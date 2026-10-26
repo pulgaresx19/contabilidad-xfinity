@@ -147,8 +147,10 @@ export default function App() {
 
             {activeTab === 'history' && (
               <HistoryView
+                orders={orders}
                 summaryData={summaryData}
                 onRefresh={refreshAll}
+                onOpenPhotos={handleOpenPhotos}
               />
             )}
 

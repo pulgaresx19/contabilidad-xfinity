@@ -1,14 +1,56 @@
 import React, { useState } from 'react';
 import { 
   Camera, Check, X, Phone, MapPin, Share2, Clock, 
-  CheckCircle2, AlertCircle, Search, Plus, Sparkles, AlertTriangle, ArrowRight, Shield,
-  SlidersHorizontal, Edit3, Minus, DollarSign
+  CheckCircle2, AlertCircle, Plus, Sparkles, AlertTriangle, Shield,
+  SlidersHorizontal, Edit3, Minus, DollarSign, Calendar, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import AddJobModal from './AddJobModal';
 
+// Helper to normalize any date format to YYYY-MM-DD
+function normalizeDateStr(dStr) {
+  if (!dStr) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) return dStr;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(dStr)) {
+    const [m, d, y] = dStr.split('-');
+    return `${y}-${m}-${d}`;
+  }
+  const dt = new Date(dStr);
+  if (!isNaN(dt.getTime())) {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  return dStr;
+}
+
+function formatDateFriendly(dateStr) {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-');
+  const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+  const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  return `${days[date.getDay()]}, ${parseInt(d)} de ${months[date.getMonth()]} ${y}`;
+}
+
 export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhotos, onOrderUpdated }) {
+  const todayReal = new Date().toISOString().split('T')[0];
+  
+  // Find which date to display by default:
+  // If today has orders, start on today.
+  // If not, find the most recent order's date, or default to today.
+  const [activeDate, setActiveDate] = useState(() => {
+    const hasToday = orders.some(o => normalizeDateStr(o.work_date) === todayReal);
+    if (hasToday) return todayReal;
+    if (orders.length > 0) {
+      // Return the most recent order's date
+      const sorted = [...orders].sort((a, b) => normalizeDateStr(b.work_date).localeCompare(normalizeDateStr(a.work_date)));
+      return normalizeDateStr(sorted[0].work_date) || todayReal;
+    }
+    return todayReal;
+  });
+
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'Pendiente' | 'Completado' | 'No Realizado'
-  const [searchTerm, setSearchTerm] = useState('');
   const [sharingId, setSharingId] = useState(null);
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -20,6 +62,20 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   const [adjustAmount, setAdjustAmount] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
   const [savingAdjust, setSavingAdjust] = useState(false);
+
+  // 1. FILTER ORDERS EXCLUSIVELY FOR THE ACTIVE DAY
+  const dayOrders = orders.filter(o => normalizeDateStr(o.work_date) === activeDate);
+  const dayPending = dayOrders.filter(o => o.status === 'Pendiente');
+  const dayCompleted = dayOrders.filter(o => o.status === 'Completado');
+  const dayCancelled = dayOrders.filter(o => o.status === 'No Realizado');
+  const dayEarnings = dayCompleted.reduce((sum, o) => sum + (o.rate_calculated || 0), 0);
+  const dayFeet = dayCompleted.reduce((sum, o) => sum + (o.drop_footage || 0), 0);
+
+  // Filtered by status chip
+  const visibleOrders = dayOrders.filter(o => {
+    if (statusFilter !== 'ALL' && o.status !== statusFilter) return false;
+    return true;
+  });
 
   // Base calculation without manual adjustment
   const getOrderBaseCalculation = (order) => {
@@ -112,24 +168,16 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
     }
   };
 
-  // Daily summary calculations
-  const pendingOrders = orders.filter(o => o.status === 'Pendiente');
-  const completedOrders = orders.filter(o => o.status === 'Completado');
-  const cancelledOrders = orders.filter(o => o.status === 'No Realizado');
-  const todayEarnings = completedOrders.reduce((sum, o) => sum + (o.rate_calculated || 0), 0);
-  const totalFeet = completedOrders.reduce((sum, o) => sum + (o.drop_footage || 0), 0);
-
-  // Filtered orders list
-  const filteredOrders = orders.filter(o => {
-    const matchesSearch = 
-      o.job_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (o.phone && o.phone.includes(searchTerm));
-
-    if (!matchesSearch) return false;
-    if (statusFilter !== 'ALL' && o.status !== statusFilter) return false;
-    return true;
-  });
+  // Date navigation helpers
+  const shiftDay = (days) => {
+    const [y, m, d] = activeDate.split('-');
+    const current = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+    current.setDate(current.getDate() + days);
+    const newY = current.getFullYear();
+    const newM = String(current.getMonth() + 1).padStart(2, '0');
+    const newD = String(current.getDate()).padStart(2, '0');
+    setActiveDate(`${newY}-${newM}-${newD}`);
+  };
 
   // Mark order as completed
   const handleMarkCompleted = async (order) => {
@@ -191,7 +239,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
     }
   };
 
-  // Native WhatsApp share (with photos and text in a single block)
+  // Native WhatsApp share
   const handleShareWhatsApp = async (order) => {
     setSharingId(order.id);
 
@@ -217,12 +265,10 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
 ✅ *Estado:* COMPLETADO Y VERIFICADO`;
 
     try {
-      // First fetch the latest order with photos
       const res = await fetch(`/api/orders/${order.id}`);
       const fullOrder = await res.json();
       const photos = fullOrder.photos || [];
 
-      // Check if browser supports sharing files (Mobile Safari / Android Chrome)
       if (navigator.canShare && photos.length > 0) {
         const filesToShare = [];
         for (let i = 0; i < photos.length; i++) {
@@ -248,12 +294,10 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
         }
       }
 
-      // Fallback: Copy formatted text and open WhatsApp link
       await navigator.clipboard.writeText(reportText);
       const waUrl = `https://wa.me/?text=${encodeURIComponent(reportText)}`;
       window.open(waUrl, '_blank');
     } catch (err) {
-      // If user cancels share sheet or error
       if (err.name !== 'AbortError') {
         navigator.clipboard.writeText(reportText);
         window.open(`https://wa.me/?text=${encodeURIComponent(reportText)}`, '_blank');
@@ -263,37 +307,85 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
     }
   };
 
+  const isViewingToday = activeDate === todayReal;
+
   return (
     <div className="space-y-3.5 max-w-md mx-auto">
-      {/* 1. DAILY PROGRESS HERO CARD */}
+      {/* 1. NAVEGADOR DE FECHA & HERO CARD DE LA JORNADA */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3">
+        {/* Barra superior de Fecha de la Jornada */}
+        <div className="flex items-center justify-between bg-slate-950/70 px-3 py-2 rounded-2xl border border-slate-800/80">
+          <button
+            type="button"
+            onClick={() => shiftDay(-1)}
+            className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            title="Día anterior"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+
+          <div className="flex items-center gap-2">
+            <Calendar className="h-3.5 w-3.5 text-cyan-400" />
+            <span className="text-xs font-black text-white font-mono">
+              {isViewingToday ? `Hoy (${formatDateFriendly(activeDate)})` : formatDateFriendly(activeDate)}
+            </span>
+            {!isViewingToday && (
+              <button
+                type="button"
+                onClick={() => setActiveDate(todayReal)}
+                className="text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-1.5 py-0.2 rounded-md font-bold hover:bg-cyan-900"
+              >
+                Ir a Hoy
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => shiftDay(1)}
+            className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            title="Día siguiente"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Métricas de la Jornada de ese día */}
         <div className="flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">
-              Jornada de Hoy
+              {isViewingToday ? 'Jornada de Hoy' : 'Producción del Día'}
             </span>
-            <h2 className="text-xl font-black text-white font-mono mt-0.5">
-              ${todayEarnings.toFixed(2)}
+            <h2 className="text-2xl font-black text-white font-mono mt-0.5">
+              ${dayEarnings.toFixed(2)}
             </h2>
+            <span className="text-[10px] text-amber-300/80 font-mono">
+              {Math.round(dayFeet)} ft instalados
+            </span>
           </div>
 
           <div className="text-right">
-            <span className="text-[10px] text-slate-400 block font-medium">Progreso de la Ruta</span>
+            <span className="text-[10px] text-slate-400 block font-medium">Progreso del Día</span>
             <span className="text-xs font-bold text-slate-200">
-              <strong className="text-emerald-400 text-sm font-black">{completedOrders.length}</strong> de {orders.length} hechos
+              <strong className="text-emerald-400 text-sm font-black">{dayCompleted.length}</strong> de {dayOrders.length} hechos
             </span>
+            {dayPending.length > 0 && (
+              <span className="text-[10px] text-amber-400 block font-semibold">
+                {dayPending.length} pendientes
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Progress Bar */}
+        {/* Barra de Progreso del Día */}
         <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
           <div 
             className="bg-gradient-to-r from-cyan-500 to-emerald-400 h-full rounded-full transition-all duration-500"
-            style={{ width: `${orders.length > 0 ? (completedOrders.length / orders.length) * 100 : 0}%` }}
+            style={{ width: `${dayOrders.length > 0 ? (dayCompleted.length / dayOrders.length) * 100 : 0}%` }}
           />
         </div>
 
-        {/* Action Buttons: Scan Dispatch Sheet & Manual Add Job */}
+        {/* Botones de Acción: Escanear Hoja & Añadir Trabajo */}
         <div className="grid grid-cols-2 gap-2 pt-0.5">
           <button
             onClick={onOpenScan}
@@ -313,78 +405,90 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
         </div>
       </div>
 
-      {/* 2. SEARCH & STATUS FILTER TABS */}
-      <div className="space-y-2">
-        {/* Quick search input */}
-        <div className="relative">
-          <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Buscar casa o Job #..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-          />
-        </div>
-
-        {/* Segmented status chips */}
-        <div className="grid grid-cols-4 gap-1 bg-slate-900/90 p-1 rounded-2xl border border-slate-800 text-[10px] font-bold text-center">
-          <button
-            onClick={() => setStatusFilter('ALL')}
-            className={`py-1.5 rounded-xl transition ${statusFilter === 'ALL' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400'}`}
-          >
-            Todos ({orders.length})
-          </button>
-          <button
-            onClick={() => setStatusFilter('Pendiente')}
-            className={`py-1.5 rounded-xl transition ${statusFilter === 'Pendiente' ? 'bg-amber-500 text-slate-950' : 'text-slate-400'}`}
-          >
-            Pendientes ({pendingOrders.length})
-          </button>
-          <button
-            onClick={() => setStatusFilter('Completado')}
-            className={`py-1.5 rounded-xl transition ${statusFilter === 'Completado' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}
-          >
-            Hechos ({completedOrders.length})
-          </button>
-          <button
-            onClick={() => setStatusFilter('No Realizado')}
-            className={`py-1.5 rounded-xl transition ${statusFilter === 'No Realizado' ? 'bg-rose-500 text-white' : 'text-slate-400'}`}
-          >
-            Fallidos ({cancelledOrders.length})
-          </button>
-        </div>
+      {/* 2. CHIPS DE FILTRO DE ESTADO (SIN BUSCADOR) */}
+      <div className="grid grid-cols-4 gap-1 bg-slate-900/90 p-1 rounded-2xl border border-slate-800 text-[10px] font-bold text-center">
+        <button
+          onClick={() => setStatusFilter('ALL')}
+          className={`py-1.5 rounded-xl transition ${statusFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+        >
+          Todos ({dayOrders.length})
+        </button>
+        <button
+          onClick={() => setStatusFilter('Pendiente')}
+          className={`py-1.5 rounded-xl transition ${statusFilter === 'Pendiente' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+        >
+          Pendientes ({dayPending.length})
+        </button>
+        <button
+          onClick={() => setStatusFilter('Completado')}
+          className={`py-1.5 rounded-xl transition ${statusFilter === 'Completado' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+        >
+          Hechos ({dayCompleted.length})
+        </button>
+        <button
+          onClick={() => setStatusFilter('No Realizado')}
+          className={`py-1.5 rounded-xl transition ${statusFilter === 'No Realizado' ? 'bg-rose-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+        >
+          Cancelados ({dayCancelled.length})
+        </button>
       </div>
 
-      {/* 3. INTERACTIVE ORDERS LIST */}
-      {filteredOrders.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center space-y-1 text-slate-400 text-xs">
-          <p className="font-semibold text-slate-300">No hay órdenes en esta categoría.</p>
-          <p className="text-[10px]">Usa el botón de arriba para escanear la hoja del día.</p>
+      {/* 3. LISTA DE TRABAJOS DEL DÍA CON NÚMEROS EN CÍRCULO */}
+      {visibleOrders.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-3">
+          <div className="h-12 w-12 rounded-2xl bg-slate-800/80 text-slate-500 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="h-6 w-6" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-sm font-bold text-slate-200">
+              Sin trabajos en esta fecha
+            </h4>
+            <p className="text-xs text-slate-400 max-w-xs mx-auto">
+              {isViewingToday 
+                ? 'No tienes trabajos registrados para hoy aún. Escanea tu hoja de despacho o añade el primer trabajo.'
+                : `No hay órdenes registradas para el día ${formatDateFriendly(activeDate)}.`
+              }
+            </p>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <button
+              onClick={onOpenScan}
+              className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl transition"
+            >
+              Escanear Hoja
+            </button>
+            <button
+              onClick={() => setIsAddJobOpen(true)}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition"
+            >
+              Añadir Trabajo
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-2.5">
-          {filteredOrders.map((order, idx) => {
+          {visibleOrders.map((order, idx) => {
             const isCompleted = order.status === 'Completado';
-            const isPending = order.status === 'Pendiente';
             const isCancelled = order.status === 'No Realizado';
+            const isPending = order.status === 'Pendiente';
             const hasDrivewayBore = order.bore_type && order.bore_type.includes('DW');
 
             return (
               <div
                 key={order.id}
-                className={`bg-slate-900/90 border rounded-2xl p-3.5 space-y-2.5 transition shadow-sm ${
-                  isCompleted 
-                    ? 'border-emerald-500/30' 
+                className={`border rounded-2xl p-3.5 space-y-2.5 shadow-sm transition ${
+                  isCompleted
+                    ? 'bg-slate-900/90 border-slate-800'
                     : isCancelled
-                    ? 'border-rose-500/30 opacity-75'
-                    : 'border-slate-800 hover:border-slate-700'
+                    ? 'bg-rose-950/20 border-rose-900/40 opacity-75'
+                    : 'bg-slate-900/90 border-amber-500/40 shadow-amber-500/5'
                 }`}
               >
-                {/* Header: Item Number in Circle, Job #, Status Badge, Earnings */}
+                {/* Header de la Tarjeta con Número en Círculo */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    {/* CIRCULAR ITEM NUMBER BADGE */}
+                    {/* Número de ítem en círculo */}
                     <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black font-mono shadow-sm flex-shrink-0 ${
                       isCompleted
                         ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
@@ -414,7 +518,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                     </span>
                   </div>
 
-                  {/* Clickable price to open adjustment modal */}
+                  {/* Precio con botón de ajuste manual */}
                   <button
                     type="button"
                     onClick={() => openAdjustModal(order)}
@@ -430,7 +534,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                   </button>
                 </div>
 
-                {/* Customer Address & Phone */}
+                {/* Dirección y Teléfono */}
                 <div className="space-y-1">
                   <div className="flex items-start gap-1.5 text-xs text-slate-100">
                     <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
@@ -458,7 +562,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                   )}
                 </div>
 
-                {/* Tech Specs: Drop, Cable, Bore */}
+                {/* Especificaciones Técnicas */}
                 <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
                   <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-amber-300 font-bold">
                     {order.drop_footage} ft
@@ -515,7 +619,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                   </div>
                 )}
 
-                {/* If Cancelled: Show Reason */}
+                {/* Motivo si fue Cancelado */}
                 {isCancelled && order.cancel_reason && (
                   <div className="bg-rose-950/30 border border-rose-500/30 p-2 rounded-xl text-[10px] text-rose-300 flex items-start gap-1.5">
                     <AlertTriangle className="h-3.5 w-3.5 text-rose-400 flex-shrink-0 mt-0.5" />
@@ -525,9 +629,8 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                   </div>
                 )}
 
-                {/* Action Buttons Area */}
+                {/* Botones de Acción */}
                 <div className="pt-1.5 border-t border-slate-800/80 flex items-center justify-between gap-2">
-                  {/* Photo Evidence button */}
                   <button
                     onClick={() => onOpenPhotos(order)}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-950 hover:bg-slate-800 text-[11px] font-bold text-cyan-300 border border-slate-800 rounded-xl transition"
@@ -537,7 +640,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                   </button>
 
                   <div className="flex items-center gap-1.5">
-                    {/* If Pendiente: Confirm or Cancel */}
+                    {/* Si Pendiente: Confirmar o No Realizado */}
                     {isPending && (
                       <>
                         <button
@@ -557,7 +660,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                       </>
                     )}
 
-                    {/* If Completado: WhatsApp Share */}
+                    {/* Si Completado: WhatsApp Share */}
                     {isCompleted && (
                       <button
                         onClick={() => handleShareWhatsApp(order)}
@@ -565,17 +668,17 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                         className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-extrabold rounded-xl transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95"
                       >
                         <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
-                        <span>{sharingId === order.id ? 'Preparando...' : 'WhatsApp (Fotos + Datos)'}</span>
+                        <span>{sharingId === order.id ? 'Preparando...' : 'WhatsApp'}</span>
                       </button>
                     )}
 
-                    {/* If Cancelled: Reopen button */}
+                    {/* Si Cancelado: Reactivar */}
                     {isCancelled && (
                       <button
                         onClick={() => handleReopenOrder(order)}
                         className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold rounded-xl"
                       >
-                        Reactivar Trabajo
+                        Reactivar
                       </button>
                     )}
                   </div>
@@ -586,48 +689,6 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
         </div>
       )}
 
-      {/* MODAL: Marcar como No Realizado */}
-      {cancelModalOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 w-full max-w-sm space-y-3">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-rose-400" />
-              Marcar Trabajo como No Realizado
-            </h3>
-            <p className="text-[11px] text-slate-400">
-              Job #{cancelModalOrder.job_id} ({cancelModalOrder.address})
-            </p>
-
-            <div>
-              <label className="text-[10px] text-slate-400 block font-semibold mb-1">
-                Motivo / Razón:
-              </label>
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                rows={3}
-                placeholder="ej. Sin acceso a patio, cliente no estaba, reja cerrada con perro, etc."
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-xs text-slate-200 focus:outline-none focus:border-rose-500"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                onClick={() => setCancelModalOrder(null)}
-                className="px-3 py-1.5 bg-slate-800 text-slate-300 text-xs font-semibold rounded-lg"
-              >
-                Volver
-              </button>
-              <button
-                onClick={handleConfirmCancelled}
-                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg transition"
-              >
-                Confirmar No Realizado
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* MODAL: Ajustar Tarifa / Inconsistencia de Pago */}
       {adjustModalOrder && (() => {
         const { base, dwBonus, footageBonus, autoSubtotal } = getOrderBaseCalculation(adjustModalOrder);
@@ -638,7 +699,6 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
         return (
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
             <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-4 sm:p-5 shadow-2xl space-y-3.5 max-h-[92vh] overflow-y-auto">
-              {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-cyan-500/10 text-cyan-400 rounded-xl">
@@ -659,13 +719,11 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                 </button>
               </div>
 
-              {/* Dirección */}
               <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 text-xs">
                 <p className="font-bold text-slate-200">{adjustModalOrder.address}</p>
                 <p className="text-[10px] text-slate-400">{adjustModalOrder.city}</p>
               </div>
 
-              {/* Desglose Automático */}
               <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1 text-xs font-mono">
                 <div className="flex items-center justify-between text-slate-400 text-[11px]">
                   <span>Tarifa Base:</span>
@@ -692,13 +750,11 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                 </div>
               </div>
 
-              {/* Ajuste Manual: Sumar o Restar */}
               <div className="space-y-2">
                 <label className="text-[11px] font-bold text-slate-300 block">
                   Ajuste / Inconsistencia del Supervisor:
                 </label>
 
-                {/* Switch Sumar vs Restar */}
                 <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
                   <button
                     type="button"
@@ -727,7 +783,6 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                   </button>
                 </div>
 
-                {/* Campo de Monto */}
                 <div className="relative">
                   <span className={`absolute left-3 top-2.5 text-xs font-mono font-black ${
                     adjustType === 'add' ? 'text-emerald-400' : 'text-amber-400'
@@ -744,7 +799,6 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                   />
                 </div>
 
-                {/* Chips rápidos de monto común */}
                 <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                   <span className="text-[10px] text-slate-500">Rápidos:</span>
                   <button
@@ -771,7 +825,6 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                 </div>
               </div>
 
-              {/* Motivo de la Inconsistencia */}
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-300 block">
                   Motivo / Constancia del Ajuste:
@@ -785,7 +838,6 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                 />
               </div>
 
-              {/* Previsualización del Total Final */}
               <div className="p-3 bg-gradient-to-r from-slate-950 to-slate-900 border border-cyan-500/30 rounded-xl flex items-center justify-between">
                 <div>
                   <span className="text-[10px] text-slate-400 block font-bold uppercase">
@@ -807,7 +859,6 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                 </div>
               </div>
 
-              {/* Botones de acción */}
               <div className="flex items-center gap-2 pt-1">
                 {adjustModalOrder.manual_adjustment !== 0 && (
                   <button

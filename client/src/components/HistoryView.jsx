@@ -2,15 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { 
   Calendar, CheckCircle2, Clock, Share2, Check, 
   Trash2, ExternalLink, Image as ImageIcon, X, DollarSign, 
-  Ruler, ChevronRight, Copy, Camera, AlertCircle, FileText, ShieldAlert, CheckCircle
+  Ruler, ChevronRight, Copy, Camera, AlertCircle, FileText, 
+  ShieldAlert, CheckCircle, Search, Filter, Sparkles, MapPin, Phone
 } from 'lucide-react';
 
-export default function HistoryView({ summaryData, onRefresh }) {
-  const [subTab, setSubTab] = useState('weeks'); // 'weeks' | 'sheets'
+export default function HistoryView({ orders = [], summaryData, onRefresh, onOpenPhotos }) {
+  const [subTab, setSubTab] = useState('weeks'); // 'weeks' | 'all_orders' | 'sheets'
   const [selectedWeekModal, setSelectedWeekModal] = useState(null); // Week object for overlay modal
   const [copiedWeekKey, setCopiedWeekKey] = useState(null);
   const [copiedJobId, setCopiedJobId] = useState(null);
   const [updatingWeekKey, setUpdatingWeekKey] = useState(null);
+
+  // General orders search and filters
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
+  const [orderCableFilter, setOrderCableFilter] = useState('ALL');
 
   // Sheets state
   const [sheets, setSheets] = useState([]);
@@ -48,14 +54,31 @@ export default function HistoryView({ summaryData, onRefresh }) {
     }
   }, [summaryData]);
 
+  // Filtered list of all historical orders
+  const filteredAllOrders = orders.filter((o) => {
+    const q = orderSearch.toLowerCase().trim();
+    const matchesSearch = 
+      !q ||
+      o.job_id.toLowerCase().includes(q) ||
+      o.address.toLowerCase().includes(q) ||
+      o.city.toLowerCase().includes(q) ||
+      (o.phone && o.phone.includes(q)) ||
+      (o.work_date && o.work_date.includes(q));
+
+    if (!matchesSearch) return false;
+    if (orderStatusFilter !== 'ALL' && o.status !== orderStatusFilter) return false;
+    if (orderCableFilter !== 'ALL' && o.cable_type !== orderCableFilter) return false;
+    return true;
+  });
+
   // Toggle or set payment status for a week
   const handleTogglePayment = async (w, targetStatus, e) => {
     if (e) e.stopPropagation();
 
     const isMarkingPaid = targetStatus === 'Cobrado';
     const msg = isMarkingPaid
-      ? `¿Confirmar que ya cobraste la Semana ${w.key} ($${w.totalEarnings.toFixed(2)})?`
-      : `¿Revertir la Semana ${w.key} a PENDIENTE por cobrar?`;
+      ? `¿Confirmar que ya cobraste la Semana ${w.displayLabel || w.key} ($${w.totalEarnings.toFixed(2)})?`
+      : `¿Revertir la Semana ${w.displayLabel || w.key} a PENDIENTE por cobrar?`;
 
     if (!confirm(msg)) return;
 
@@ -155,32 +178,43 @@ ${jobLines}
 
   return (
     <div className="space-y-4 max-w-md mx-auto">
-      {/* Segmented Switcher */}
-      <div className="bg-slate-900 p-1 rounded-2xl border border-slate-800 flex items-center">
+      {/* 1. SELECTOR SUPERIOR DE 3 SUBPESTAÑAS */}
+      <div className="bg-slate-900 p-1 rounded-2xl border border-slate-800 grid grid-cols-3 gap-1 shadow-sm">
         <button
           onClick={() => setSubTab('weeks')}
-          className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition ${
+          className={`py-2 text-[11px] font-bold rounded-xl transition text-center ${
             subTab === 'weeks'
               ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          Cierres Semanales ({weeks.length})
+          Cierres ({weeks.length})
+        </button>
+
+        <button
+          onClick={() => setSubTab('all_orders')}
+          className={`py-2 text-[11px] font-bold rounded-xl transition text-center ${
+            subTab === 'all_orders'
+              ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          Historial ({orders.length})
         </button>
 
         <button
           onClick={() => setSubTab('sheets')}
-          className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition ${
+          className={`py-2 text-[11px] font-bold rounded-xl transition text-center ${
             subTab === 'sheets'
               ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          Hojas de Ruta (Fotos)
+          Hojas ({sheets.length})
         </button>
       </div>
 
-      {/* SUBTAB 1: LISTADO DE SEMANAS CON ESTADO COBRADO/PENDIENTE Y BOTÓN DE CONFIRMACIÓN */}
+      {/* SUBTAB 1: LISTADO DE CIERRES SEMANALES */}
       {subTab === 'weeks' && (
         <div className="space-y-2.5">
           {weeks.length === 0 ? (
@@ -200,7 +234,7 @@ ${jobLines}
                   onClick={() => setSelectedWeekModal(w)}
                   className="bg-slate-900/90 border border-slate-800 hover:border-cyan-500/50 rounded-2xl p-3.5 cursor-pointer transition select-none space-y-2.5 shadow-sm active:scale-[0.99] group"
                 >
-                  {/* Fila Superior: Semana, Rango y Monto */}
+                  {/* Fila Superior */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
@@ -235,10 +269,10 @@ ${jobLines}
                     </div>
                   </div>
 
-                  {/* Fila Inferior: Botón de Confirmación de Cobro directo en la lista */}
+                  {/* Fila Inferior con Botón de Cobro Directo */}
                   <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
                     <span className="text-[10px] text-slate-500">
-                      Toca para ver el detalle completo
+                      Toca para ver el detalle y evidencias
                     </span>
 
                     <div className="flex items-center gap-2">
@@ -278,7 +312,207 @@ ${jobLines}
         </div>
       )}
 
-      {/* SUBTAB 2: HOJAS DE RUTA (FOTOS DE DESPACHO) */}
+      {/* SUBTAB 2: HISTORIAL GENERAL DE TODOS LOS TRABAJOS (CON BUSCADOR Y FILTROS) */}
+      {subTab === 'all_orders' && (
+        <div className="space-y-3">
+          {/* BUSCADOR GENERAL */}
+          <div className="relative">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Buscar por Job #, dirección, teléfono, ciudad..."
+              value={orderSearch}
+              onChange={(e) => setOrderSearch(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition shadow-sm"
+            />
+          </div>
+
+          {/* Filtros de Estado y Cable */}
+          <div className="flex items-center justify-between gap-1 text-[10px] overflow-x-auto no-scrollbar pb-0.5">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setOrderStatusFilter('ALL')}
+                className={`px-2.5 py-1 rounded-xl font-bold transition ${
+                  orderStatusFilter === 'ALL' ? 'bg-cyan-500 text-slate-950' : 'bg-slate-900 border border-slate-800 text-slate-400'
+                }`}
+              >
+                Todos ({orders.length})
+              </button>
+              <button
+                onClick={() => setOrderStatusFilter('Completado')}
+                className={`px-2.5 py-1 rounded-xl font-bold transition ${
+                  orderStatusFilter === 'Completado' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-900 border border-slate-800 text-slate-400'
+                }`}
+              >
+                Hechos
+              </button>
+              <button
+                onClick={() => setOrderStatusFilter('Pendiente')}
+                className={`px-2.5 py-1 rounded-xl font-bold transition ${
+                  orderStatusFilter === 'Pendiente' ? 'bg-amber-500 text-slate-950' : 'bg-slate-900 border border-slate-800 text-slate-400'
+                }`}
+              >
+                Pendientes
+              </button>
+              <button
+                onClick={() => setOrderStatusFilter('No Realizado')}
+                className={`px-2.5 py-1 rounded-xl font-bold transition ${
+                  orderStatusFilter === 'No Realizado' ? 'bg-rose-500 text-slate-950' : 'bg-slate-900 border border-slate-800 text-slate-400'
+                }`}
+              >
+                Cancelados
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1 border-l border-slate-800 pl-1.5 flex-shrink-0">
+              <button
+                onClick={() => setOrderCableFilter('ALL')}
+                className={`px-2 py-1 rounded-lg font-bold ${orderCableFilter === 'ALL' ? 'text-white font-black' : 'text-slate-500'}`}
+              >
+                Cables
+              </button>
+              <button
+                onClick={() => setOrderCableFilter('RG-6')}
+                className={`px-2 py-1 rounded-lg font-bold ${orderCableFilter === 'RG-6' ? 'bg-slate-800 text-amber-300' : 'text-slate-500'}`}
+              >
+                RG-6
+              </button>
+              <button
+                onClick={() => setOrderCableFilter('RG-11')}
+                className={`px-2 py-1 rounded-lg font-bold ${orderCableFilter === 'RG-11' ? 'bg-slate-800 text-cyan-300' : 'text-slate-500'}`}
+              >
+                RG-11
+              </button>
+            </div>
+          </div>
+
+          {/* Listado de Órdenes Filtradas */}
+          {filteredAllOrders.length === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-xs">
+              No se encontraron trabajos con los filtros actuales.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredAllOrders.map((order, idx) => {
+                const isComp = order.status === 'Completado';
+                const isCanc = order.status === 'No Realizado';
+                const hasBore = order.bore_type && order.bore_type.includes('DW');
+
+                return (
+                  <div
+                    key={order.id}
+                    className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 space-y-2 text-xs shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {/* Número en círculo */}
+                        <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black font-mono shadow-sm flex-shrink-0 ${
+                          isComp
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            : isCanc
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                            : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                        }`}>
+                          {idx + 1}
+                        </div>
+
+                        <span className="font-mono font-black text-cyan-400">
+                          Job #{order.job_id}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {order.work_date}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
+                          isComp ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                          : isCanc ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                          : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                        }`}>
+                          {order.status}
+                        </span>
+                        <span className="font-mono font-black text-emerald-400">
+                          ${order.rate_calculated}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Dirección */}
+                    <div className="text-slate-200">
+                      <p className="font-semibold">{order.address}</p>
+                      <p className="text-[10px] text-slate-400">{order.city} {order.zip_code}</p>
+                    </div>
+
+                    {/* Specs */}
+                    <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
+                      <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-amber-300 font-bold">
+                        {order.drop_footage} ft
+                      </span>
+                      <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
+                        {order.cable_type}
+                      </span>
+                      {hasBore && (
+                        <span className="bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800 font-bold">
+                          DW Bore +$30
+                        </span>
+                      )}
+                      {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
+                        <span className="bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800 font-bold">
+                          Drop &gt;300ft: +${Math.floor((order.drop_footage - 300) / 100) * 25}
+                        </span>
+                      )}
+                      {order.manual_adjustment && order.manual_adjustment !== 0 ? (
+                        <span className={`px-2 py-0.5 rounded border text-[9px] ${
+                          order.manual_adjustment > 0 ? 'bg-cyan-950 text-cyan-300 border-cyan-800' : 'bg-amber-950 text-amber-300 border-amber-800'
+                        }`}>
+                          Ajuste {order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {/* Footer de la tarjeta con Fotos y Copiar Comprobante */}
+                    <div className="pt-1.5 border-t border-slate-800 flex items-center justify-between">
+                      {onOpenPhotos ? (
+                        <button
+                          onClick={() => onOpenPhotos(order)}
+                          className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1"
+                        >
+                          <Camera className="h-3 w-3" />
+                          <span>{order.photos_count || 0} Fotos</span>
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {order.photos_count || 0} fotos
+                        </span>
+                      )}
+
+                      <button
+                        onClick={() => copySingleJobClaim(order)}
+                        className="text-[10px] text-slate-300 hover:text-white bg-slate-800 px-2.5 py-1 rounded-lg flex items-center gap-1 transition"
+                      >
+                        {copiedJobId === order.id ? (
+                          <>
+                            <Check className="h-3 w-3 text-emerald-400" />
+                            <span className="text-emerald-400 font-bold">¡Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3 w-3 text-cyan-400" />
+                            <span>Copiar Comprobante</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SUBTAB 3: HOJAS DE RUTA (FOTOS DE DESPACHO) */}
       {subTab === 'sheets' && (
         <div className="space-y-3">
           {loadingSheets ? (
@@ -287,7 +521,7 @@ ${jobLines}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center space-y-1">
               <ImageIcon className="h-8 w-8 text-slate-600 mx-auto mb-1" />
               <p className="text-xs text-slate-300 font-semibold">Sin fotos de hojas todavía.</p>
-              <p className="text-[10px] text-slate-500">Usa "Escanear" en la pestaña Jornada para tomar la primera foto.</p>
+              <p className="text-[10px] text-slate-500">Usa "Escanear Hoja" en Jornada para registrar una.</p>
             </div>
           ) : (
             sheets.map((s) => (
@@ -456,7 +690,6 @@ ${jobLines}
                       {/* Job Header con Número en Círculo */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          {/* Número de ítem en círculo */}
                           <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black font-mono shadow-sm flex-shrink-0 ${
                             isComp
                               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
