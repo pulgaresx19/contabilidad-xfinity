@@ -1,11 +1,11 @@
 import React from 'react';
-import { LayoutDashboard, CheckSquare, History } from 'lucide-react';
+import { Home, CalendarDays, User } from 'lucide-react';
 
-export default function BottomNav({ activeTab, setActiveTab, ordersCount }) {
+export default function BottomNav({ activeTab, setActiveTab, pendingCount }) {
   const tabs = [
-    { id: 'home', label: 'Inicio', icon: LayoutDashboard },
-    { id: 'orders', label: 'Órdenes', icon: CheckSquare, badge: ordersCount },
-    { id: 'history', label: 'Historial', icon: History },
+    { id: 'today', label: 'Jornada', icon: Home, badge: pendingCount },
+    { id: 'history', label: 'Cierres', icon: CalendarDays },
+    { id: 'profile', label: 'Perfil', icon: User },
   ];
 
   return (
@@ -28,7 +28,7 @@ export default function BottomNav({ activeTab, setActiveTab, ordersCount }) {
               <div className="relative flex items-center justify-center">
                 <Icon className={`h-4 w-4 ${isActive ? 'stroke-[2.5]' : 'stroke-2'}`} />
                 {tab.badge > 0 && !isActive && (
-                  <span className="absolute -top-1 -right-2 bg-cyan-500 text-slate-950 text-[9px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1.5 -right-2 bg-amber-500 text-slate-950 text-[9px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center">
                     {tab.badge}
                   </span>
                 )}

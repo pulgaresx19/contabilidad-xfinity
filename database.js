@@ -63,6 +63,11 @@ function initDb() {
     );
   `);
 
+  // Ensure cancel_reason column exists
+  try {
+    db.exec("ALTER TABLE work_orders ADD COLUMN cancel_reason TEXT");
+  } catch (e) {}
+
   // Default settings if not already set
   const getSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
   const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
@@ -170,8 +175,9 @@ function parseDispatchLine(line) {
     neighbor_notice,
     raw_notes: notes,
     rate_calculated: rate,
-    status: 'Completado',
-    payment_status: 'En Fondo (3 Sem)'
+    status: 'Pendiente',
+    payment_status: 'En Fondo (3 Sem)',
+    cancel_reason: ''
   };
 }
 

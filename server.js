@@ -127,8 +127,9 @@ function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
       neighbor_notice: /NBR[:\s]*2/i.test(line) ? '2' : 'N',
       raw_notes: line,
       rate_calculated: rate,
-      status: 'Completado',
-      payment_status: 'En Fondo (3 Sem)'
+      status: 'Pendiente',
+      payment_status: 'En Fondo (3 Sem)',
+      cancel_reason: ''
     });
   }
 
@@ -312,6 +313,7 @@ app.put('/api/orders/:id', (req, res) => {
         neighbor_notice = @neighbor_notice,
         rate_calculated = @rate_calculated,
         status = @status,
+        cancel_reason = @cancel_reason,
         payment_status = @payment_status,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = @id
@@ -336,6 +338,7 @@ app.put('/api/orders/:id', (req, res) => {
       neighbor_notice: data.neighbor_notice || 'N',
       rate_calculated: parseFloat(data.rate_calculated) || 0,
       status: data.status || 'Completado',
+      cancel_reason: data.cancel_reason || '',
       payment_status: data.payment_status || 'En Fondo (3 Sem)'
     });
 
@@ -508,8 +511,12 @@ app.get('/api/weekly-summary', (req, res) => {
 
       const w = weeksMap[key];
       w.totalJobs++;
-      w.totalFootage += (order.drop_footage || 0);
-      w.totalEarnings += (order.rate_calculated || 0);
+      if (order.status !== 'No Realizado') {
+        w.totalFootage += (order.drop_footage || 0);
+      }
+      if (order.status === 'Completado') {
+        w.totalEarnings += (order.rate_calculated || 0);
+      }
       if (order.cable_type === 'RG-11') w.rg11Count++;
       if (order.cable_type === 'RG-6') w.rg6Count++;
       if (order.bore_type && order.bore_type !== 'N') w.boresCount++;
@@ -530,11 +537,15 @@ app.get('/api/weekly-summary', (req, res) => {
     let totalFeetAll = 0;
 
     for (const o of allOrders) {
-      totalAllEarnings += o.rate_calculated || 0;
-      totalFeetAll += o.drop_footage || 0;
-      if (o.payment_status === 'En Fondo (3 Sem)') totalInHoldback += (o.rate_calculated || 0);
-      if (o.payment_status === 'Listo para Cobro') totalReadyForPayout += (o.rate_calculated || 0);
-      if (o.payment_status === 'Cobrado') totalPaid += (o.rate_calculated || 0);
+      if (o.status === 'Completado') {
+        totalAllEarnings += o.rate_calculated || 0;
+        if (o.payment_status === 'En Fondo (3 Sem)') totalInHoldback += (o.rate_calculated || 0);
+        if (o.payment_status === 'Listo para Cobro') totalReadyForPayout += (o.rate_calculated || 0);
+        if (o.payment_status === 'Cobrado') totalPaid += (o.rate_calculated || 0);
+      }
+      if (o.status !== 'No Realizado') {
+        totalFeetAll += o.drop_footage || 0;
+      }
     }
 
     res.json({

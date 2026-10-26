@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import BottomNav from './components/BottomNav';
-import HomeDashboard from './components/HomeDashboard';
-import OrdersList from './components/OrdersList';
+import TodayView from './components/TodayView';
 import HistoryView from './components/HistoryView';
+import ProfileView from './components/ProfileView';
 import ScanModal from './components/ScanModal';
 import PhotoModal from './components/PhotoModal';
 import SettingsModal from './components/SettingsModal';
 import { Cable, ShieldCheck, Settings } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState('today'); // 'today' | 'history' | 'profile'
   const [orders, setOrders] = useState([]);
   const [summaryData, setSummaryData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -91,20 +91,10 @@ export default function App() {
     fetchOrders();
   };
 
-  const handleDeleteOrder = async (orderId) => {
-    if (!confirm('¿Eliminar esta orden de trabajo?')) return;
-    try {
-      const res = await fetch(`/api/orders/${orderId}`, { method: 'DELETE' });
-      if (res.ok) {
-        refreshAll();
-      }
-    } catch (err) {
-      alert('Error eliminando orden: ' + err.message);
-    }
-  };
+  const pendingCount = orders.filter(o => o.status === 'Pendiente').length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-slate-950">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-slate-950 font-sans">
       {/* Top Mobile Header */}
       <header className="bg-slate-900/90 border-b border-slate-800/80 sticky top-0 z-30 backdrop-blur-md">
         <div className="max-w-md mx-auto px-4 h-13 flex items-center justify-between">
@@ -145,22 +135,13 @@ export default function App() {
           </div>
         ) : (
           <>
-            {activeTab === 'home' && (
-              <HomeDashboard
+            {activeTab === 'today' && (
+              <TodayView
+                orders={orders}
                 summaryData={summaryData}
-                orders={orders}
                 onOpenScan={() => setIsScanModalOpen(true)}
-                onRefresh={refreshAll}
-              />
-            )}
-
-            {activeTab === 'orders' && (
-              <OrdersList
-                orders={orders}
                 onOpenPhotos={handleOpenPhotos}
                 onOrderUpdated={refreshAll}
-                onDeleteOrder={handleDeleteOrder}
-                onOpenScan={() => setIsScanModalOpen(true)}
               />
             )}
 
@@ -168,6 +149,14 @@ export default function App() {
               <HistoryView
                 summaryData={summaryData}
                 onRefresh={refreshAll}
+              />
+            )}
+
+            {activeTab === 'profile' && (
+              <ProfileView
+                techName={techName}
+                summaryData={summaryData}
+                onOpenSettings={() => setIsSettingsModalOpen(true)}
               />
             )}
           </>
@@ -178,7 +167,7 @@ export default function App() {
       <BottomNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        ordersCount={orders.length}
+        pendingCount={pendingCount}
       />
 
       {/* Scan Modal (Opens right from Home) */}
@@ -187,7 +176,7 @@ export default function App() {
         onClose={() => setIsScanModalOpen(false)}
         onOrdersSaved={() => {
           refreshAll();
-          setActiveTab('orders');
+          setActiveTab('today');
         }}
         defaultTech={techName}
       />
