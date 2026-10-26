@@ -40,6 +40,8 @@ function initDb() {
       cancel_reason TEXT DEFAULT '',
       status TEXT DEFAULT 'Pendiente',
       payment_status TEXT DEFAULT 'Pendiente',
+      whatsapp_shared INTEGER DEFAULT 0,
+      whatsapp_shared_at TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
@@ -90,6 +92,12 @@ function initDb() {
   } catch (e) {}
   try {
     db.exec("ALTER TABLE work_orders ADD COLUMN adjustment_reason TEXT DEFAULT ''");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE work_orders ADD COLUMN whatsapp_shared INTEGER DEFAULT 0");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE work_orders ADD COLUMN whatsapp_shared_at TEXT");
   } catch (e) {}
 
   // Default settings if not already set

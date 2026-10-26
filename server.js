@@ -119,9 +119,12 @@ function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
       address = addrMatch[1].replace(/,\s*$/, '').trim();
     }
 
-    // City
-    let city = 'ELKHART';
-    if (/ELKHART/i.test(line)) city = 'ELKHART';
+    // City detection from line or known Indiana service cities
+    let city = '';
+    const cityMatch = line.match(/\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW)\b/i);
+    if (cityMatch) {
+      city = cityMatch[1].toUpperCase();
+    }
 
     // Rate calculation: $100 base + $30 for Driveway Bore (DW) + $25 por cada 100 ft > 300 ft
     let rate = 100;
@@ -259,7 +262,9 @@ app.get('/api/orders', (req, res) => {
     const { search, cable_type, status, payment_status, date } = req.query;
     let query = `
       SELECT o.*, 
-        (SELECT COUNT(*) FROM job_photos WHERE work_order_id = o.id) as photos_count 
+        (SELECT COUNT(*) FROM job_photos WHERE work_order_id = o.id) as photos_count,
+        (SELECT COUNT(*) FROM job_photos WHERE work_order_id = o.id AND category != 'Constancia No Realizado') as work_photos_count,
+        (SELECT COUNT(*) FROM job_photos WHERE work_order_id = o.id AND category = 'Constancia No Realizado') as cancel_photos_count
       FROM work_orders o
       WHERE 1=1
     `;
@@ -334,7 +339,7 @@ app.post('/api/orders', (req, res) => {
       tech_id: data.tech_id || 'Javier (P0G1)',
       job_id: data.job_id,
       address: data.address,
-      city: data.city || 'ELKHART',
+      city: data.city || '',
       zip_code: data.zip_code || '',
       phone: data.phone || '',
       call_first: data.call_first ? 1 : 0,
@@ -381,6 +386,7 @@ app.put('/api/orders/:id', (req, res) => {
         obstacles = @obstacles,
         premise_access = @premise_access,
         neighbor_notice = @neighbor_notice,
+        raw_notes = @raw_notes,
         rate_calculated = @rate_calculated,
         manual_adjustment = @manual_adjustment,
         adjustment_reason = @adjustment_reason,
@@ -408,6 +414,7 @@ app.put('/api/orders/:id', (req, res) => {
       obstacles: data.obstacles || 'N',
       premise_access: data.premise_access || 'N',
       neighbor_notice: data.neighbor_notice || 'N',
+      raw_notes: data.raw_notes !== undefined ? data.raw_notes : '',
       rate_calculated: parseFloat(data.rate_calculated) || 0,
       manual_adjustment: parseFloat(data.manual_adjustment) || 0,
       adjustment_reason: data.adjustment_reason || '',
@@ -441,6 +448,21 @@ app.post('/api/orders/:id/adjust', (req, res) => {
       adjustment_reason || '',
       req.params.id
     );
+    const updated = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(req.params.id);
+    res.json({ success: true, order: updated });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 4c. Toggle WhatsApp shared status
+app.patch('/api/orders/:id/whatsapp-shared', (req, res) => {
+  try {
+    const { shared } = req.body;
+    const isShared = shared !== undefined ? (shared ? 1 : 0) : 1;
+    const now = isShared ? new Date().toISOString() : null;
+    db.prepare('UPDATE work_orders SET whatsapp_shared = ?, whatsapp_shared_at = ? WHERE id = ?')
+      .run(isShared, now, req.params.id);
     const updated = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(req.params.id);
     res.json({ success: true, order: updated });
   } catch (error) {
@@ -590,6 +612,8 @@ app.get('/api/weekly-summary', (req, res) => {
     for (const order of allOrders) {
       order.photos = photosStmt.all(order.id);
       order.photos_count = order.photos.length;
+      order.work_photos_count = order.photos.filter(p => p.category !== 'Constancia No Realizado').length;
+      order.cancel_photos_count = order.photos.filter(p => p.category === 'Constancia No Realizado').length;
 
       const weekInfo = getWeekInfo(order.work_date, cutoffSetting);
       const key = weekInfo.key;
@@ -746,6 +770,8 @@ app.get('/api/monthly-summary', (req, res) => {
     for (const order of allOrders) {
       order.photos = photosStmt.all(order.id);
       order.photos_count = order.photos.length;
+      order.work_photos_count = order.photos.filter(p => p.category !== 'Constancia No Realizado').length;
+      order.cancel_photos_count = order.photos.filter(p => p.category === 'Constancia No Realizado').length;
 
       const od = parseDateParts(order.work_date);
       const oMonth = `${od.getFullYear()}-${String(od.getMonth() + 1).padStart(2, '0')}`;
@@ -913,11 +939,12 @@ app.get('/api/expenses', (req, res) => {
   }
 });
 
-app.post('/api/expenses', uploadExpense.single('receipt_photo'), (req, res) => {
+app.post('/api/expenses', uploadExpense.any(), (req, res) => {
   try {
     const { expense_date, category, description, amount } = req.body;
-    if (!description || !amount) {
-      return res.status(400).json({ error: 'Descripción y monto son requeridos' });
+    const finalDesc = (description && description.trim()) || category || 'Gasto General';
+    if (!amount) {
+      return res.status(400).json({ error: 'El monto es requerido' });
     }
 
     const dateStr = expense_date || new Date().toISOString().split('T')[0];
@@ -925,8 +952,10 @@ app.post('/api/expenses', uploadExpense.single('receipt_photo'), (req, res) => {
     const month_key = `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, '0')}`;
 
     let receiptPath = null;
-    if (req.file) {
-      receiptPath = path.join('expenses', req.file.filename).replace(/\\/g, '/');
+    const uploadedFiles = req.files || (req.file ? [req.file] : []);
+    if (uploadedFiles.length > 0) {
+      const paths = uploadedFiles.map(f => path.join('expenses', f.filename).replace(/\\/g, '/'));
+      receiptPath = paths.length === 1 ? paths[0] : JSON.stringify(paths);
     }
 
     const stmt = db.prepare(`
@@ -938,7 +967,7 @@ app.post('/api/expenses', uploadExpense.single('receipt_photo'), (req, res) => {
       month_key,
       dateStr,
       category || 'Combustible',
-      description.trim(),
+      finalDesc,
       parseFloat(amount) || 0,
       receiptPath
     );
@@ -956,8 +985,20 @@ app.delete('/api/expenses/:id', (req, res) => {
     const expense = db.prepare('SELECT * FROM monthly_expenses WHERE id = ?').get(req.params.id);
     if (expense) {
       if (expense.receipt_photo) {
-        const fullPath = path.join(uploadsDir, expense.receipt_photo);
-        if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        let photos = [];
+        try {
+          if (expense.receipt_photo.startsWith('[')) {
+            photos = JSON.parse(expense.receipt_photo);
+          } else {
+            photos = [expense.receipt_photo];
+          }
+        } catch (e) {
+          photos = [expense.receipt_photo];
+        }
+        for (const p of photos) {
+          const fullPath = path.join(uploadsDir, p);
+          if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        }
       }
       db.prepare('DELETE FROM monthly_expenses WHERE id = ?').run(req.params.id);
     }

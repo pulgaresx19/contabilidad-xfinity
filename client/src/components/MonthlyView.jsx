@@ -3,7 +3,8 @@ import {
   Calendar, DollarSign, TrendingUp, TrendingDown, Clock, 
   CheckCircle2, ChevronLeft, ChevronRight, Plus, Fuel, Wrench, 
   Car, Utensils, Smartphone, Shield, Package, Trash2, Copy, 
-  Check, Share2, AlertCircle, FileText, ChevronDown, ChevronUp, Image as ImageIcon
+  Check, Share2, AlertCircle, FileText, ChevronDown, ChevronUp, Image as ImageIcon,
+  ShieldCheck, CheckCircle
 } from 'lucide-react';
 import { 
   getCurrentMonthStr, formatMonthFriendly, 
@@ -354,7 +355,11 @@ ${weeksLines || '  (No hay semanas registradas)'}
               return (
                 <div
                   key={w.key}
-                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 transition shadow-sm space-y-3"
+                  className={`border rounded-2xl p-4 transition shadow-sm space-y-3 ${
+                    w.isPaid
+                      ? 'bg-gradient-to-br from-emerald-50/70 via-white to-white dark:from-emerald-950/20 dark:via-slate-900/90 dark:to-slate-900 border-emerald-300/80 dark:border-emerald-500/35 hover:border-emerald-400'
+                      : 'bg-gradient-to-br from-amber-50/70 via-white to-white dark:from-amber-950/20 dark:via-slate-900/90 dark:to-slate-900 border-amber-300/80 dark:border-amber-500/35 hover:border-amber-400'
+                  }`}
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -363,14 +368,16 @@ ${weeksLines || '  (No hay semanas registradas)'}
                           Semana {w.displayLabel}
                         </h3>
                         {w.isPaid ? (
-                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30 flex items-center gap-1 shadow-sm">
-                            <Check className="w-3 h-3 stroke-[3]" />
-                            Cobrado
+                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/90 dark:text-emerald-300 dark:border-emerald-600/50 flex items-center gap-1.5 shadow-xs">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                            <span>Cobrado</span>
                           </span>
                         ) : (
-                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30 flex items-center gap-1 shadow-sm">
-                            <Clock className="w-3 h-3" />
-                            Pendiente
+                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300 dark:bg-amber-950/90 dark:text-amber-300 dark:border-amber-600/50 flex items-center gap-1.5 shadow-xs">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                            <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                            <span>Pendiente</span>
                           </span>
                         )}
                       </div>
@@ -380,7 +387,9 @@ ${weeksLines || '  (No hay semanas registradas)'}
                     </div>
 
                     <div className="text-right">
-                      <div className="text-base font-black text-slate-900 dark:text-white">
+                      <div className={`text-base font-black font-mono ${
+                        w.isPaid ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'
+                      }`}>
                         ${w.totalEarnings.toFixed(2)}
                       </div>
                       <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
@@ -390,7 +399,9 @@ ${weeksLines || '  (No hay semanas registradas)'}
                   </div>
 
                   {/* Action buttons */}
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 gap-2">
+                  <div className={`flex items-center justify-between pt-2 border-t gap-2 ${
+                    w.isPaid ? 'border-emerald-100 dark:border-slate-800/80' : 'border-amber-100 dark:border-slate-800/80'
+                  }`}>
                     <button
                       onClick={() => setExpandedWeekKey(isExpanded ? null : w.key)}
                       className="text-xs text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 font-bold flex items-center gap-1 py-1"
@@ -411,13 +422,23 @@ ${weeksLines || '  (No hay semanas registradas)'}
                     <button
                       onClick={(e) => handleToggleWeekPayment(w, w.isPaid ? 'Pendiente' : 'Cobrado', e)}
                       disabled={isUpdating}
-                      className={`text-xs px-3 py-1.5 rounded-xl font-black transition flex items-center gap-1.5 ${
+                      className={`text-xs px-2.5 py-1 rounded-xl font-black transition flex items-center gap-1 ${
                         w.isPaid
-                          ? 'bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 hover:border-rose-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300'
-                          : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 shadow-md shadow-emerald-500/20'
+                          ? 'bg-emerald-500/10 hover:bg-rose-500/10 text-emerald-700 hover:text-rose-600 dark:text-emerald-300 dark:hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30 shadow-2xs'
+                          : 'bg-amber-500/15 hover:bg-emerald-500/15 text-amber-800 hover:text-emerald-700 dark:text-amber-300 dark:hover:text-emerald-300 border border-amber-500/30 hover:border-emerald-500/30 shadow-2xs active:scale-95'
                       }`}
                     >
-                      {w.isPaid ? 'Marcar Pendiente' : 'Marcar Cobrado ✓'}
+                      {w.isPaid ? (
+                        <>
+                          <CheckCircle className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                          <span>Cobrado ✓</span>
+                        </>
+                      ) : (
+                        <>
+                          <DollarSign className="h-3 w-3 stroke-[2.5]" />
+                          <span>Confirmar</span>
+                        </>
+                      )}
                     </button>
                   </div>
 
@@ -541,12 +562,35 @@ ${weeksLines || '  (No hay semanas registradas)'}
                           <span>{exp.category}</span>
                           <span>•</span>
                           <span>{exp.expense_date}</span>
-                          {exp.receipt_photo && (
-                            <span className="text-cyan-400 flex items-center gap-0.5 font-medium">
-                              <ImageIcon className="w-3 h-3" />
-                              Ticket
-                            </span>
-                          )}
+                          {exp.receipt_photo && (() => {
+                            let photos = [];
+                            try {
+                              if (exp.receipt_photo.startsWith('[')) {
+                                photos = JSON.parse(exp.receipt_photo);
+                              } else {
+                                photos = [exp.receipt_photo];
+                              }
+                            } catch (e) {
+                              photos = [exp.receipt_photo];
+                            }
+                            return (
+                              <span className="flex items-center gap-1">
+                                {photos.map((p, pIdx) => (
+                                  <a
+                                    key={pIdx}
+                                    href={`/uploads/${p}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-cyan-400 hover:text-cyan-300 underline flex items-center gap-0.5 font-medium"
+                                    title={`Abrir ticket #${pIdx + 1}`}
+                                  >
+                                    <ImageIcon className="w-3 h-3" />
+                                    <span>Ticket{photos.length > 1 ? ` #${pIdx + 1}` : ''}</span>
+                                  </a>
+                                ))}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>

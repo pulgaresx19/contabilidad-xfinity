@@ -20,21 +20,33 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [expenseDate, setExpenseDate] = useState(initialDate || getLocalDateStr());
-  const [receiptFile, setReceiptFile] = useState(null);
-  const [receiptPreview, setReceiptPreview] = useState(null);
+  const [receiptFiles, setReceiptFiles] = useState([]);
+  const [receiptPreviews, setReceiptPreviews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   if (!isOpen) return null;
 
   const handlePhotoSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setReceiptFile(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setReceiptFiles((prev) => [...prev, ...files]);
+
+    files.forEach((file) => {
       const reader = new FileReader();
-      reader.onload = (ev) => setReceiptPreview(ev.target.result);
+      reader.onload = (ev) => {
+        setReceiptPreviews((prev) => [...prev, ev.target.result]);
+      };
       reader.readAsDataURL(file);
-    }
+    });
+
+    e.target.value = '';
+  };
+
+  const handleRemoveReceiptPhoto = (idx) => {
+    setReceiptFiles((prev) => prev.filter((_, i) => i !== idx));
+    setReceiptPreviews((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleSubmit = async (e) => {
@@ -42,10 +54,6 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       setError('Ingresa un monto válido mayor a 0');
-      return;
-    }
-    if (!description.trim()) {
-      setError('Ingresa una breve descripción del gasto');
       return;
     }
 
@@ -56,11 +64,11 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
       const formData = new FormData();
       formData.append('expense_date', expenseDate);
       formData.append('category', category);
-      formData.append('description', description.trim());
+      formData.append('description', description.trim() || category);
       formData.append('amount', numAmount);
-      if (receiptFile) {
-        formData.append('receipt_photo', receiptFile);
-      }
+      receiptFiles.forEach((file) => {
+        formData.append('receipt_photos', file);
+      });
 
       const res = await fetch('/api/expenses', {
         method: 'POST',
@@ -75,8 +83,8 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
       // Reset & notify
       setAmount('');
       setDescription('');
-      setReceiptFile(null);
-      setReceiptPreview(null);
+      setReceiptFiles([]);
+      setReceiptPreviews([]);
       if (onExpenseAdded) onExpenseAdded();
       onClose();
     } catch (err) {
@@ -183,17 +191,21 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
             </div>
           </div>
 
-          {/* Description */}
+          {/* Description (Opcional) */}
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              Descripción o Motivo *
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-slate-300">
+                Descripción o Motivo (Opcional)
+              </label>
+              <span className="text-[10px] text-slate-500 font-medium">
+                Por defecto: {category}
+              </span>
+            </div>
             <input
               type="text"
-              placeholder="Ej: Gasolina Van principal, Brocas 3/8, Aceite"
+              placeholder={`Ej: ${category === 'Combustible' ? 'Gasolina Van principal' : category === 'Herramientas' ? 'Brocas 3/8, Teflón' : 'Detalle opcional...'}`}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              required
               className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 rounded-xl py-2.5 px-3.5 text-sm text-white placeholder-slate-600 outline-none transition"
             />
           </div>
@@ -214,48 +226,70 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
             </div>
           </div>
 
-          {/* Optional Receipt Photo */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              Comprobante o Ticket (Opcional)
-            </label>
-            {receiptPreview ? (
-              <div className="relative rounded-2xl overflow-hidden border border-slate-700 bg-slate-950 aspect-[16/9] flex items-center justify-center">
-                <img src={receiptPreview} alt="Receipt preview" className="object-contain w-full h-full" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReceiptFile(null);
-                    setReceiptPreview(null);
-                  }}
-                  className="absolute top-2 right-2 p-1.5 rounded-full bg-slate-900/80 text-rose-400 hover:bg-slate-900 border border-rose-500/30"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-slate-700 hover:border-slate-500 bg-slate-950/40 text-slate-300 hover:text-white cursor-pointer transition text-xs font-medium">
-                  <Camera className="w-4 h-4 text-rose-400" />
-                  <span>Tomar Foto</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handlePhotoSelect}
-                    className="hidden"
-                  />
-                </label>
-                <label className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-slate-700 hover:border-slate-500 bg-slate-950/40 text-slate-300 hover:text-white cursor-pointer transition text-xs font-medium">
-                  <Upload className="w-4 h-4 text-slate-400" />
-                  <span>Galería</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePhotoSelect}
-                    className="hidden"
-                  />
-                </label>
+          {/* Optional Receipt Photos */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-slate-300">
+                Comprobante o Ticket (Opcional)
+              </label>
+              {receiptPreviews.length > 0 && (
+                <span className="text-[10px] font-bold text-rose-400">
+                  {receiptPreviews.length} {receiptPreviews.length === 1 ? 'ticket adjunto' : 'tickets adjuntos'}
+                </span>
+              )}
+            </div>
+
+            {/* Los 2 botones fijos arriba a primera vista */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* Botón Cámara */}
+              <label className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl border border-dashed border-rose-500/40 hover:border-rose-500 bg-rose-500/10 text-rose-400 text-xs font-bold cursor-pointer transition active:scale-95 text-center">
+                <Camera className="w-4 h-4 shrink-0" />
+                <span>+ Cámara</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handlePhotoSelect}
+                  className="hidden"
+                />
+              </label>
+
+              {/* Botón Galería */}
+              <label className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl border border-dashed border-slate-700 hover:border-rose-500 bg-slate-950/60 text-slate-300 hover:text-white text-xs font-bold cursor-pointer transition active:scale-95 text-center">
+                <Upload className="w-4 h-4 shrink-0 text-slate-400" />
+                <span>+ Galería</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handlePhotoSelect}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {/* Tira horizontal de fotos añadidas abajo */}
+            {receiptPreviews.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin">
+                {receiptPreviews.map((src, idx) => (
+                  <div
+                    key={idx}
+                    className="relative w-24 h-16 flex-shrink-0 rounded-xl overflow-hidden border border-slate-800 bg-black/60 shadow-sm"
+                  >
+                    <img src={src} alt={`Ticket ${idx + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveReceiptPhoto(idx)}
+                      className="absolute top-1 right-1 p-1 rounded-full bg-rose-600/90 hover:bg-rose-500 text-white shadow active:scale-90 transition"
+                      title="Quitar foto de ticket"
+                    >
+                      <X className="w-3 h-3 stroke-[2.5]" />
+                    </button>
+                    <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-white/90">
+                      #{idx + 1}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </div>

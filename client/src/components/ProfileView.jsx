@@ -157,13 +157,6 @@ export default function ProfileView({ techName, summaryData }) {
           </div>
         </div>
       </div>
-
-      {/* 3. INSTRUCCIÓN CLARA DE COBRO */}
-      <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-3.5 text-xs text-slate-500 dark:text-slate-400 space-y-1">
-        <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
-          💡 Para modificar tarifas, porcentajes o el día de corte de semana, utiliza el botón de <strong className="text-cyan-700 dark:text-cyan-400">Ajustes (⚙️)</strong> ubicado arriba en la barra superior.
-        </p>
-      </div>
     </div>
   );
 }

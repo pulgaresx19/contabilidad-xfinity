@@ -28,16 +28,13 @@ export default function OrdersList({ orders, onOpenPhotos, onOrderUpdated, onDel
 
   // Copy WhatsApp message for supervisor
   const copyWhatsAppReport = (order) => {
-    const text = `📋 *TRABAJO COMPLETADO - XFINITY*
+    const text = `📋 *REPORTE DE TRABAJO*
 📅 *Fecha:* ${order.work_date}
-🔢 *Job #:* ${order.job_id}
-📍 *Dirección:* ${order.address}, ${order.city}
-📏 *Drop:* ${order.drop_footage} ft (${order.cable_type})
-🛠️ *Bore:* ${order.bore_type && order.bore_type !== 'N' ? order.bore_type : 'Ninguno'}
-⚠️ *Obstáculos:* ${order.obstacles && order.obstacles !== 'N' ? order.obstacles : 'Ninguno'}
-📸 *Fotos:* ${order.photos_count || 0} evidencia(s)
-💵 *Cobro:* $${order.rate_calculated}
-✅ *Estado:* ${order.status}`;
+🔢 *Orden #:* ${order.job_id}
+📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
+📏 *Drop:* ${order.drop_footage} ft (${order.cable_type})${order.bore_type && order.bore_type !== 'N' ? `\n🛠️ *Bore:* ${order.bore_type}` : ''}
+💵 *Tarifa:* $${order.rate_calculated}
+✅ *Estado:* Completado y Verificado`;
 
     navigator.clipboard.writeText(text);
     setCopiedId(order.id);

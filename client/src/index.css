@@ -263,3 +263,14 @@ html.light header {
   box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05) !important;
   border-color: #e2e8f0 !important;
 }
+
+/* Scrollbar Utilities */
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none,
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
