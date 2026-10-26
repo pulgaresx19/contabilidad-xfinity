@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Calendar, CheckCircle2, Clock, Share2, Check, 
   Trash2, ExternalLink, Image as ImageIcon, X, DollarSign, 
-  Ruler, ChevronRight, Copy, Camera, AlertCircle, FileText, ShieldAlert
+  Ruler, ChevronRight, Copy, Camera, AlertCircle, FileText, ShieldAlert, CheckCircle
 } from 'lucide-react';
 
 export default function HistoryView({ summaryData, onRefresh }) {
@@ -10,6 +10,7 @@ export default function HistoryView({ summaryData, onRefresh }) {
   const [selectedWeekModal, setSelectedWeekModal] = useState(null); // Week object for overlay modal
   const [copiedWeekKey, setCopiedWeekKey] = useState(null);
   const [copiedJobId, setCopiedJobId] = useState(null);
+  const [updatingWeekKey, setUpdatingWeekKey] = useState(null);
 
   // Sheets state
   const [sheets, setSheets] = useState([]);
@@ -47,6 +48,38 @@ export default function HistoryView({ summaryData, onRefresh }) {
     }
   }, [summaryData]);
 
+  // Toggle or set payment status for a week
+  const handleTogglePayment = async (w, targetStatus, e) => {
+    if (e) e.stopPropagation();
+
+    const isMarkingPaid = targetStatus === 'Cobrado';
+    const msg = isMarkingPaid
+      ? `¿Confirmar que ya cobraste la Semana ${w.key} ($${w.totalEarnings.toFixed(2)})?`
+      : `¿Revertir la Semana ${w.key} a PENDIENTE por cobrar?`;
+
+    if (!confirm(msg)) return;
+
+    setUpdatingWeekKey(w.key);
+    try {
+      const res = await fetch(`/api/weeks/${encodeURIComponent(w.key)}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_status: targetStatus })
+      });
+
+      if (res.ok) {
+        if (onRefresh) await onRefresh();
+      } else {
+        const errData = await res.json();
+        alert('Error: ' + (errData.error || 'No se pudo actualizar'));
+      }
+    } catch (err) {
+      alert('Error de red: ' + err.message);
+    } finally {
+      setUpdatingWeekKey(null);
+    }
+  };
+
   // Comprehensive audit statement for dispute/claim
   const copyAuditStatement = (w) => {
     const completedList = w.orders.filter(o => o.status === 'Completado');
@@ -64,13 +97,13 @@ export default function HistoryView({ summaryData, onRefresh }) {
 👤 *Técnico:* Javier (P0G1)
 🔢 *Órdenes Completadas:* ${completedList.length} trabajos
 📏 *Metraje Total:* ${Math.round(w.totalFootage)} ft
-💰 *MONTO A COBRAR:* $${w.totalEarnings.toFixed(2)}
-⏳ *Fecha Exigible de Cobro (+3 sem de fondo):* ${w.payoutDueDate}
+💰 *MONTO TOTAL:* $${w.totalEarnings.toFixed(2)}
+🏷️ *Estado de Cobro:* ${w.isPaid ? 'COBRADO' : 'PENDIENTE POR COBRAR'}
 
-📋 *DESGLOSE DE ÓRDENES AUDITADAS:*
+📋 *DESGLOSE DE ÓRDENES:*
 ${jobLines}
 
-⚠️ *Nota:* Cada trabajo cuenta con su orden de Comcast, metraje y registro fotográfico en el sistema.`;
+⚠️ *Nota:* Cada orden cuenta con registro de Comcast, metraje y fotos de respaldo en el sistema.`;
 
     navigator.clipboard.writeText(text);
     setCopiedWeekKey(w.key);
@@ -93,23 +126,6 @@ ${jobLines}
     navigator.clipboard.writeText(text);
     setCopiedJobId(order.id);
     setTimeout(() => setCopiedJobId(null), 2500);
-  };
-
-  const markWeekAsPaid = async (w) => {
-    if (!confirm(`¿Marcar todas las órdenes de la semana ${w.key} como COBRADAS?`)) return;
-
-    try {
-      for (const order of w.orders) {
-        await fetch(`/api/orders/${order.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...order, payment_status: 'Cobrado' })
-        });
-      }
-      onRefresh();
-    } catch (err) {
-      alert('Error actualizando semana: ' + err.message);
-    }
   };
 
   const handleDeleteSheet = async (id) => {
@@ -151,7 +167,7 @@ ${jobLines}
         </button>
       </div>
 
-      {/* SUBTAB 1: LISTADO DE SEMANAS (TOCAR ABRE EL MODAL SUPERPUESTO) */}
+      {/* SUBTAB 1: LISTADO DE SEMANAS CON ESTADO COBRADO/PENDIENTE Y BOTÓN DE CONFIRMACIÓN */}
       {subTab === 'weeks' && (
         <div className="space-y-2.5">
           {weeks.length === 0 ? (
@@ -160,40 +176,86 @@ ${jobLines}
             </div>
           ) : (
             weeks.map((w) => {
-              const completedCount = w.orders.filter(o => o.status === 'Completado').length;
+              const completedCount = w.completedCount !== undefined 
+                ? w.completedCount 
+                : w.orders.filter(o => o.status === 'Completado').length;
+              const isUpdating = updatingWeekKey === w.key;
 
               return (
                 <div
                   key={w.key}
                   onClick={() => setSelectedWeekModal(w)}
-                  className="bg-slate-900/90 border border-slate-800 hover:border-cyan-500/50 rounded-2xl p-4 cursor-pointer transition select-none flex items-center justify-between gap-3 shadow-sm active:scale-[0.99] group"
+                  className="bg-slate-900/90 border border-slate-800 hover:border-cyan-500/50 rounded-2xl p-3.5 cursor-pointer transition select-none space-y-2.5 shadow-sm active:scale-[0.99] group"
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-black text-white font-mono group-hover:text-cyan-400 transition">
-                        {w.key}
-                      </span>
-                      <span className="text-[10px] text-cyan-400 bg-cyan-950 border border-cyan-800 px-2 py-0.2 rounded-full font-bold">
-                        Cobro: {w.payoutDueDate}
-                      </span>
+                  {/* Fila Superior: Semana, Rango y Monto */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-white font-mono group-hover:text-cyan-400 transition">
+                          Semana {w.key}
+                        </span>
+                        {/* Estado de Cobro Badge */}
+                        {w.isPaid ? (
+                          <span className="text-[10px] text-emerald-400 bg-emerald-950/80 border border-emerald-700/60 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            Cobrado
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-amber-300 bg-amber-950/80 border border-amber-700/60 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                            Pendiente
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        {w.startDate} al {w.endDate} • {completedCount} de {w.totalJobs} hechos
+                      </p>
                     </div>
-                    <p className="text-[11px] text-slate-400">
-                      {w.startDate} al {w.endDate} • {completedCount} de {w.totalJobs} hechos
-                    </p>
-                  </div>
 
-                  <div className="flex items-center gap-2.5">
                     <div className="text-right">
                       <span className="text-base font-black text-emerald-400 font-mono block">
                         ${w.totalEarnings.toFixed(2)}
                       </span>
-                      <span className="text-[9px] text-slate-400 font-mono">
+                      <span className="text-[10px] text-amber-300/80 font-mono">
                         {Math.round(w.totalFootage)} ft
                       </span>
                     </div>
+                  </div>
 
-                    <div className="h-7 w-7 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 group-hover:text-cyan-400 group-hover:border-cyan-500/40 transition">
-                      <ChevronRight className="h-4 w-4" />
+                  {/* Fila Inferior: Botón de Confirmación de Cobro directo en la lista */}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
+                    <span className="text-[10px] text-slate-500">
+                      Toca para ver el detalle completo
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      {w.isPaid ? (
+                        <button
+                          type="button"
+                          disabled={isUpdating}
+                          onClick={(e) => handleTogglePayment(w, 'Pendiente', e)}
+                          className="px-2.5 py-1 bg-emerald-950/60 hover:bg-rose-950/60 text-emerald-400 hover:text-rose-300 border border-emerald-800/50 hover:border-rose-700/50 rounded-xl text-[10px] font-bold flex items-center gap-1 transition"
+                          title="Toca para cambiar a Pendiente si hubo algún error"
+                        >
+                          <CheckCircle className="h-3 w-3" />
+                          <span>Cobrado ✓</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isUpdating}
+                          onClick={(e) => handleTogglePayment(w, 'Cobrado', e)}
+                          className="px-2.5 py-1 bg-amber-500/20 hover:bg-emerald-500 hover:text-slate-950 text-amber-300 border border-amber-500/40 rounded-xl text-[10px] font-black flex items-center gap-1 transition shadow-sm active:scale-95"
+                          title="Confirmar que recibiste el pago de esta semana"
+                        >
+                          <DollarSign className="h-3 w-3" />
+                          <span>Confirmar Cobro</span>
+                        </button>
+                      )}
+
+                      <div className="h-6 w-6 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 group-hover:text-cyan-400 group-hover:border-cyan-500/40 transition flex-shrink-0">
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -266,9 +328,15 @@ ${jobLines}
                   <span className="text-base font-black text-white font-mono">
                     Semana {selectedWeekModal.key}
                   </span>
-                  <span className="text-[10px] text-cyan-400 bg-cyan-950 border border-cyan-800 px-2 py-0.5 rounded-full font-bold">
-                    Cobro: {selectedWeekModal.payoutDueDate}
-                  </span>
+                  {selectedWeekModal.isPaid ? (
+                    <span className="text-[10px] text-emerald-400 bg-emerald-950 border border-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                      Cobrado ✓
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-amber-300 bg-amber-950 border border-amber-800 px-2 py-0.5 rounded-full font-bold">
+                      Pendiente
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
                   {selectedWeekModal.startDate} al {selectedWeekModal.endDate} • {selectedWeekModal.orders.length} trabajos
@@ -278,7 +346,7 @@ ${jobLines}
               {/* BOTÓN DE LA CRUZ (CERRAR) */}
               <button
                 onClick={() => setSelectedWeekModal(null)}
-                className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80 hover:bg-slate-800 transition"
+                className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80 hover:bg-slate-800 transition active:scale-95"
                 title="Cerrar ventana"
               >
                 <X className="h-5 w-5" />
@@ -288,7 +356,7 @@ ${jobLines}
             {/* Cuerpo del Modal con Scroll */}
             <div className="p-4 overflow-y-auto space-y-4 flex-1">
               {/* Resumen Financiero y Reclamación */}
-              <div className="bg-slate-950/80 border border-slate-800 p-3.5 rounded-2xl space-y-2.5">
+              <div className="bg-slate-950/80 border border-slate-800 p-3.5 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase font-bold block">
@@ -309,11 +377,11 @@ ${jobLines}
                   </div>
                 </div>
 
-                {/* Botones de Auditoría / Cobro */}
-                <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80">
+                {/* Botones de Auditoría / Confirmación de Cobro */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-800/80">
                   <button
                     onClick={() => copyAuditStatement(selectedWeekModal)}
-                    className="flex-1 py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 active:scale-95 transition"
+                    className="py-2.5 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 active:scale-95 transition"
                   >
                     {copiedWeekKey === selectedWeekModal.key ? (
                       <>
@@ -323,18 +391,28 @@ ${jobLines}
                     ) : (
                       <>
                         <Copy className="h-4 w-4" />
-                        <span>Copiar Auditoría para Reclamación</span>
+                        <span>Copiar Auditoría de Reclamación</span>
                       </>
                     )}
                   </button>
 
-                  <button
-                    onClick={() => markWeekAsPaid(selectedWeekModal)}
-                    className="py-2 px-3 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 font-bold text-xs rounded-xl flex items-center gap-1 transition"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>Cobrada</span>
-                  </button>
+                  {selectedWeekModal.isPaid ? (
+                    <button
+                      onClick={() => handleTogglePayment(selectedWeekModal, 'Pendiente')}
+                      className="py-2.5 px-3 bg-emerald-950/80 hover:bg-rose-950/80 text-emerald-400 hover:text-rose-300 border border-emerald-800/80 hover:border-rose-700/80 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95"
+                    >
+                      <CheckCircle className="h-4 w-4 text-emerald-400" />
+                      <span>Cobrado (Toca para Pendiente)</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleTogglePayment(selectedWeekModal, 'Cobrado')}
+                      className="py-2.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 transition active:scale-95"
+                    >
+                      <DollarSign className="h-4 w-4 stroke-[3]" />
+                      <span>Confirmar Pago Recibido</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -417,6 +495,13 @@ ${jobLines}
                             DW Bore +$30
                           </span>
                         )}
+                        <span className={`px-2 py-0.5 rounded border text-[9px] ${
+                          order.payment_status === 'Cobrado'
+                            ? 'bg-emerald-950/60 border-emerald-800 text-emerald-400'
+                            : 'bg-amber-950/60 border-amber-800 text-amber-300'
+                        }`}>
+                          {order.payment_status || 'Pendiente'}
+                        </span>
                       </div>
 
                       {/* Galería de Fotos de Evidencia de esa Orden */}
@@ -480,7 +565,7 @@ ${jobLines}
             <div className="px-5 py-3 border-t border-slate-800 bg-slate-950/70 flex justify-end">
               <button
                 onClick={() => setSelectedWeekModal(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition active:scale-95"
               >
                 Cerrar Detalle
               </button>

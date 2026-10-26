@@ -280,7 +280,7 @@ app.post('/api/orders', (req, res) => {
       raw_notes: data.raw_notes || '',
       rate_calculated: parseFloat(data.rate_calculated) || (data.bore_type && data.bore_type.includes('DW') ? 130 : 100),
       status: data.status || 'Pendiente',
-      payment_status: data.payment_status || 'En Fondo (3 Sem)'
+      payment_status: data.payment_status || 'Pendiente'
     });
 
     const newOrder = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(result.lastInsertRowid);
@@ -339,7 +339,7 @@ app.put('/api/orders/:id', (req, res) => {
       rate_calculated: parseFloat(data.rate_calculated) || 0,
       status: data.status || 'Completado',
       cancel_reason: data.cancel_reason || '',
-      payment_status: data.payment_status || 'En Fondo (3 Sem)'
+      payment_status: data.payment_status || 'Pendiente'
     });
 
     const updated = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(req.params.id);
@@ -474,10 +474,10 @@ app.post('/api/batch-import', (req, res) => {
   }
 });
 
-// 10. Weekly Summary & 3-Week Rolling Holdback
+// 10. Weekly Summary & Financial Accounting
 app.get('/api/weekly-summary', (req, res) => {
   try {
-    const allOrders = db.prepare('SELECT * FROM work_orders ORDER BY work_date DESC').all();
+    const allOrders = db.prepare('SELECT * FROM work_orders ORDER BY work_date DESC, id DESC').all();
     const photosStmt = db.prepare('SELECT id, filename, original_name, category, created_at FROM job_photos WHERE work_order_id = ? ORDER BY id DESC');
 
     // Group orders by week
@@ -499,53 +499,75 @@ app.get('/api/weekly-summary', (req, res) => {
           endDate: weekInfo.endDate,
           payoutDueDate: weekInfo.payoutDueDate,
           totalJobs: 0,
+          completedCount: 0,
+          pendingJobsCount: 0,
+          cancelledCount: 0,
           totalFootage: 0,
           totalEarnings: 0,
+          pendingEarnings: 0,
+          paidEarnings: 0,
           rg6Count: 0,
           rg11Count: 0,
           boresCount: 0,
-          orders: [],
-          statusCount: {
-            'En Fondo (3 Sem)': 0,
-            'Listo para Cobro': 0,
-            'Cobrado': 0
-          }
+          orders: []
         };
       }
 
       const w = weeksMap[key];
       w.totalJobs++;
+      if (order.status === 'Completado') {
+        w.completedCount++;
+        const val = order.rate_calculated || 0;
+        w.totalEarnings += val;
+        if (order.payment_status === 'Cobrado') {
+          w.paidEarnings += val;
+        } else {
+          w.pendingEarnings += val;
+        }
+      } else if (order.status === 'No Realizado') {
+        w.cancelledCount++;
+      } else {
+        w.pendingJobsCount++;
+      }
+
       if (order.status !== 'No Realizado') {
         w.totalFootage += (order.drop_footage || 0);
-      }
-      if (order.status === 'Completado') {
-        w.totalEarnings += (order.rate_calculated || 0);
       }
       if (order.cable_type === 'RG-11') w.rg11Count++;
       if (order.cable_type === 'RG-6') w.rg6Count++;
       if (order.bore_type && order.bore_type !== 'N') w.boresCount++;
 
       w.orders.push(order);
-      if (w.statusCount[order.payment_status] !== undefined) {
-        w.statusCount[order.payment_status]++;
-      }
     }
 
-    const weeks = Object.values(weeksMap).sort((a, b) => b.key.localeCompare(a.key));
+    // Determine week payment status
+    const weeks = Object.values(weeksMap).map(w => {
+      const completedList = w.orders.filter(o => o.status === 'Completado');
+      const isPaid = completedList.length > 0 && completedList.every(o => o.payment_status === 'Cobrado');
+      return {
+        ...w,
+        isPaid,
+        payment_status: isPaid ? 'Cobrado' : 'Pendiente'
+      };
+    }).sort((a, b) => b.key.localeCompare(a.key));
 
     // Global KPIs
     let totalAllEarnings = 0;
-    let totalInHoldback = 0; // Sum of earnings in holdback
-    let totalReadyForPayout = 0;
+    let totalPending = 0;
     let totalPaid = 0;
     let totalFeetAll = 0;
+    let totalCompletedCount = 0;
 
     for (const o of allOrders) {
       if (o.status === 'Completado') {
-        totalAllEarnings += o.rate_calculated || 0;
-        if (o.payment_status === 'En Fondo (3 Sem)') totalInHoldback += (o.rate_calculated || 0);
-        if (o.payment_status === 'Listo para Cobro') totalReadyForPayout += (o.rate_calculated || 0);
-        if (o.payment_status === 'Cobrado') totalPaid += (o.rate_calculated || 0);
+        totalCompletedCount++;
+        const val = o.rate_calculated || 0;
+        totalAllEarnings += val;
+        if (o.payment_status === 'Cobrado') {
+          totalPaid += val;
+        } else {
+          totalPending += val;
+        }
       }
       if (o.status !== 'No Realizado') {
         totalFeetAll += o.drop_footage || 0;
@@ -555,14 +577,48 @@ app.get('/api/weekly-summary', (req, res) => {
     res.json({
       summary: {
         totalAllEarnings,
-        totalInHoldback,
-        totalReadyForPayout,
+        totalPending,
         totalPaid,
         totalFeetAll: Math.round(totalFeetAll),
-        totalOrdersCount: allOrders.length
+        totalOrdersCount: allOrders.length,
+        totalCompletedCount
       },
       weeks
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 10b. Update payment status for an entire week (Cobrado vs Pendiente)
+app.post('/api/weeks/:key/status', (req, res) => {
+  try {
+    const { key } = req.params;
+    const { payment_status } = req.body; // 'Cobrado' | 'Pendiente'
+    const newStatus = payment_status === 'Cobrado' ? 'Cobrado' : 'Pendiente';
+
+    const allOrders = db.prepare('SELECT id, work_date, status, payment_status FROM work_orders').all();
+    const orderIds = [];
+
+    for (const o of allOrders) {
+      const weekInfo = getWeekInfo(o.work_date);
+      const oKey = `${weekInfo.year}-W${String(weekInfo.weekNumber).padStart(2, '0')}`;
+      if (oKey === key && o.status === 'Completado') {
+        orderIds.push(o.id);
+      }
+    }
+
+    if (orderIds.length > 0) {
+      const stmt = db.prepare('UPDATE work_orders SET payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+      const updateMany = db.transaction((ids, st) => {
+        for (const id of ids) {
+          stmt.run(st, id);
+        }
+      });
+      updateMany(orderIds, newStatus);
+    }
+
+    res.json({ success: true, updated: orderIds.length, payment_status: newStatus });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

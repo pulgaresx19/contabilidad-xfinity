@@ -35,8 +35,8 @@ function initDb() {
       neighbor_notice TEXT DEFAULT 'N',
       raw_notes TEXT,
       rate_calculated REAL DEFAULT 0,
-      status TEXT DEFAULT 'Completado',
-      payment_status TEXT DEFAULT 'En Fondo (3 Sem)',
+      status TEXT DEFAULT 'Pendiente',
+      payment_status TEXT DEFAULT 'Pendiente',
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
@@ -176,7 +176,7 @@ function parseDispatchLine(line) {
     raw_notes: notes,
     rate_calculated: rate,
     status: 'Pendiente',
-    payment_status: 'En Fondo (3 Sem)',
+    payment_status: 'Pendiente',
     cancel_reason: ''
   };
 }
