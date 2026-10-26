@@ -1,0 +1,27 @@
+{
+  "name": "contabilidad-xfinity",
+  "version": "1.0.0",
+  "description": "Sistema de gestión, contabilidad y control de órdenes de trabajo para técnicos instaladores de cableado Xfinity / Comcast.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "cd client && npm run build",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "xfinity",
+    "comcast",
+    "contabilidad",
+    "drop-bury",
+    "technician"
+  ],
+  "author": "Javier",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "cors": "^2.8.6",
+    "express": "^5.3.0",
+    "multer": "^2.5.0"
+  }
+}
