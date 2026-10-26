@@ -77,8 +77,13 @@ function initDb() {
   }
   insertSetting.run('base_rate', '100.00'); // Base pay: $100 por trabajo
   insertSetting.run('bore_dw_bonus', '30.00'); // Driveway bore: $30
-  insertSetting.run('cutoff_day', 'Sunday'); // Weekly cutoff day
-  insertSetting.run('holdback_weeks', '3'); // Weeks in arrears
+  if (!getSetting.get('cutoff_day')) {
+    insertSetting.run('cutoff_day', '0'); // 0 = Domingo (Lunes a Domingo por defecto)
+  }
+  // Clean up obsolete settings
+  try {
+    db.exec("DELETE FROM settings WHERE key IN ('holdback_weeks', 'rg11_bonus', 'bore_sw_bonus', 'rate_per_foot')");
+  } catch (e) {}
 
   // Check if we should seed with the sample orders from user's dispatch sheet
   const count = db.prepare('SELECT COUNT(*) as count FROM work_orders').get().count;

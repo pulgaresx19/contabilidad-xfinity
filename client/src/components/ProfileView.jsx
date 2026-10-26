@@ -1,5 +1,13 @@
 import React from 'react';
-import { ShieldCheck, Settings, Clock, DollarSign, CheckCircle2, Ruler, Briefcase, ChevronRight } from 'lucide-react';
+import { ShieldCheck, Settings, Clock, DollarSign, CheckCircle2, Ruler, Briefcase, Calendar } from 'lucide-react';
+
+const CUTOFF_LABELS = {
+  '0': 'Domingos (Lunes a Domingo)',
+  '5': 'Viernes (Sábado a Viernes)',
+  '4': 'Jueves (Viernes a Jueves)',
+  '6': 'Sábados (Domingo a Sábado)',
+  '3': 'Miércoles (Jueves a Miércoles)'
+};
 
 export default function ProfileView({ techName, summaryData, onOpenSettings }) {
   const summary = summaryData?.summary || {
@@ -49,6 +57,28 @@ export default function ProfileView({ techName, summaryData, onOpenSettings }) {
             <span className="text-[10px] text-slate-400 block font-medium">Bono Driveway Bore (DW):</span>
             <span className="text-sm font-black text-cyan-400 font-mono">+$30.00</span>
           </div>
+        </div>
+
+        {/* Active Cutoff Day Card */}
+        <div 
+          onClick={onOpenSettings}
+          className="flex items-center justify-between bg-slate-950/60 hover:bg-slate-950/90 p-2.5 rounded-2xl border border-slate-800/80 hover:border-amber-500/40 text-xs cursor-pointer transition active:scale-[0.99] group"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-amber-500/10 text-amber-400 rounded-xl">
+              <Calendar className="h-4 w-4" />
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block font-medium">Día de Cierre de Semana:</span>
+              <span className="font-bold text-amber-300 font-mono text-[11px]">
+                {CUTOFF_LABELS[String(summary.cutoffDay ?? '0')] || 'Domingos (Lunes a Domingo)'}
+              </span>
+            </div>
+          </div>
+
+          <span className="text-[10px] text-cyan-400 group-hover:underline font-bold px-2 py-1 bg-cyan-950/50 rounded-lg border border-cyan-800/40">
+            Ajustar
+          </span>
         </div>
       </div>
 

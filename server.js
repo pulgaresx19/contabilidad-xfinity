@@ -137,9 +137,33 @@ function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
 }
 
 // -----------------------------------------------------------------------------
-// HELPER: Calculate Week Number and Dates
+// HELPER: Calculate Week Number and Dates based on configurable closing day
 // -----------------------------------------------------------------------------
-function getWeekInfo(dateStr) {
+function parseCutoffDay(val) {
+  if (val === undefined || val === null || val === '') return 0; // 0 = Sunday (Mon-Sun)
+  const map = {
+    'sunday': 0, 'sun': 0, 'domingo': 0, '0': 0,
+    'monday': 1, 'mon': 1, 'lunes': 1, '1': 1,
+    'tuesday': 2, 'tue': 2, 'martes': 2, '2': 2,
+    'wednesday': 3, 'wed': 3, 'miercoles': 3, 'miércoles': 3, '3': 3,
+    'thursday': 4, 'thu': 4, 'jueves': 4, '4': 4,
+    'friday': 5, 'fri': 5, 'viernes': 5, '5': 5,
+    'saturday': 6, 'sat': 6, 'sabado': 6, 'sábado': 6, '6': 6
+  };
+  const key = String(val).toLowerCase().trim();
+  return map[key] !== undefined ? map[key] : 0;
+}
+
+function getCutoffDaySetting() {
+  try {
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'cutoff_day'").get();
+    return row ? parseCutoffDay(row.value) : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function getWeekInfo(dateStr, cutoffSetting = null) {
   // Format: YYYY-MM-DD or MM-DD-YYYY
   let d = new Date(dateStr);
   if (isNaN(d.getTime()) && dateStr.includes('-')) {
@@ -151,35 +175,42 @@ function getWeekInfo(dateStr) {
   }
   if (isNaN(d.getTime())) d = new Date();
 
-  // Target Thursday of the week to calculate ISO week number
-  const target = new Date(d.valueOf());
-  const dayNr = (d.getDay() + 6) % 7;
-  target.setDate(target.getDate() - dayNr + 3);
-  const firstThursday = target.valueOf();
-  target.setMonth(0, 1);
-  if (target.getDay() !== 4) {
-    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
-  }
-  const weekNumber = 1 + Math.ceil((firstThursday - target) / 604800000);
-  const year = d.getFullYear();
+  const cutoffDay = cutoffSetting !== null ? parseCutoffDay(cutoffSetting) : getCutoffDaySetting();
+  const currentDay = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
 
-  // Compute Monday (start) and Sunday (end) of that week
-  const monday = new Date(d);
-  const currentDay = (d.getDay() + 6) % 7;
-  monday.setDate(d.getDate() - currentDay);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
+  // Days remaining from currentDay to reach cutoffDay
+  const daysUntilEnd = (cutoffDay - currentDay + 7) % 7;
+  const end = new Date(d);
+  end.setDate(d.getDate() + daysUntilEnd);
 
-  // Estimated payout date: +3 weeks from the end of the worked week
-  const payoutDate = new Date(sunday);
-  payoutDate.setDate(payoutDate.getDate() + 21);
+  const start = new Date(end);
+  start.setDate(end.getDate() - 6);
+
+  const fmt = (dt) => {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const startDate = fmt(start);
+  const endDate = fmt(end);
+
+  // Friendly short display e.g. "10/20 al 10/26"
+  const startShort = `${start.getMonth() + 1}/${start.getDate()}`;
+  const endShort = `${end.getMonth() + 1}/${end.getDate()}`;
+  const displayLabel = `${startShort} al ${endShort}`;
+
+  // Unique chronological key
+  const key = `${startDate}_al_${endDate}`;
 
   return {
-    weekNumber,
-    year,
-    startDate: monday.toISOString().split('T')[0],
-    endDate: sunday.toISOString().split('T')[0],
-    payoutDueDate: payoutDate.toISOString().split('T')[0]
+    key,
+    displayLabel,
+    startDate,
+    endDate,
+    year: end.getFullYear(),
+    cutoffDay
   };
 }
 
@@ -480,24 +511,24 @@ app.get('/api/weekly-summary', (req, res) => {
     const allOrders = db.prepare('SELECT * FROM work_orders ORDER BY work_date DESC, id DESC').all();
     const photosStmt = db.prepare('SELECT id, filename, original_name, category, created_at FROM job_photos WHERE work_order_id = ? ORDER BY id DESC');
 
-    // Group orders by week
+    // Group orders by week based on configured closing day
+    const cutoffSetting = getCutoffDaySetting();
     const weeksMap = {};
 
     for (const order of allOrders) {
       order.photos = photosStmt.all(order.id);
       order.photos_count = order.photos.length;
 
-      const weekInfo = getWeekInfo(order.work_date);
-      const key = `${weekInfo.year}-W${String(weekInfo.weekNumber).padStart(2, '0')}`;
+      const weekInfo = getWeekInfo(order.work_date, cutoffSetting);
+      const key = weekInfo.key;
 
       if (!weeksMap[key]) {
         weeksMap[key] = {
           key,
+          displayLabel: weekInfo.displayLabel,
           year: weekInfo.year,
-          weekNumber: weekInfo.weekNumber,
           startDate: weekInfo.startDate,
           endDate: weekInfo.endDate,
-          payoutDueDate: weekInfo.payoutDueDate,
           totalJobs: 0,
           completedCount: 0,
           pendingJobsCount: 0,
@@ -540,7 +571,7 @@ app.get('/api/weekly-summary', (req, res) => {
       w.orders.push(order);
     }
 
-    // Determine week payment status
+    // Determine week payment status and sort chronologically descending
     const weeks = Object.values(weeksMap).map(w => {
       const completedList = w.orders.filter(o => o.status === 'Completado');
       const isPaid = completedList.length > 0 && completedList.every(o => o.payment_status === 'Cobrado');
@@ -549,7 +580,7 @@ app.get('/api/weekly-summary', (req, res) => {
         isPaid,
         payment_status: isPaid ? 'Cobrado' : 'Pendiente'
       };
-    }).sort((a, b) => b.key.localeCompare(a.key));
+    }).sort((a, b) => b.startDate.localeCompare(a.startDate));
 
     // Global KPIs
     let totalAllEarnings = 0;
@@ -581,7 +612,8 @@ app.get('/api/weekly-summary', (req, res) => {
         totalPaid,
         totalFeetAll: Math.round(totalFeetAll),
         totalOrdersCount: allOrders.length,
-        totalCompletedCount
+        totalCompletedCount,
+        cutoffDay: cutoffSetting
       },
       weeks
     });
@@ -597,13 +629,13 @@ app.post('/api/weeks/:key/status', (req, res) => {
     const { payment_status } = req.body; // 'Cobrado' | 'Pendiente'
     const newStatus = payment_status === 'Cobrado' ? 'Cobrado' : 'Pendiente';
 
+    const cutoffSetting = getCutoffDaySetting();
     const allOrders = db.prepare('SELECT id, work_date, status, payment_status FROM work_orders').all();
     const orderIds = [];
 
     for (const o of allOrders) {
-      const weekInfo = getWeekInfo(o.work_date);
-      const oKey = `${weekInfo.year}-W${String(weekInfo.weekNumber).padStart(2, '0')}`;
-      if (oKey === key && o.status === 'Completado') {
+      const weekInfo = getWeekInfo(o.work_date, cutoffSetting);
+      if (weekInfo.key === key && o.status === 'Completado') {
         orderIds.push(o.id);
       }
     }

@@ -93,7 +93,7 @@ export default function HistoryView({ summaryData, onRefresh }) {
     }).join('\n\n');
 
     const text = `📁 *CONSTANCIA DE AUDITORÍA & RECLAMACIÓN - XFINITY*
-📅 *Período:* Semana ${w.key} (${w.startDate} al ${w.endDate})
+📅 *Período:* Semana ${w.displayLabel || w.key} (${w.startDate} al ${w.endDate})
 👤 *Técnico:* Javier (P0G1)
 🔢 *Órdenes Completadas:* ${completedList.length} trabajos
 📏 *Metraje Total:* ${Math.round(w.totalFootage)} ft
@@ -192,7 +192,7 @@ ${jobLines}
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-black text-white font-mono group-hover:text-cyan-400 transition">
-                          Semana {w.key}
+                          Semana {w.displayLabel || w.key}
                         </span>
                         {/* Estado de Cobro Badge */}
                         {w.isPaid ? (
@@ -326,7 +326,7 @@ ${jobLines}
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-base font-black text-white font-mono">
-                    Semana {selectedWeekModal.key}
+                    Semana {selectedWeekModal.displayLabel || selectedWeekModal.key}
                   </span>
                   {selectedWeekModal.isPaid ? (
                     <span className="text-[10px] text-emerald-400 bg-emerald-950 border border-emerald-800 px-2 py-0.5 rounded-full font-bold">
