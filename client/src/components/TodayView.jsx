@@ -242,7 +242,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
         </div>
       ) : (
         <div className="space-y-2.5">
-          {filteredOrders.map((order) => {
+          {filteredOrders.map((order, idx) => {
             const isCompleted = order.status === 'Completado';
             const isPending = order.status === 'Pendiente';
             const isCancelled = order.status === 'No Realizado';
@@ -259,9 +259,20 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                     : 'border-slate-800 hover:border-slate-700'
                 }`}
               >
-                {/* Header: Job #, Status Badge, Earnings */}
+                {/* Header: Item Number in Circle, Job #, Status Badge, Earnings */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
+                    {/* CIRCULAR ITEM NUMBER BADGE */}
+                    <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black font-mono shadow-sm flex-shrink-0 ${
+                      isCompleted
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        : isCancelled
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                        : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    }`}>
+                      {idx + 1}
+                    </div>
+
                     <span className="text-sm font-black text-cyan-400 font-mono">
                       #{order.job_id}
                     </span>

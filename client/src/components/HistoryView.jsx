@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   Calendar, CheckCircle2, Clock, Share2, Check, 
   Trash2, ExternalLink, Image as ImageIcon, X, DollarSign, 
-  Ruler, ChevronDown, ChevronUp, Copy, Camera, AlertCircle, FileText, ShieldAlert
+  Ruler, ChevronRight, Copy, Camera, AlertCircle, FileText, ShieldAlert
 } from 'lucide-react';
 
 export default function HistoryView({ summaryData, onRefresh }) {
   const [subTab, setSubTab] = useState('weeks'); // 'weeks' | 'sheets'
-  const [expandedWeeks, setExpandedWeeks] = useState({}); // { [weekKey]: boolean }
+  const [selectedWeekModal, setSelectedWeekModal] = useState(null); // Week object for overlay modal
   const [copiedWeekKey, setCopiedWeekKey] = useState(null);
   const [copiedJobId, setCopiedJobId] = useState(null);
 
@@ -17,20 +17,6 @@ export default function HistoryView({ summaryData, onRefresh }) {
   const [selectedPhoto, setSelectedPhoto] = useState(null);
 
   const weeks = summaryData?.weeks || [];
-
-  // Default expand the first week
-  useEffect(() => {
-    if (weeks.length > 0 && Object.keys(expandedWeeks).length === 0) {
-      setExpandedWeeks({ [weeks[0].key]: true });
-    }
-  }, [weeks]);
-
-  const toggleWeek = (weekKey) => {
-    setExpandedWeeks(prev => ({
-      ...prev,
-      [weekKey]: !prev[weekKey]
-    }));
-  };
 
   const fetchSheets = async () => {
     try {
@@ -52,6 +38,14 @@ export default function HistoryView({ summaryData, onRefresh }) {
       fetchSheets();
     }
   }, [subTab]);
+
+  // Keep selectedWeekModal updated if summaryData refreshes
+  useEffect(() => {
+    if (selectedWeekModal && weeks.length > 0) {
+      const updated = weeks.find(w => w.key === selectedWeekModal.key);
+      if (updated) setSelectedWeekModal(updated);
+    }
+  }, [summaryData]);
 
   // Comprehensive audit statement for dispute/claim
   const copyAuditStatement = (w) => {
@@ -157,236 +151,51 @@ ${jobLines}
         </button>
       </div>
 
-      {/* SUBTAB 1: CIERRES SEMANALES CON HISTORIAL DESPLEGABLE */}
+      {/* SUBTAB 1: LISTADO DE SEMANAS (TOCAR ABRE EL MODAL SUPERPUESTO) */}
       {subTab === 'weeks' && (
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {weeks.length === 0 ? (
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-xs">
               No hay semanas registradas aún.
             </div>
           ) : (
             weeks.map((w) => {
-              const isExpanded = !!expandedWeeks[w.key];
               const completedCount = w.orders.filter(o => o.status === 'Completado').length;
 
               return (
                 <div
                   key={w.key}
-                  className="bg-slate-900/90 border border-slate-800 rounded-3xl overflow-hidden shadow-sm transition"
+                  onClick={() => setSelectedWeekModal(w)}
+                  className="bg-slate-900/90 border border-slate-800 hover:border-cyan-500/50 rounded-2xl p-4 cursor-pointer transition select-none flex items-center justify-between gap-3 shadow-sm active:scale-[0.99] group"
                 >
-                  {/* ACCORDION HEADER (FLECHAR PARA EXPANDIR) */}
-                  <div
-                    onClick={() => toggleWeek(w.key)}
-                    className="p-4 cursor-pointer hover:bg-slate-800/40 transition select-none flex items-center justify-between gap-3"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-black text-white font-mono">{w.key}</span>
-                        <span className="text-[10px] text-cyan-400 bg-cyan-950 border border-cyan-800 px-2 py-0.2 rounded-full font-bold">
-                          Cobro: {w.payoutDueDate}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400">
-                        {w.startDate} al {w.endDate} • {completedCount} de {w.totalJobs} hechos
-                      </p>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-black text-white font-mono group-hover:text-cyan-400 transition">
+                        {w.key}
+                      </span>
+                      <span className="text-[10px] text-cyan-400 bg-cyan-950 border border-cyan-800 px-2 py-0.2 rounded-full font-bold">
+                        Cobro: {w.payoutDueDate}
+                      </span>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <span className="text-base font-black text-emerald-400 font-mono block">
-                          ${w.totalEarnings.toFixed(2)}
-                        </span>
-                        <span className="text-[9px] text-slate-400 font-mono">
-                          {Math.round(w.totalFootage)} ft
-                        </span>
-                      </div>
-
-                      <div className="h-7 w-7 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400">
-                        {isExpanded ? (
-                          <ChevronUp className="h-4 w-4 text-cyan-400" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
-                        )}
-                      </div>
-                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      {w.startDate} al {w.endDate} • {completedCount} de {w.totalJobs} hechos
+                    </p>
                   </div>
 
-                  {/* EXPANDED CONTENT: COMPONENTE DETALLADO DE AUDITORÍA Y FOTOS */}
-                  {isExpanded && (
-                    <div className="px-4 pb-4 pt-2 border-t border-slate-800/80 bg-slate-950/40 space-y-3.5 animate-fade-in">
-                      {/* Reclamation Action Bar */}
-                      <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-2xl space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-slate-300 flex items-center gap-1.5">
-                            <ShieldAlert className="h-4 w-4 text-amber-400" />
-                            Constancia de Cobro & Reclamación
-                          </span>
-                          <span className="text-[10px] text-blue-400 font-mono">
-                            Fondo 3 Semanas
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-400 leading-tight">
-                          Si surge una disputa o retraso en el pago de esta semana, copia este reporte detallado con todas las órdenes y fotos de respaldo.
-                        </p>
-
-                        <div className="flex items-center gap-2 pt-1">
-                          <button
-                            onClick={() => copyAuditStatement(w)}
-                            className="flex-1 py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 active:scale-95 transition"
-                          >
-                            {copiedWeekKey === w.key ? (
-                              <>
-                                <Check className="h-3.5 w-3.5 stroke-[3]" />
-                                <span>¡Constancia Copiada!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="h-3.5 w-3.5" />
-                                <span>Copiar Auditoría de la Semana</span>
-                              </>
-                            )}
-                          </button>
-
-                          <button
-                            onClick={() => markWeekAsPaid(w)}
-                            className="py-2 px-3 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 font-bold text-xs rounded-xl flex items-center gap-1 transition"
-                            title="Marcar toda la semana como cobrada"
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            <span>Cobrada</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Itemized List of Jobs in this Week */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between px-1 text-[11px] font-bold text-slate-400 uppercase">
-                          <span>Historial de Trabajos ({w.orders.length})</span>
-                          <span>Evidencias y Metraje</span>
-                        </div>
-
-                        {w.orders.map((order, idx) => {
-                          const isComp = order.status === 'Completado';
-                          const isCanc = order.status === 'No Realizado';
-                          const hasBore = order.bore_type && order.bore_type.includes('DW');
-                          const photos = order.photos || [];
-
-                          return (
-                            <div
-                              key={order.id}
-                              className={`bg-slate-900 border rounded-2xl p-3 space-y-2 text-xs ${
-                                isComp 
-                                  ? 'border-slate-800' 
-                                  : isCanc 
-                                  ? 'border-rose-900/40 bg-rose-950/10'
-                                  : 'border-amber-900/40'
-                              }`}
-                            >
-                              {/* Job Header */}
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[11px] text-slate-500 font-bold">#{idx + 1}</span>
-                                  <span className="font-mono font-black text-cyan-400">
-                                    Job #{order.job_id}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 font-mono">
-                                    {order.work_date}
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
-                                    isComp ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                                    : isCanc ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                                    : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                                  }`}>
-                                    {order.status}
-                                  </span>
-                                  <span className="font-mono font-black text-emerald-400">
-                                    ${order.rate_calculated}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Customer Address */}
-                              <div className="text-slate-200">
-                                <p className="font-semibold">{order.address}</p>
-                                <p className="text-[10px] text-slate-400">{order.city} {order.zip_code}</p>
-                              </div>
-
-                              {/* Technical Specs */}
-                              <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
-                                <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-amber-300 font-bold">
-                                  {order.drop_footage} ft
-                                </span>
-                                <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
-                                  {order.cable_type}
-                                </span>
-                                {hasBore && (
-                                  <span className="bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800 font-bold">
-                                    DW Bore +$30
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Photo Evidence Gallery for this Job */}
-                              <div className="pt-1.5 border-t border-slate-800/60">
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-                                    <Camera className="h-3 w-3 text-cyan-400" />
-                                    <span>Fotos de Respaldo ({photos.length})</span>
-                                  </span>
-
-                                  {/* Copy Single Job Claim */}
-                                  <button
-                                    onClick={() => copySingleJobClaim(order)}
-                                    className="text-[10px] text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
-                                  >
-                                    {copiedJobId === order.id ? (
-                                      <>
-                                        <Check className="h-3 w-3 text-emerald-400" />
-                                        <span className="text-emerald-400">¡Copiado!</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Copy className="h-3 w-3" />
-                                        <span>Copiar Comprobante</span>
-                                      </>
-                                    )}
-                                  </button>
-                                </div>
-
-                                {photos.length === 0 ? (
-                                  <p className="text-[10px] text-slate-500 italic">
-                                    Sin fotos adjuntas para esta orden.
-                                  </p>
-                                ) : (
-                                  <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-                                    {photos.map((p) => (
-                                      <div
-                                        key={p.id}
-                                        onClick={() => setSelectedPhoto(`/uploads/${p.filename}`)}
-                                        className="h-14 w-16 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 flex-shrink-0 cursor-pointer relative group"
-                                      >
-                                        <img 
-                                          src={`/uploads/${p.filename}`} 
-                                          alt={p.category} 
-                                          className="w-full h-full object-cover group-hover:scale-105 transition" 
-                                        />
-                                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                                          <ExternalLink className="h-3.5 w-3.5 text-white" />
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                  <div className="flex items-center gap-2.5">
+                    <div className="text-right">
+                      <span className="text-base font-black text-emerald-400 font-mono block">
+                        ${w.totalEarnings.toFixed(2)}
+                      </span>
+                      <span className="text-[9px] text-slate-400 font-mono">
+                        {Math.round(w.totalFootage)} ft
+                      </span>
                     </div>
-                  )}
+
+                    <div className="h-7 w-7 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 group-hover:text-cyan-400 group-hover:border-cyan-500/40 transition">
+                      <ChevronRight className="h-4 w-4" />
+                    </div>
+                  </div>
                 </div>
               );
             })
@@ -443,6 +252,240 @@ ${jobLines}
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* COMPONENTE SUPERPUESTO (MODAL DETALLADO DE LA SEMANA CON BOTÓN DE LA CRUZ) */}
+      {selectedWeekModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-md p-0 sm:p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+            {/* Header del Modal con la Cruz */}
+            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-black text-white font-mono">
+                    Semana {selectedWeekModal.key}
+                  </span>
+                  <span className="text-[10px] text-cyan-400 bg-cyan-950 border border-cyan-800 px-2 py-0.5 rounded-full font-bold">
+                    Cobro: {selectedWeekModal.payoutDueDate}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {selectedWeekModal.startDate} al {selectedWeekModal.endDate} • {selectedWeekModal.orders.length} trabajos
+                </p>
+              </div>
+
+              {/* BOTÓN DE LA CRUZ (CERRAR) */}
+              <button
+                onClick={() => setSelectedWeekModal(null)}
+                className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80 hover:bg-slate-800 transition"
+                title="Cerrar ventana"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Cuerpo del Modal con Scroll */}
+            <div className="p-4 overflow-y-auto space-y-4 flex-1">
+              {/* Resumen Financiero y Reclamación */}
+              <div className="bg-slate-950/80 border border-slate-800 p-3.5 rounded-2xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                      Total Producido Esta Semana
+                    </span>
+                    <span className="text-2xl font-black text-emerald-400 font-mono">
+                      ${selectedWeekModal.totalEarnings.toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                      Metraje Total
+                    </span>
+                    <span className="text-base font-black text-amber-300 font-mono">
+                      {Math.round(selectedWeekModal.totalFootage)} ft
+                    </span>
+                  </div>
+                </div>
+
+                {/* Botones de Auditoría / Cobro */}
+                <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80">
+                  <button
+                    onClick={() => copyAuditStatement(selectedWeekModal)}
+                    className="flex-1 py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 active:scale-95 transition"
+                  >
+                    {copiedWeekKey === selectedWeekModal.key ? (
+                      <>
+                        <Check className="h-4 w-4 stroke-[3]" />
+                        <span>¡Constancia Copiada!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4" />
+                        <span>Copiar Auditoría para Reclamación</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => markWeekAsPaid(selectedWeekModal)}
+                    className="py-2 px-3 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 font-bold text-xs rounded-xl flex items-center gap-1 transition"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Cobrada</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Listado Completo de Trabajos y Evidencias de esa Semana */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between px-1 text-[11px] font-bold text-slate-400 uppercase">
+                  <span>Historial de Trabajos ({selectedWeekModal.orders.length})</span>
+                  <span>Fotos & Comprobantes</span>
+                </div>
+
+                {selectedWeekModal.orders.map((order, idx) => {
+                  const isComp = order.status === 'Completado';
+                  const isCanc = order.status === 'No Realizado';
+                  const hasBore = order.bore_type && order.bore_type.includes('DW');
+                  const photos = order.photos || [];
+
+                  return (
+                    <div
+                      key={order.id}
+                      className={`bg-slate-950/70 border rounded-2xl p-3 space-y-2 text-xs ${
+                        isComp 
+                          ? 'border-slate-800' 
+                          : isCanc 
+                          ? 'border-rose-900/40 bg-rose-950/10'
+                          : 'border-amber-900/40'
+                      }`}
+                    >
+                      {/* Job Header con Número en Círculo */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {/* Número de ítem en círculo */}
+                          <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black font-mono shadow-sm flex-shrink-0 ${
+                            isComp
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : isCanc
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                              : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                          }`}>
+                            {idx + 1}
+                          </div>
+
+                          <span className="font-mono font-black text-cyan-400">
+                            Job #{order.job_id}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {order.work_date}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
+                            isComp ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                            : isCanc ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                            : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                          }`}>
+                            {order.status}
+                          </span>
+                          <span className="font-mono font-black text-emerald-400">
+                            ${order.rate_calculated}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Dirección del Cliente */}
+                      <div className="text-slate-200">
+                        <p className="font-semibold">{order.address}</p>
+                        <p className="text-[10px] text-slate-400">{order.city} {order.zip_code}</p>
+                      </div>
+
+                      {/* Especificaciones */}
+                      <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
+                        <span className="bg-slate-900 px-2 py-0.5 rounded border border-slate-800 text-amber-300 font-bold">
+                          {order.drop_footage} ft
+                        </span>
+                        <span className="bg-slate-900 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
+                          {order.cable_type}
+                        </span>
+                        {hasBore && (
+                          <span className="bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800 font-bold">
+                            DW Bore +$30
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Galería de Fotos de Evidencia de esa Orden */}
+                      <div className="pt-1.5 border-t border-slate-800/80">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                            <Camera className="h-3 w-3 text-cyan-400" />
+                            <span>Fotos de Evidencia ({photos.length})</span>
+                          </span>
+
+                          <button
+                            onClick={() => copySingleJobClaim(order)}
+                            className="text-[10px] text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
+                          >
+                            {copiedJobId === order.id ? (
+                              <>
+                                <Check className="h-3 w-3 text-emerald-400" />
+                                <span className="text-emerald-400">¡Copiado!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3 w-3" />
+                                <span>Copiar Comprobante</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {photos.length === 0 ? (
+                          <p className="text-[10px] text-slate-500 italic">
+                            Sin fotos adjuntas para esta orden.
+                          </p>
+                        ) : (
+                          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                            {photos.map((p) => (
+                              <div
+                                key={p.id}
+                                onClick={() => setSelectedPhoto(`/uploads/${p.filename}`)}
+                                className="h-14 w-16 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 flex-shrink-0 cursor-pointer relative group"
+                              >
+                                <img 
+                                  src={`/uploads/${p.filename}`} 
+                                  alt={p.category} 
+                                  className="w-full h-full object-cover group-hover:scale-105 transition" 
+                                />
+                                <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                  <ExternalLink className="h-3.5 w-3.5 text-white" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer con Botón de Cerrar */}
+            <div className="px-5 py-3 border-t border-slate-800 bg-slate-950/70 flex justify-end">
+              <button
+                onClick={() => setSelectedWeekModal(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition"
+              >
+                Cerrar Detalle
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
