@@ -169,17 +169,28 @@ function getCutoffDaySetting() {
   }
 }
 
-function getWeekInfo(dateStr, cutoffSetting = null) {
-  // Format: YYYY-MM-DD or MM-DD-YYYY
-  let d = new Date(dateStr);
-  if (isNaN(d.getTime()) && dateStr.includes('-')) {
-    const parts = dateStr.split('-');
-    if (parts[0].length === 2 && parts[2].length === 4) {
-      // MM-DD-YYYY
-      d = new Date(`${parts[2]}-${parts[0]}-${parts[1]}`);
+function parseDateParts(dateStr) {
+  if (!dateStr) return new Date();
+  const clean = String(dateStr).trim().split('T')[0];
+  if (clean.includes('-')) {
+    const parts = clean.split('-');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        // YYYY-MM-DD - parse with noon (12:00:00) to avoid any timezone/DST shift
+        return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+      } else if (parts[2].length === 4) {
+        // MM-DD-YYYY
+        return new Date(parseInt(parts[2], 10), parseInt(parts[0], 10) - 1, parseInt(parts[1], 10), 12, 0, 0);
+      }
     }
   }
-  if (isNaN(d.getTime())) d = new Date();
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? new Date() : d;
+}
+
+function getWeekInfo(dateStr, cutoffSetting = null) {
+  // Format: YYYY-MM-DD or MM-DD-YYYY parsed cleanly with noon to prevent UTC shifting
+  const d = parseDateParts(dateStr);
 
   const cutoffDay = cutoffSetting !== null ? parseCutoffDay(cutoffSetting) : getCutoffDaySetting();
   const currentDay = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat

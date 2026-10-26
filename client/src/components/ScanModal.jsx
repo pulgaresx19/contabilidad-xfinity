@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { Camera, Upload, Check, AlertCircle, Trash2, Plus, Sparkles, X, Eye, Image as ImageIcon } from 'lucide-react';
+import { getLocalDateStr } from '../utils/dateUtils';
 
 export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech }) {
-  const [sheetDate, setSheetDate] = useState(new Date().toISOString().split('T')[0]);
+  const [sheetDate, setSheetDate] = useState(() => getLocalDateStr());
   const [techId, setTechId] = useState(defaultTech || 'Javier (P0G1)');
   const [mode, setMode] = useState('photo'); // 'photo' | 'paste'
 
@@ -99,7 +100,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
         obstacles: 'N',
         rate_calculated: 100,
         status: 'Completado',
-        payment_status: 'En Fondo (3 Sem)'
+        payment_status: 'Pendiente'
       }
     ]);
   };

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Sparkles, FileText, Plus, Check, AlertCircle, ArrowRight } from 'lucide-react';
+import { getLocalDateStr } from '../utils/dateUtils';
 
 export default function AddOrderModal({ onOrderCreated, defaultTech = 'Javier (P0G1)' }) {
   const [mode, setMode] = useState('paste'); // 'paste' | 'manual'
@@ -14,7 +15,7 @@ export default function AddOrderModal({ onOrderCreated, defaultTech = 'Javier (P
 
   // Manual Form State
   const [formData, setFormData] = useState({
-    work_date: new Date().toISOString().split('T')[0],
+    work_date: getLocalDateStr(),
     tech_id: defaultTech,
     job_id: '',
     address: '',
@@ -29,8 +30,8 @@ export default function AddOrderModal({ onOrderCreated, defaultTech = 'Javier (P
     obstacles: 'N',
     premise_access: 'N',
     neighbor_notice: 'N',
-    rate_calculated: 65,
-    payment_status: 'En Fondo (3 Sem)'
+    rate_calculated: 100,
+    payment_status: 'Pendiente'
   });
 
   // Handle parsing dispatch rows
@@ -105,7 +106,7 @@ export default function AddOrderModal({ onOrderCreated, defaultTech = 'Javier (P
       if (res.ok) {
         setSuccessMsg(`¡Orden #${data.job_id} agregada exitosamente!`);
         setFormData({
-          work_date: new Date().toISOString().split('T')[0],
+          work_date: getLocalDateStr(),
           tech_id: defaultTech,
           job_id: '',
           address: '',
@@ -120,8 +121,8 @@ export default function AddOrderModal({ onOrderCreated, defaultTech = 'Javier (P
           obstacles: 'N',
           premise_access: 'N',
           neighbor_notice: 'N',
-          rate_calculated: 65,
-          payment_status: 'En Fondo (3 Sem)'
+          rate_calculated: 100,
+          payment_status: 'Pendiente'
         });
         onOrderCreated();
       } else {

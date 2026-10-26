@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Plus, X, Check, AlertCircle, Phone, MapPin, Ruler, DollarSign, FileText } from 'lucide-react';
+import { getLocalDateStr } from '../utils/dateUtils';
 
 export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech }) {
   const [formData, setFormData] = useState({
-    work_date: new Date().toISOString().split('T')[0],
+    work_date: getLocalDateStr(),
     tech_id: defaultTech || 'Javier (P0G1)',
     job_id: '',
     address: '',
@@ -17,7 +18,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech }
     rate_calculated: 100,
     raw_notes: '',
     status: 'Pendiente',
-    payment_status: 'En Fondo (3 Sem)'
+    payment_status: 'Pendiente'
   });
 
   const [saving, setSaving] = useState(false);

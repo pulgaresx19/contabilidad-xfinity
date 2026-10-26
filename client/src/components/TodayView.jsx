@@ -5,36 +5,11 @@ import {
   SlidersHorizontal, Edit3, Minus, DollarSign, Calendar, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import AddJobModal from './AddJobModal';
-
-// Helper to normalize any date format to YYYY-MM-DD
-function normalizeDateStr(dStr) {
-  if (!dStr) return '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) return dStr;
-  if (/^\d{2}-\d{2}-\d{4}$/.test(dStr)) {
-    const [m, d, y] = dStr.split('-');
-    return `${y}-${m}-${d}`;
-  }
-  const dt = new Date(dStr);
-  if (!isNaN(dt.getTime())) {
-    const y = dt.getFullYear();
-    const m = String(dt.getMonth() + 1).padStart(2, '0');
-    const day = String(dt.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  }
-  return dStr;
-}
-
-function formatDateFriendly(dateStr) {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-');
-  const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-  const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-  return `${days[date.getDay()]}, ${parseInt(d)} de ${months[date.getMonth()]} ${y}`;
-}
+import { getLocalDateStr, normalizeDateStr, formatDateFriendly } from '../utils/dateUtils';
 
 export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhotos, onOrderUpdated }) {
-  const todayReal = new Date().toISOString().split('T')[0];
+  // Uses local device time (ET/CT/MT/PT) - never jumps to tomorrow in late evening hours
+  const todayReal = getLocalDateStr();
   
   // Find which date to display by default:
   // If today has orders, start on today.
@@ -171,7 +146,8 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   // Date navigation helpers
   const shiftDay = (days) => {
     const [y, m, d] = activeDate.split('-');
-    const current = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+    // Noon avoids daylight saving time boundary skips
+    const current = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10), 12, 0, 0);
     current.setDate(current.getDate() + days);
     const newY = current.getFullYear();
     const newM = String(current.getMonth() + 1).padStart(2, '0');
