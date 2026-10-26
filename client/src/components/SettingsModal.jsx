@@ -1,42 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { X, Settings, Save, Check, Calendar, DollarSign, ShieldCheck, HelpCircle } from 'lucide-react';
+import { X, Settings, Save, Check, Calendar, DollarSign, ShieldCheck } from 'lucide-react';
 
-const CLOSING_DAY_OPTIONS = [
-  {
-    id: '0',
-    dayName: 'Domingo',
-    period: 'Lunes a Domingo',
-    tag: 'Estándar General',
-    desc: 'Cierre domingo a medianoche. Semana laboral de lunes a domingo.'
-  },
-  {
-    id: '5',
-    dayName: 'Viernes',
-    period: 'Sábado a Viernes',
-    tag: 'Frecuente en Comcast',
-    desc: 'Cierre los viernes al final del día. Semana de sábado a viernes.'
-  },
-  {
-    id: '4',
-    dayName: 'Jueves',
-    period: 'Viernes a Jueves',
-    tag: 'Corte Jueves',
-    desc: 'Cierre los jueves. Semana laboral de viernes a jueves.'
-  },
-  {
-    id: '6',
-    dayName: 'Sábado',
-    period: 'Domingo a Sábado',
-    tag: 'Fin de Semana',
-    desc: 'Cierre los sábados. Semana laboral de domingo a sábado.'
-  },
-  {
-    id: '3',
-    dayName: 'Miércoles',
-    period: 'Jueves a Miércoles',
-    tag: 'Mitad de Semana',
-    desc: 'Cierre los miércoles. Semana de jueves a miércoles.'
-  }
+const WEEK_DAYS = [
+  { id: '1', short: 'Lun', full: 'Lunes', cycle: 'Martes a Lunes' },
+  { id: '2', short: 'Mar', full: 'Martes', cycle: 'Miércoles a Martes' },
+  { id: '3', short: 'Mié', full: 'Miércoles', cycle: 'Jueves a Miércoles' },
+  { id: '4', short: 'Jue', full: 'Jueves', cycle: 'Viernes a Jueves' },
+  { id: '5', short: 'Vie', full: 'Viernes', cycle: 'Sábado a Viernes' },
+  { id: '6', short: 'Sáb', full: 'Sábado', cycle: 'Domingo a Sábado' },
+  { id: '0', short: 'Dom', full: 'Domingo', cycle: 'Lunes a Domingo' },
 ];
 
 export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
@@ -62,6 +34,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             else if (cutoffVal === 'Thursday') cutoffVal = '4';
             else if (cutoffVal === 'Saturday') cutoffVal = '6';
             else if (cutoffVal === 'Wednesday') cutoffVal = '3';
+            else if (cutoffVal === 'Tuesday') cutoffVal = '2';
+            else if (cutoffVal === 'Monday') cutoffVal = '1';
             else if (!cutoffVal) cutoffVal = '0';
 
             setSettings({
@@ -78,7 +52,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
 
   if (!isOpen) return null;
 
-  const currentOption = CLOSING_DAY_OPTIONS.find(o => o.id === String(settings.cutoff_day)) || CLOSING_DAY_OPTIONS[0];
+  const currentOption = WEEK_DAYS.find(o => o.id === String(settings.cutoff_day)) || WEEK_DAYS[6]; // default Domingo (id: '0')
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -122,8 +96,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
               <Settings className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="font-bold text-white text-base">Ajustes & Cierres de Semana</h3>
-              <p className="text-[11px] text-slate-400">Configura tus tarifas y el ciclo de tu contratista</p>
+              <h3 className="font-bold text-white text-base">Ajustes & Semanario</h3>
+              <p className="text-[11px] text-slate-400">Tarifas y día de cierre de tu compañía</p>
             </div>
           </div>
 
@@ -205,71 +179,59 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             </div>
           </div>
 
-          {/* 3. DÍA / CICLO DE CIERRE SEMANAL (CONFIGURACIÓN FLEXIBLE) */}
+          {/* 3. DÍA DE CIERRE SEMANAL (SEMANARIO LINEAL) */}
           <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3.5 space-y-3">
-            <div className="flex items-center justify-between">
+            <div>
               <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Calendar className="h-4 w-4" />
-                <span>Día de Cierre de Semana</span>
+                <span>Semanario & Día de Cierre</span>
               </span>
-              <span className="text-[10px] text-slate-400 font-mono">Corte de nómina</span>
+              <p className="text-[11px] text-slate-300 mt-1 leading-snug">
+                Selecciona el día de la semana en que corta tu compañía. Ese día se tomará lógicamente como el fin de cada cierre semanal:
+              </p>
             </div>
 
-            <p className="text-[11px] text-slate-300 leading-relaxed">
-              Elige qué día cierra la semana tu compañía contratista para agrupar automáticamente tus órdenes de trabajo:
-            </p>
-
-            {/* Selector de opciones */}
-            <div className="space-y-2">
-              {CLOSING_DAY_OPTIONS.map((opt) => {
-                const isSelected = String(settings.cutoff_day) === opt.id;
+            {/* Selector Lineal Horizontal de 7 Días */}
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5 pt-1">
+              {WEEK_DAYS.map((d) => {
+                const isSelected = String(settings.cutoff_day) === d.id;
                 return (
-                  <div
-                    key={opt.id}
-                    onClick={() => setSettings({ ...settings, cutoff_day: opt.id })}
-                    className={`p-3 rounded-2xl border cursor-pointer transition select-none flex items-center justify-between gap-3 ${
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => setSettings({ ...settings, cutoff_day: d.id })}
+                    className={`py-3 px-1 rounded-xl text-xs font-black transition flex flex-col items-center justify-center gap-0.5 border select-none ${
                       isSelected
-                        ? 'bg-amber-500/15 border-amber-500 text-white shadow-md shadow-amber-500/10'
-                        : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700'
+                        ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-lg shadow-amber-400/25 scale-105 z-10'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 active:scale-95'
                     }`}
                   >
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-black ${isSelected ? 'text-amber-300' : 'text-white'}`}>
-                          Cierre: {opt.dayName}
-                        </span>
-                        <span className={`text-[10px] px-2 py-0.2 rounded-full font-bold ${
-                          isSelected ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-800 text-slate-400'
-                        }`}>
-                          {opt.period}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-400">{opt.desc}</p>
-                    </div>
-
-                    <div className={`h-5 w-5 rounded-full flex items-center justify-center border transition flex-shrink-0 ${
-                      isSelected
-                        ? 'border-amber-400 bg-amber-400 text-slate-950'
-                        : 'border-slate-700 bg-slate-950 text-transparent'
-                    }`}>
-                      <Check className="h-3 w-3 stroke-[3]" />
-                    </div>
-                  </div>
+                    <span>{d.short}</span>
+                    <span className={`text-[8px] font-bold uppercase ${isSelected ? 'text-slate-950/90' : 'text-slate-600'}`}>
+                      {isSelected ? 'Cierre' : 'Día'}
+                    </span>
+                  </button>
                 );
               })}
             </div>
 
-            {/* Recuadro informativo del ciclo activo */}
-            <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-xs space-y-1">
-              <span className="text-[10px] text-slate-400 uppercase font-bold block">
-                Ciclo Seleccionado Actualmente:
-              </span>
-              <p className="text-amber-300 font-bold font-mono text-xs">
-                Cierre los {currentOption.dayName}s ({currentOption.period})
-              </p>
-              <p className="text-[10px] text-slate-400">
-                Al guardar, la lista de cierres semanales y comprobantes se recalculará automáticamente con este período.
-              </p>
+            {/* Previsualización del Ciclo Seleccionado */}
+            <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl text-xs flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                  Cierre de Semana Configurado:
+                </span>
+                <p className="text-sm font-black text-amber-300 font-mono">
+                  {currentOption.full}
+                </p>
+                <p className="text-[10px] text-slate-400 font-mono">
+                  Período: {currentOption.cycle}
+                </p>
+              </div>
+
+              <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
+                <Check className="h-4 w-4 stroke-[3]" />
+              </div>
             </div>
           </div>
 

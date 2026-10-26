@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Upload, Check, AlertCircle, Trash2, Plus, Sparkles, X, Eye } from 'lucide-react';
+import { Camera, Upload, Check, AlertCircle, Trash2, Plus, Sparkles, X, Eye, Image as ImageIcon } from 'lucide-react';
 
 export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech }) {
   const [sheetDate, setSheetDate] = useState(new Date().toISOString().split('T')[0]);
@@ -14,7 +14,8 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
   const [showRawText, setShowRawText] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
-  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
 
   // Paste state
   const [pasteText, setPasteText] = useState('');
@@ -227,8 +228,9 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
           {/* Mode 1: Photo & Camera */}
           {mode === 'photo' && (
             <div className="space-y-3">
+              {/* Input for Camera (forces camera on mobile) */}
               <input
-                ref={fileInputRef}
+                ref={cameraInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
@@ -236,34 +238,83 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                 className="hidden"
               />
 
+              {/* Input for Gallery / File picker (no capture, opens photo album) */}
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+
               {!previewUrl ? (
-                <button
-                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                  className="w-full py-8 px-4 border-2 border-dashed border-cyan-500/40 hover:border-cyan-400 bg-cyan-950/20 rounded-2xl flex flex-col items-center justify-center gap-2 transition active:scale-[0.99]"
-                >
-                  <div className="h-12 w-12 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center shadow-lg">
-                    <Camera className="h-6 w-6" />
+                <div className="space-y-2">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block px-0.5">
+                    Elige cómo agregar la hoja de despacho:
+                  </span>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {/* Botón 1: Cámara */}
+                    <button
+                      type="button"
+                      onClick={() => cameraInputRef.current && cameraInputRef.current.click()}
+                      className="py-6 px-3 border border-cyan-500/40 hover:border-cyan-400 bg-cyan-950/25 hover:bg-cyan-950/50 rounded-2xl flex flex-col items-center justify-center gap-2 transition active:scale-95 group shadow-sm text-center"
+                    >
+                      <div className="h-12 w-12 rounded-2xl bg-cyan-500/20 text-cyan-400 group-hover:bg-cyan-500 group-hover:text-slate-950 flex items-center justify-center transition shadow-md">
+                        <Camera className="h-6 w-6 stroke-[2.5]" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-white">Tomar con Cámara</p>
+                        <p className="text-[10px] text-slate-400">Foto en vivo ahora</p>
+                      </div>
+                    </button>
+
+                    {/* Botón 2: Galería de Fotos */}
+                    <button
+                      type="button"
+                      onClick={() => galleryInputRef.current && galleryInputRef.current.click()}
+                      className="py-6 px-3 border border-slate-800 hover:border-blue-400/60 bg-slate-950/80 hover:bg-slate-900 rounded-2xl flex flex-col items-center justify-center gap-2 transition active:scale-95 group shadow-sm text-center"
+                    >
+                      <div className="h-12 w-12 rounded-2xl bg-blue-500/20 text-blue-400 group-hover:bg-blue-500 group-hover:text-slate-950 flex items-center justify-center transition shadow-md">
+                        <ImageIcon className="h-6 w-6 stroke-[2.5]" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-white">Elegir de Galería</p>
+                        <p className="text-[10px] text-slate-400">Foto ya guardada</p>
+                      </div>
+                    </button>
                   </div>
-                  <div className="text-center">
-                    <p className="text-xs font-bold text-white">Tomar Foto con Cámara o Elegir Imagen</p>
-                    <p className="text-[10px] text-slate-400">La foto se guardará en tu historial y se extraerán las órdenes</p>
-                  </div>
-                </button>
+                </div>
               ) : (
                 <div className="space-y-2">
-                  <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-950 max-h-36 aspect-video">
+                  <div className="relative rounded-2xl overflow-hidden border border-slate-700 bg-slate-950 max-h-40 aspect-video shadow-md">
                     <img src={previewUrl} alt="Hoja" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent flex items-end justify-between p-2">
-                      <span className="text-[9px] bg-slate-900/90 text-cyan-300 border border-slate-700 px-1.5 py-0.5 rounded">
-                        Foto tomada
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent flex items-end justify-between p-2.5">
+                      <span className="text-[10px] bg-slate-900/90 text-cyan-300 border border-slate-700 px-2 py-0.5 rounded-lg font-mono font-bold">
+                        Foto Cargada
                       </span>
-                      <button
-                        onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                        className="px-2 py-0.5 bg-slate-800 text-white text-[10px] font-bold rounded"
-                      >
-                        Cambiar Foto
-                      </button>
                     </div>
+                  </div>
+
+                  {/* Botones para cambiar foto: Cámara o Galería */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => cameraInputRef.current && cameraInputRef.current.click()}
+                      className="flex-1 py-2 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95"
+                    >
+                      <Camera className="h-3.5 w-3.5 text-cyan-400" />
+                      <span>Otra con Cámara</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => galleryInputRef.current && galleryInputRef.current.click()}
+                      className="flex-1 py-2 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95"
+                    >
+                      <ImageIcon className="h-3.5 w-3.5 text-blue-400" />
+                      <span>Elegir de Galería</span>
+                    </button>
                   </div>
 
                   {scanning && (
