@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const Tesseract = require('tesseract.js');
 const { db, parseDispatchLine } = require('./database');
 
 const app = express();
@@ -20,7 +21,13 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use('/uploads', express.static(uploadsDir));
 
-// Multer storage config
+// Subdirectory for dispatch sheet scans
+const sheetsDir = path.join(uploadsDir, 'sheets');
+if (!fs.existsSync(sheetsDir)) {
+  fs.mkdirSync(sheetsDir, { recursive: true });
+}
+
+// Multer storage configs
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
@@ -32,6 +39,104 @@ const storage = multer.diskStorage({
   }
 });
 const upload = multer({ storage });
+
+const sheetStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, sheetsDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, 'sheet-' + uniqueSuffix + ext);
+  }
+});
+const uploadSheet = multer({ storage: sheetStorage });
+
+// Helper to extract candidate orders from OCR text
+function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 8);
+  const candidates = [];
+
+  for (const line of lines) {
+    // Look for Job ID (typically 6-digit number starting with 6 or 7, or general 6 digits)
+    const jobMatch = line.match(/\b([67]\d{5}|\d{6})\b/);
+    if (!jobMatch) continue;
+
+    const jobId = jobMatch[1];
+    
+    // Drop footage
+    let dropFootage = 0;
+    const dropMatch = line.match(/DROP[:\s]*([0-9]{1,4}(?:[.,\s][0-9]{1,2})?)/i);
+    if (dropMatch) {
+      let rawNum = dropMatch[1].replace(/\s+/g, '.').replace(',', '.');
+      dropFootage = parseFloat(rawNum) || 0;
+    }
+
+    // Cable type
+    let cableType = 'RG-6';
+    if (/RG-?11/i.test(line)) cableType = 'RG-11';
+
+    // Bore
+    let boreType = 'N';
+    if (/BORE[:\s]*DW[-:\s]?1/i.test(line) || /DW[-:\s]?1/i.test(line)) boreType = 'DW:1';
+    else if (/BORE[:\s]*SW[-:\s]?1/i.test(line) || /SW[-:\s]?1/i.test(line)) boreType = 'SW:1';
+
+    // Temp
+    const isTemp = /TEMP[:\s]*Y/i.test(line);
+
+    // Obstacles
+    let obstacles = 'N';
+    const obstMatch = line.match(/Obstacl(?:es|ias)[:\s]*([A-Z,]+)/i);
+    if (obstMatch) obstacles = obstMatch[1];
+
+    // Phone
+    let phone = '';
+    const phoneMatch = line.match(/P#[:\s]*(\d{10})/i);
+    if (phoneMatch) phone = phoneMatch[1];
+
+    // Address
+    let address = 'Dirección por verificar';
+    const addrMatch = line.match(/(\d{1,5}\s+[A-Za-z0-9\s]+(?:AVE|DR|ST|RD|CIR|BLVD|WAY|LN|CT)[.,]?)/i);
+    if (addrMatch) {
+      address = addrMatch[1].replace(/,\s*$/, '').trim();
+    }
+
+    // City
+    let city = 'ELKHART';
+    if (/ELKHART/i.test(line)) city = 'ELKHART';
+
+    // Rate calculation
+    let rate = 65;
+    if (cableType === 'RG-11') rate += 20;
+    if (boreType === 'DW:1') rate += 45;
+    if (boreType === 'SW:1') rate += 25;
+    if (dropFootage > 120) rate += 15;
+
+    candidates.push({
+      work_date: defaultDate || new Date().toISOString().split('T')[0],
+      tech_id: defaultTech || 'Javier (P0G1)',
+      job_id: jobId,
+      address,
+      city,
+      zip_code: '46516',
+      phone,
+      call_first: /CALLFIRST/i.test(line) ? 1 : 0,
+      drop_footage: dropFootage,
+      cable_type: cableType,
+      bore_type: boreType,
+      is_temp: isTemp ? 1 : 0,
+      obstacles,
+      premise_access: /RQHM/i.test(line) ? 'RQHM' : 'N',
+      neighbor_notice: /NBR[:\s]*2/i.test(line) ? '2' : 'N',
+      raw_notes: line,
+      rate_calculated: rate,
+      status: 'Completado',
+      payment_status: 'En Fondo (3 Sem)'
+    });
+  }
+
+  return candidates;
+}
 
 // -----------------------------------------------------------------------------
 // HELPER: Calculate Week Number and Dates
@@ -469,6 +574,67 @@ app.post('/api/settings', (req, res) => {
     const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
     for (const [k, v] of Object.entries(updates)) {
       stmt.run(k, String(v));
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 12. Dispatch Sheet Photo Scanner & OCR
+app.post('/api/dispatch-sheets/scan', uploadSheet.single('sheetPhoto'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No se subió ninguna foto de hoja de despacho' });
+    
+    const filePath = req.file.path;
+    const sheetDate = req.body.sheetDate || new Date().toISOString().split('T')[0];
+    const techId = req.body.techId || 'Javier (P0G1)';
+
+    // Run OCR with Tesseract
+    const { data: { text } } = await Tesseract.recognize(filePath, 'eng');
+
+    // Extract candidate orders
+    const parsedOrders = extractOrdersFromOcrText(text, sheetDate, techId);
+
+    // Save record to dispatch_sheets table
+    const relPath = path.join('sheets', req.file.filename).replace(/\\/g, '/');
+    const stmt = db.prepare(`
+      INSERT INTO dispatch_sheets (sheet_date, filename, original_name, extracted_text, orders_count)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(sheetDate, relPath, req.file.originalname, text, parsedOrders.length);
+
+    res.json({
+      sheetId: result.lastInsertRowid,
+      filename: relPath,
+      extractedText: text,
+      ordersCount: parsedOrders.length,
+      parsedOrders
+    });
+  } catch (err) {
+    console.error('OCR scan error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 13. Get all dispatch sheets history
+app.get('/api/dispatch-sheets', (req, res) => {
+  try {
+    const sheets = db.prepare('SELECT * FROM dispatch_sheets ORDER BY sheet_date DESC, id DESC').all();
+    res.json(sheets);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 14. Delete dispatch sheet
+app.delete('/api/dispatch-sheets/:id', (req, res) => {
+  try {
+    const sheet = db.prepare('SELECT * FROM dispatch_sheets WHERE id = ?').get(req.params.id);
+    if (sheet) {
+      const fullPath = path.join(uploadsDir, sheet.filename);
+      if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+      db.prepare('DELETE FROM dispatch_sheets WHERE id = ?').run(req.params.id);
     }
     res.json({ success: true });
   } catch (error) {

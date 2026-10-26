@@ -50,6 +50,17 @@ function initDb() {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS dispatch_sheets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sheet_date TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      original_name TEXT,
+      extracted_text TEXT,
+      orders_count INTEGER DEFAULT 0,
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   // Default settings if not already set

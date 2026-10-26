@@ -7,5 +7,6 @@ uploads/*
 *.db-journal
 *.db-wal
 *.db-shm
+*.traineddata
 .DS_Store
 Thumbs.db
