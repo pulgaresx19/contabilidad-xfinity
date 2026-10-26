@@ -65,17 +65,15 @@ function initDb() {
 
   // Default settings if not already set
   const getSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
+  const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+  
   if (!getSetting.get('tech_default')) {
-    const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
     insertSetting.run('tech_default', 'Javier (P0G1)');
-    insertSetting.run('base_rate', '50.00'); // Base pay per drop
-    insertSetting.run('rate_per_foot', '0.25'); // Extra pay per foot or rate
-    insertSetting.run('bore_dw_bonus', '45.00'); // Driveway bore bonus
-    insertSetting.run('bore_sw_bonus', '25.00'); // Sidewalk bore bonus
-    insertSetting.run('rg11_bonus', '20.00'); // RG-11 heavier cable bonus
-    insertSetting.run('cutoff_day', 'Sunday'); // Weekly cutoff day
-    insertSetting.run('holdback_weeks', '3'); // Weeks in arrears
   }
+  insertSetting.run('base_rate', '100.00'); // Base pay: $100 por trabajo
+  insertSetting.run('bore_dw_bonus', '30.00'); // Driveway bore: $30
+  insertSetting.run('cutoff_day', 'Sunday'); // Weekly cutoff day
+  insertSetting.run('holdback_weeks', '3'); // Weeks in arrears
 
   // Check if we should seed with the sample orders from user's dispatch sheet
   const count = db.prepare('SELECT COUNT(*) as count FROM work_orders').get().count;
@@ -148,12 +146,11 @@ function parseDispatchLine(line) {
     }
   }
 
-  // Calculate estimated rate based on standard rates
-  let rate = 65; // Base default estimate
-  if (cable_type.toUpperCase().includes('RG-11')) rate += 20;
-  if (bore_type.toUpperCase().includes('DW')) rate += 45;
-  if (bore_type.toUpperCase().includes('SW')) rate += 25;
-  if (drop_footage > 120) rate += 15;
+  // Calculate rate based on technician rules: $100 base + $30 for Driveway Bore (DW)
+  let rate = 100;
+  if (bore_type.toUpperCase().includes('DW')) {
+    rate += 30; // Driveway bore: $30
+  }
 
   return {
     work_date,

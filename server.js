@@ -105,12 +105,9 @@ function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
     let city = 'ELKHART';
     if (/ELKHART/i.test(line)) city = 'ELKHART';
 
-    // Rate calculation
-    let rate = 65;
-    if (cableType === 'RG-11') rate += 20;
-    if (boreType === 'DW:1') rate += 45;
-    if (boreType === 'SW:1') rate += 25;
-    if (dropFootage > 120) rate += 15;
+    // Rate calculation: $100 base + $30 for Driveway Bore (DW)
+    let rate = 100;
+    if (boreType === 'DW:1' || boreType.includes('DW')) rate += 30;
 
     candidates.push({
       work_date: defaultDate || new Date().toISOString().split('T')[0],
