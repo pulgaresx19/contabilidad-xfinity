@@ -13,10 +13,9 @@ export default function HistoryView({ orders = [], summaryData, onRefresh, onOpe
   const [copiedJobId, setCopiedJobId] = useState(null);
   const [updatingWeekKey, setUpdatingWeekKey] = useState(null);
 
-  // General orders search and filters
+  // General orders search and status filter
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
-  const [orderCableFilter, setOrderCableFilter] = useState('ALL');
 
   // Sheets state
   const [sheets, setSheets] = useState([]);
@@ -54,20 +53,26 @@ export default function HistoryView({ orders = [], summaryData, onRefresh, onOpe
     }
   }, [summaryData]);
 
-  // Filtered list of all historical orders
+  // Filtered list of all historical orders with smart cable search (RG6 / RG11)
   const filteredAllOrders = orders.filter((o) => {
     const q = orderSearch.toLowerCase().trim();
-    const matchesSearch = 
-      !q ||
-      o.job_id.toLowerCase().includes(q) ||
-      o.address.toLowerCase().includes(q) ||
-      o.city.toLowerCase().includes(q) ||
-      (o.phone && o.phone.includes(q)) ||
-      (o.work_date && o.work_date.includes(q));
+    if (q) {
+      const cleanQ = q.replace(/[^a-z0-9]/g, '');
+      const cleanCable = (o.cable_type || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    if (!matchesSearch) return false;
+      const matchesSearch = 
+        o.job_id.toLowerCase().includes(q) ||
+        o.address.toLowerCase().includes(q) ||
+        o.city.toLowerCase().includes(q) ||
+        (o.phone && o.phone.includes(q)) ||
+        (o.work_date && o.work_date.includes(q)) ||
+        (o.cable_type && o.cable_type.toLowerCase().includes(q)) ||
+        (cleanCable && cleanQ && cleanCable.includes(cleanQ));
+
+      if (!matchesSearch) return false;
+    }
+
     if (orderStatusFilter !== 'ALL' && o.status !== orderStatusFilter) return false;
-    if (orderCableFilter !== 'ALL' && o.cable_type !== orderCableFilter) return false;
     return true;
   });
 
@@ -315,75 +320,74 @@ ${jobLines}
       {/* SUBTAB 2: HISTORIAL GENERAL DE TODOS LOS TRABAJOS (CON BUSCADOR Y FILTROS) */}
       {subTab === 'all_orders' && (
         <div className="space-y-3">
-          {/* BUSCADOR GENERAL */}
+          {/* BUSCADOR GENERAL INTELIGENTE (INCLUYE CABLES RG6 Y RG11) */}
           <div className="relative">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
-              placeholder="Buscar por Job #, dirección, teléfono, ciudad..."
+              placeholder="Buscar por Job #, dirección, cable (RG6/RG11), ciudad..."
               value={orderSearch}
               onChange={(e) => setOrderSearch(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition shadow-sm"
+              className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-9 pr-8 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition shadow-sm"
             />
+            {orderSearch && (
+              <button
+                type="button"
+                onClick={() => setOrderSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-0.5"
+                title="Limpiar búsqueda"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
 
-          {/* Filtros de Estado y Cable */}
-          <div className="flex items-center justify-between gap-1 text-[10px] overflow-x-auto no-scrollbar pb-0.5">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setOrderStatusFilter('ALL')}
-                className={`px-2.5 py-1 rounded-xl font-bold transition ${
-                  orderStatusFilter === 'ALL' ? 'bg-cyan-500 text-slate-950' : 'bg-slate-900 border border-slate-800 text-slate-400'
-                }`}
-              >
-                Todos ({orders.length})
-              </button>
-              <button
-                onClick={() => setOrderStatusFilter('Completado')}
-                className={`px-2.5 py-1 rounded-xl font-bold transition ${
-                  orderStatusFilter === 'Completado' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-900 border border-slate-800 text-slate-400'
-                }`}
-              >
-                Hechos
-              </button>
-              <button
-                onClick={() => setOrderStatusFilter('Pendiente')}
-                className={`px-2.5 py-1 rounded-xl font-bold transition ${
-                  orderStatusFilter === 'Pendiente' ? 'bg-amber-500 text-slate-950' : 'bg-slate-900 border border-slate-800 text-slate-400'
-                }`}
-              >
-                Pendientes
-              </button>
-              <button
-                onClick={() => setOrderStatusFilter('No Realizado')}
-                className={`px-2.5 py-1 rounded-xl font-bold transition ${
-                  orderStatusFilter === 'No Realizado' ? 'bg-rose-500 text-slate-950' : 'bg-slate-900 border border-slate-800 text-slate-400'
-                }`}
-              >
-                Cancelados
-              </button>
-            </div>
-
-            <div className="flex items-center gap-1 border-l border-slate-800 pl-1.5 flex-shrink-0">
-              <button
-                onClick={() => setOrderCableFilter('ALL')}
-                className={`px-2 py-1 rounded-lg font-bold ${orderCableFilter === 'ALL' ? 'text-white font-black' : 'text-slate-500'}`}
-              >
-                Cables
-              </button>
-              <button
-                onClick={() => setOrderCableFilter('RG-6')}
-                className={`px-2 py-1 rounded-lg font-bold ${orderCableFilter === 'RG-6' ? 'bg-slate-800 text-amber-300' : 'text-slate-500'}`}
-              >
-                RG-6
-              </button>
-              <button
-                onClick={() => setOrderCableFilter('RG-11')}
-                className={`px-2 py-1 rounded-lg font-bold ${orderCableFilter === 'RG-11' ? 'bg-slate-800 text-cyan-300' : 'text-slate-500'}`}
-              >
-                RG-11
-              </button>
-            </div>
+          {/* Filtros de Estado Exclusivos: Todos, Hechos, Pendientes, Cancelados */}
+          <div className="grid grid-cols-4 gap-1.5 text-[11px] font-bold">
+            <button
+              type="button"
+              onClick={() => setOrderStatusFilter('ALL')}
+              className={`py-2 px-1 rounded-xl text-center transition ${
+                orderStatusFilter === 'ALL'
+                  ? 'bg-cyan-500 text-slate-950 font-black shadow-sm'
+                  : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              Todos ({orders.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderStatusFilter('Completado')}
+              className={`py-2 px-1 rounded-xl text-center transition ${
+                orderStatusFilter === 'Completado'
+                  ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
+                  : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              Hechos ({orders.filter(o => o.status === 'Completado').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderStatusFilter('Pendiente')}
+              className={`py-2 px-1 rounded-xl text-center transition ${
+                orderStatusFilter === 'Pendiente'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                  : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              Pendientes ({orders.filter(o => o.status === 'Pendiente').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderStatusFilter('No Realizado')}
+              className={`py-2 px-1 rounded-xl text-center transition ${
+                orderStatusFilter === 'No Realizado'
+                  ? 'bg-rose-500 text-slate-950 font-black shadow-sm'
+                  : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              Cancelados ({orders.filter(o => o.status === 'No Realizado').length})
+            </button>
           </div>
 
           {/* Listado de Órdenes Filtradas */}
