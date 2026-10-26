@@ -33,6 +33,17 @@ Sistema móvil de gestión operativa, control contable y auditoría de trabajos 
 - **Buscador Inteligente:** Búsqueda en tiempo real por Job ID, dirección, teléfono, ciudad o tipo de cable (**RG6** / **RG11**).
 - **Filtros por Estado:** `Todos`, `Hechos`, `Pendientes` y `Cancelados`.
 
+### 6. 📊 Reporte Mensual y Control de Gastos
+- **Suma de Semanas:** Totaliza todas las semanas cerradas en el mes para conocer exactamente el total cobrado, facturado y pendiente.
+- **Registro de Gastos:** Registro con categorías (Combustible, Herramientas, Vehículo, Viáticos, Teléfono, Seguro, Otros) y foto de comprobante opcional.
+- **Balance Neto en Mano:** Cálculo en tiempo real de `Cobrado - Gastos` con margen porcentual de ganancia.
+- **Constancia para WhatsApp:** Copia de reporte formal mensual listo para supervisores y contadores con un solo toque.
+
+### 7. ☀️🌙 Modo Claro y Modo Oscuro
+- Conmutador rápido en la barra superior (☀️ / 🌙) y persistencia en `localStorage`.
+- Paleta de alto contraste optimizada para visibilidad bajo luz solar o en la noche.
+- Botones de navegación con ícono arriba y texto abajo.
+
 ---
 
 ## 🛠️ Stack Tecnológico

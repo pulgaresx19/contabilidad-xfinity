@@ -329,24 +329,24 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
         {/* Métricas de la Jornada de ese día */}
         <div className="flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">
+            <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-wider block">
               {isViewingToday ? 'Jornada de Hoy' : 'Producción del Día'}
             </span>
-            <h2 className="text-2xl font-black text-white font-mono mt-0.5">
+            <h2 className="text-3xl font-black text-slate-900 dark:text-white font-mono mt-0.5">
               ${dayEarnings.toFixed(2)}
             </h2>
-            <span className="text-[10px] text-amber-300/80 font-mono">
+            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 font-mono block mt-0.5">
               {Math.round(dayFeet)} ft instalados
             </span>
           </div>
 
           <div className="text-right">
-            <span className="text-[10px] text-slate-400 block font-medium">Progreso del Día</span>
-            <span className="text-xs font-bold text-slate-200">
-              <strong className="text-emerald-400 text-sm font-black">{dayCompleted.length}</strong> de {dayOrders.length} hechos
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-semibold">Progreso del Día</span>
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+              <strong className="text-emerald-600 dark:text-emerald-400 text-sm font-black">{dayCompleted.length}</strong> de {dayOrders.length} hechos
             </span>
             {dayPending.length > 0 && (
-              <span className="text-[10px] text-amber-400 block font-semibold">
+              <span className="text-[10px] text-amber-600 dark:text-amber-400 block font-bold mt-0.5">
                 {dayPending.length} pendientes
               </span>
             )}
@@ -373,9 +373,9 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
 
           <button
             onClick={() => setIsAddJobOpen(true)}
-            className="py-2.5 px-3 bg-slate-800/90 hover:bg-slate-700 text-slate-100 font-extrabold text-xs rounded-2xl border border-slate-700/80 flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
+            className="py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 shadow-sm dark:bg-slate-800/90 dark:hover:bg-slate-700 dark:text-slate-100 dark:border-slate-700/80 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
           >
-            <Plus className="h-4 w-4 stroke-[3] text-cyan-400" />
+            <Plus className="h-4 w-4 stroke-[3] text-cyan-600 dark:text-cyan-400" />
             <span>Añadir Trabajo</span>
           </button>
         </div>
@@ -436,7 +436,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
             </button>
             <button
               onClick={() => setIsAddJobOpen(true)}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition"
+              className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 shadow-sm dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-white dark:border-transparent font-bold text-xs rounded-xl transition"
             >
               Añadir Trabajo
             </button>
@@ -467,25 +467,25 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                     {/* Número de ítem en círculo */}
                     <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black font-mono shadow-sm flex-shrink-0 ${
                       isCompleted
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40'
                         : isCancelled
-                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                        : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                        ? 'bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40'
+                        : 'bg-cyan-100 text-cyan-800 border border-cyan-300 dark:bg-cyan-500/20 dark:text-cyan-300 dark:border-cyan-500/40'
                     }`}>
                       {idx + 1}
                     </div>
 
-                    <span className="text-sm font-black text-cyan-400 font-mono">
+                    <span className="text-sm font-black text-cyan-700 dark:text-cyan-400 font-mono">
                       #{order.job_id}
                     </span>
 
                     {/* Status Badge */}
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
                       isCompleted
-                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/30'
                         : isCancelled
-                        ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                        : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                        ? 'bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-500/15 dark:text-rose-400 dark:border-rose-500/30'
+                        : 'bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30'
                     }`}>
                       {isCompleted && <CheckCircle2 className="h-3 w-3" />}
                       {isPending && <Clock className="h-3 w-3" />}
@@ -498,25 +498,25 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                   <button
                     type="button"
                     onClick={() => openAdjustModal(order)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 rounded-xl transition group active:scale-95"
+                    className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-950 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-800 hover:border-cyan-500/50 rounded-xl transition group active:scale-95"
                     title="Ajustar precio o registrar cambio del supervisor"
                   >
                     <span className={`text-base font-black font-mono ${
-                      isCancelled ? 'line-through text-slate-500' : 'text-emerald-400'
+                      isCancelled ? 'line-through text-slate-400' : 'text-emerald-700 dark:text-emerald-400'
                     }`}>
                       ${order.rate_calculated}
                     </span>
-                    <Edit3 className="h-3 w-3 text-slate-500 group-hover:text-cyan-400 transition" />
+                    <Edit3 className="h-3 w-3 text-slate-400 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition" />
                   </button>
                 </div>
 
                 {/* Dirección y Teléfono */}
                 <div className="space-y-1">
-                  <div className="flex items-start gap-1.5 text-xs text-slate-100">
-                    <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-1.5 text-xs text-slate-800 dark:text-slate-100">
+                    <MapPin className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold">{order.address}</p>
-                      <p className="text-[10px] text-slate-400">{order.city} {order.zip_code}</p>
+                      <p className="font-bold text-slate-900 dark:text-white">{order.address}</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">{order.city} {order.zip_code}</p>
                     </div>
                   </div>
 
@@ -524,13 +524,13 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                     <div className="flex items-center gap-2 pl-5 text-[11px]">
                       <a 
                         href={`tel:${order.phone}`} 
-                        className="text-cyan-400 hover:underline flex items-center gap-1 font-mono"
+                        className="text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-1 font-mono font-bold"
                       >
                         <Phone className="h-3 w-3" />
                         <span>{order.phone}</span>
                       </a>
                       {order.call_first === 1 && (
-                        <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold">
+                        <span className="text-[9px] bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30 px-1.5 py-0.2 rounded font-bold">
                           CALL FIRST
                         </span>
                       )}
@@ -540,20 +540,20 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
 
                 {/* Especificaciones Técnicas */}
                 <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
-                  <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-amber-300 font-bold">
+                  <span className="bg-slate-100 dark:bg-slate-950 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-800 text-amber-800 dark:text-amber-300 font-bold">
                     {order.drop_footage} ft
                   </span>
 
-                  <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
+                  <span className="bg-slate-100 dark:bg-slate-950 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300">
                     {order.cable_type}
                   </span>
 
                   {hasDrivewayBore ? (
-                    <span className="bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800 font-bold">
+                    <span className="bg-cyan-100 dark:bg-cyan-950 text-cyan-800 dark:text-cyan-300 px-2 py-0.5 rounded border border-cyan-300 dark:border-cyan-800 font-bold">
                       DW Bore: +$30
                     </span>
                   ) : order.bore_type && order.bore_type !== 'N' ? (
-                    <span className="bg-slate-950 text-slate-300 px-2 py-0.5 rounded border border-slate-800">
+                    <span className="bg-slate-100 dark:bg-slate-950 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-800">
                       Bore: {order.bore_type}
                     </span>
                   ) : null}

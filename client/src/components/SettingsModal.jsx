@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Settings, Save, Check, Calendar, DollarSign, ShieldCheck } from 'lucide-react';
+import { X, Settings, Save, Check, Calendar, DollarSign, ShieldCheck, Sun, Moon, Monitor } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 const WEEK_DAYS = [
   { id: '1', short: 'Lun', full: 'Lunes', cycle: 'Martes a Lunes' },
@@ -12,6 +13,7 @@ const WEEK_DAYS = [
 ];
 
 export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
+  const { themeMode, setThemeMode } = useTheme();
   const [settings, setSettings] = useState({
     tech_default: 'Javier (P0G1)',
     base_rate: '100.00',
@@ -118,6 +120,60 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
 
         {/* Form con scroll */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
+          {/* APARIENCIA / MODO CLARO Y OSCURO */}
+          <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3.5 space-y-2">
+            <span className="text-xs font-bold text-slate-300 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Sun className="h-4 w-4 text-amber-400" />
+                <span>Tema de la Aplicación</span>
+              </span>
+              <span className="text-[10px] text-cyan-400 font-bold bg-cyan-950/50 px-2 py-0.5 rounded-full border border-cyan-800/40">
+                {themeMode === 'light' ? 'Claro' : themeMode === 'dark' ? 'Oscuro' : 'Automático'}
+              </span>
+            </span>
+
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setThemeMode('light')}
+                className={`py-2 px-2 rounded-xl flex items-center justify-center gap-1.5 border text-xs font-bold transition select-none ${
+                  themeMode === 'light'
+                    ? 'bg-amber-400/20 text-amber-500 border-amber-500/40 shadow-sm'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Sun className="h-3.5 w-3.5" />
+                <span>Claro</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setThemeMode('dark')}
+                className={`py-2 px-2 rounded-xl flex items-center justify-center gap-1.5 border text-xs font-bold transition select-none ${
+                  themeMode === 'dark'
+                    ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-sm'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Moon className="h-3.5 w-3.5" />
+                <span>Oscuro</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setThemeMode('system')}
+                className={`py-2 px-2 rounded-xl flex items-center justify-center gap-1.5 border text-xs font-bold transition select-none ${
+                  themeMode === 'system'
+                    ? 'bg-purple-500/20 text-purple-400 border-purple-500/40 shadow-sm'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Monitor className="h-3.5 w-3.5" />
+                <span>Auto</span>
+              </button>
+            </div>
+          </div>
+
           {/* 1. TECNICO */}
           <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3.5 space-y-1.5">
             <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">

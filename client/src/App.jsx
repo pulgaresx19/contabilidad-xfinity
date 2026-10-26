@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import BottomNav from './components/BottomNav';
 import TodayView from './components/TodayView';
 import HistoryView from './components/HistoryView';
+import MonthlyView from './components/MonthlyView';
 import ProfileView from './components/ProfileView';
 import ScanModal from './components/ScanModal';
 import PhotoModal from './components/PhotoModal';
 import SettingsModal from './components/SettingsModal';
-import { Cable, ShieldCheck, Settings } from 'lucide-react';
+import { Cable, ShieldCheck, Settings, Sun, Moon } from 'lucide-react';
+import { useTheme } from './context/ThemeContext';
 
 export default function App() {
+  const { actualTheme, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('today'); // 'today' | 'history' | 'profile'
   const [orders, setOrders] = useState([]);
   const [summaryData, setSummaryData] = useState(null);
@@ -110,11 +113,25 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-full px-2.5 py-0.5">
               <ShieldCheck className="h-3 w-3 text-emerald-400" />
               <span className="text-[10px] text-slate-300 font-mono font-semibold">{techName}</span>
             </div>
+
+            {/* Botón rápido Modo Claro / Modo Oscuro */}
+            <button
+              onClick={toggleTheme}
+              className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition active:scale-95 border border-slate-700/60"
+              title={actualTheme === 'dark' ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
+              aria-label="Cambiar tema de la aplicación"
+            >
+              {actualTheme === 'dark' ? (
+                <Sun className="h-4 w-4 text-amber-400 stroke-[2.5]" />
+              ) : (
+                <Moon className="h-4 w-4 text-indigo-600 stroke-[2.5]" />
+              )}
+            </button>
 
             <button
               onClick={() => setIsSettingsModalOpen(true)}
@@ -154,11 +171,17 @@ export default function App() {
               />
             )}
 
+            {activeTab === 'monthly' && (
+              <MonthlyView
+                orders={orders}
+                onRefresh={refreshAll}
+              />
+            )}
+
             {activeTab === 'profile' && (
               <ProfileView
                 techName={techName}
                 summaryData={summaryData}
-                onOpenSettings={() => setIsSettingsModalOpen(true)}
               />
             )}
           </>

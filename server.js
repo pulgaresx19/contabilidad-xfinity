@@ -27,6 +27,12 @@ if (!fs.existsSync(sheetsDir)) {
   fs.mkdirSync(sheetsDir, { recursive: true });
 }
 
+// Subdirectory for expense receipts
+const expensesDir = path.join(uploadsDir, 'expenses');
+if (!fs.existsSync(expensesDir)) {
+  fs.mkdirSync(expensesDir, { recursive: true });
+}
+
 // Multer storage configs
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -51,6 +57,18 @@ const sheetStorage = multer.diskStorage({
   }
 });
 const uploadSheet = multer({ storage: sheetStorage });
+
+const expenseStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, expensesDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, 'expense-' + uniqueSuffix + ext);
+  }
+});
+const uploadExpense = multer({ storage: expenseStorage });
 
 // Helper to extract candidate orders from OCR text
 function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
@@ -705,6 +723,245 @@ app.post('/api/weeks/:key/status', (req, res) => {
     }
 
     res.json({ success: true, updated: orderIds.length, payment_status: newStatus });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 10c. Monthly Summary & Expense Accounting
+app.get('/api/monthly-summary', (req, res) => {
+  try {
+    const allOrders = db.prepare('SELECT * FROM work_orders ORDER BY work_date DESC, id DESC').all();
+    const photosStmt = db.prepare('SELECT id, filename, original_name, category, created_at FROM job_photos WHERE work_order_id = ? ORDER BY id DESC');
+    const cutoffSetting = getCutoffDaySetting();
+
+    // Group orders into weeks
+    const weeksMap = {};
+    const monthsSet = new Set();
+
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    monthsSet.add(currentMonthKey);
+
+    for (const order of allOrders) {
+      order.photos = photosStmt.all(order.id);
+      order.photos_count = order.photos.length;
+
+      const od = parseDateParts(order.work_date);
+      const oMonth = `${od.getFullYear()}-${String(od.getMonth() + 1).padStart(2, '0')}`;
+      monthsSet.add(oMonth);
+
+      const weekInfo = getWeekInfo(order.work_date, cutoffSetting);
+      const key = weekInfo.key;
+
+      if (!weeksMap[key]) {
+        weeksMap[key] = {
+          key,
+          displayLabel: weekInfo.displayLabel,
+          year: weekInfo.year,
+          startDate: weekInfo.startDate,
+          endDate: weekInfo.endDate,
+          totalJobs: 0,
+          completedCount: 0,
+          pendingJobsCount: 0,
+          cancelledCount: 0,
+          totalFootage: 0,
+          totalEarnings: 0,
+          pendingEarnings: 0,
+          paidEarnings: 0,
+          rg6Count: 0,
+          rg11Count: 0,
+          boresCount: 0,
+          orders: []
+        };
+      }
+
+      const w = weeksMap[key];
+      w.totalJobs++;
+      if (order.status === 'Completado') {
+        w.completedCount++;
+        const val = order.rate_calculated || 0;
+        w.totalEarnings += val;
+        if (order.payment_status === 'Cobrado') {
+          w.paidEarnings += val;
+        } else {
+          w.pendingEarnings += val;
+        }
+      } else if (order.status === 'No Realizado') {
+        w.cancelledCount++;
+      } else {
+        w.pendingJobsCount++;
+      }
+
+      if (order.status !== 'No Realizado') {
+        w.totalFootage += (order.drop_footage || 0);
+      }
+      if (order.cable_type === 'RG-11') w.rg11Count++;
+      if (order.cable_type === 'RG-6') w.rg6Count++;
+      if (order.bore_type && order.bore_type !== 'N') w.boresCount++;
+
+      w.orders.push(order);
+    }
+
+    const allWeeks = Object.values(weeksMap).map(w => {
+      const completedList = w.orders.filter(o => o.status === 'Completado');
+      const isPaid = completedList.length > 0 && completedList.every(o => o.payment_status === 'Cobrado');
+      return {
+        ...w,
+        isPaid,
+        payment_status: isPaid ? 'Cobrado' : 'Pendiente'
+      };
+    }).sort((a, b) => b.startDate.localeCompare(a.startDate));
+
+    // Get months from expenses
+    const expenseMonths = db.prepare('SELECT DISTINCT month_key FROM monthly_expenses').all();
+    for (const em of expenseMonths) {
+      if (em.month_key) monthsSet.add(em.month_key);
+    }
+
+    const availableMonths = Array.from(monthsSet).sort().reverse();
+
+    let targetMonth = req.query.month;
+    if (!targetMonth || !/^\d{4}-\d{2}$/.test(targetMonth)) {
+      targetMonth = currentMonthKey;
+    }
+
+    // Filter weeks that completed in this month (endDate in targetMonth) OR has orders in targetMonth
+    const monthWeeks = allWeeks.filter(w => {
+      const endMonth = w.endDate.substring(0, 7);
+      if (endMonth === targetMonth) return true;
+      const startMonth = w.startDate.substring(0, 7);
+      if (startMonth === targetMonth) {
+        return w.orders.some(o => {
+          const od = parseDateParts(o.work_date);
+          const om = `${od.getFullYear()}-${String(od.getMonth() + 1).padStart(2, '0')}`;
+          return om === targetMonth;
+        });
+      }
+      return false;
+    });
+
+    let totalMonthEarnings = 0;
+    let totalMonthPaid = 0;
+    let totalMonthPending = 0;
+    let totalMonthCompletedJobs = 0;
+    let totalMonthFootage = 0;
+
+    for (const w of monthWeeks) {
+      totalMonthEarnings += w.totalEarnings;
+      totalMonthPaid += w.paidEarnings;
+      totalMonthPending += w.pendingEarnings;
+      totalMonthCompletedJobs += w.completedCount;
+      totalMonthFootage += w.totalFootage;
+    }
+
+    // Expenses for targetMonth
+    const expenses = db.prepare('SELECT * FROM monthly_expenses WHERE month_key = ? ORDER BY expense_date DESC, id DESC').all(targetMonth);
+
+    let totalExpenses = 0;
+    const expensesByCategory = {};
+    for (const exp of expenses) {
+      const amt = Number(exp.amount) || 0;
+      totalExpenses += amt;
+      expensesByCategory[exp.category] = (expensesByCategory[exp.category] || 0) + amt;
+    }
+
+    const netPaidBalance = totalMonthPaid - totalExpenses;
+    const netProjectedBalance = totalMonthEarnings - totalExpenses;
+
+    res.json({
+      targetMonth,
+      availableMonths,
+      weeks: monthWeeks,
+      expenses,
+      expensesByCategory,
+      totals: {
+        totalWeeksCount: monthWeeks.length,
+        completedWeeksCount: monthWeeks.filter(w => w.isPaid).length,
+        totalJobs: totalMonthCompletedJobs,
+        totalFootage: Math.round(totalMonthFootage),
+        totalEarnings: totalMonthEarnings,
+        totalPaid: totalMonthPaid,
+        totalPending: totalMonthPending,
+        totalExpenses: Math.round(totalExpenses * 100) / 100,
+        netPaidBalance: Math.round(netPaidBalance * 100) / 100,
+        netProjectedBalance: Math.round(netProjectedBalance * 100) / 100,
+        marginPercent: totalMonthPaid > 0 ? Math.round((netPaidBalance / totalMonthPaid) * 100) : 0
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching monthly summary:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 10d. Expense Endpoints
+app.get('/api/expenses', (req, res) => {
+  try {
+    const { month } = req.query;
+    let query = 'SELECT * FROM monthly_expenses';
+    const params = [];
+    if (month) {
+      query += ' WHERE month_key = ?';
+      params.push(month);
+    }
+    query += ' ORDER BY expense_date DESC, id DESC';
+    const rows = db.prepare(query).all(...params);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/expenses', uploadExpense.single('receipt_photo'), (req, res) => {
+  try {
+    const { expense_date, category, description, amount } = req.body;
+    if (!description || !amount) {
+      return res.status(400).json({ error: 'Descripción y monto son requeridos' });
+    }
+
+    const dateStr = expense_date || new Date().toISOString().split('T')[0];
+    const parsedDate = parseDateParts(dateStr);
+    const month_key = `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, '0')}`;
+
+    let receiptPath = null;
+    if (req.file) {
+      receiptPath = path.join('expenses', req.file.filename).replace(/\\/g, '/');
+    }
+
+    const stmt = db.prepare(`
+      INSERT INTO monthly_expenses (month_key, expense_date, category, description, amount, receipt_photo)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    const result = stmt.run(
+      month_key,
+      dateStr,
+      category || 'Combustible',
+      description.trim(),
+      parseFloat(amount) || 0,
+      receiptPath
+    );
+
+    const newExpense = db.prepare('SELECT * FROM monthly_expenses WHERE id = ?').get(result.lastInsertRowid);
+    res.status(201).json(newExpense);
+  } catch (error) {
+    console.error('Error creating expense:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/expenses/:id', (req, res) => {
+  try {
+    const expense = db.prepare('SELECT * FROM monthly_expenses WHERE id = ?').get(req.params.id);
+    if (expense) {
+      if (expense.receipt_photo) {
+        const fullPath = path.join(uploadsDir, expense.receipt_photo);
+        if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+      }
+      db.prepare('DELETE FROM monthly_expenses WHERE id = ?').run(req.params.id);
+    }
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

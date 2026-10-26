@@ -40,3 +40,35 @@ export function formatDateFriendly(dateStr) {
   const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   return `${days[date.getDay()]}, ${d} de ${months[date.getMonth()]} ${y}`;
 }
+
+export function getCurrentMonthStr() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+export function formatMonthFriendly(monthStr) {
+  if (!monthStr || !monthStr.includes('-')) return monthStr;
+  const [y, m] = monthStr.split('-');
+  const monthNames = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+  const idx = parseInt(m, 10) - 1;
+  return `${monthNames[idx] || m} ${y}`;
+}
+
+export function getPreviousMonth(monthStr) {
+  if (!monthStr) return getCurrentMonthStr();
+  const [y, m] = monthStr.split('-').map(Number);
+  const dt = new Date(y, m - 2, 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export function getNextMonth(monthStr) {
+  if (!monthStr) return getCurrentMonthStr();
+  const [y, m] = monthStr.split('-').map(Number);
+  const dt = new Date(y, m, 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+}

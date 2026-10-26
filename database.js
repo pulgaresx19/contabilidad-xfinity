@@ -64,6 +64,21 @@ function initDb() {
       notes TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS monthly_expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      month_key TEXT NOT NULL,
+      expense_date TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'Combustible',
+      description TEXT NOT NULL,
+      amount REAL NOT NULL DEFAULT 0,
+      receipt_photo TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_monthly_expenses_month ON monthly_expenses(month_key);
+
   `);
 
   // Ensure extra columns exist
