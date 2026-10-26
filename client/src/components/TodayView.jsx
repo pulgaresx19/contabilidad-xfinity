@@ -3,6 +3,7 @@ import {
   Camera, Check, X, Phone, MapPin, Share2, Clock, 
   CheckCircle2, AlertCircle, Search, Plus, Sparkles, AlertTriangle, ArrowRight, Shield
 } from 'lucide-react';
+import AddJobModal from './AddJobModal';
 
 export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhotos, onOrderUpdated }) {
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'Pendiente' | 'Completado' | 'No Realizado'
@@ -10,6 +11,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   const [sharingId, setSharingId] = useState(null);
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [isAddJobOpen, setIsAddJobOpen] = useState(false);
 
   // Daily summary calculations
   const pendingOrders = orders.filter(o => o.status === 'Pendiente');
@@ -181,14 +183,24 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
           />
         </div>
 
-        {/* Action Button: Scan Dispatch Sheet */}
-        <button
-          onClick={onOpenScan}
-          className="w-full py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-xs rounded-2xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition active:scale-[0.98]"
-        >
-          <Camera className="h-4 w-4 stroke-[2.5]" />
-          <span>Escanear Hoja de Ruta Diaria</span>
-        </button>
+        {/* Action Buttons: Scan Dispatch Sheet & Manual Add Job */}
+        <div className="grid grid-cols-2 gap-2 pt-0.5">
+          <button
+            onClick={onOpenScan}
+            className="py-2.5 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-xs rounded-2xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
+          >
+            <Camera className="h-4 w-4 stroke-[2.5]" />
+            <span>Escanear Hoja</span>
+          </button>
+
+          <button
+            onClick={() => setIsAddJobOpen(true)}
+            className="py-2.5 px-3 bg-slate-800/90 hover:bg-slate-700 text-slate-100 font-extrabold text-xs rounded-2xl border border-slate-700/80 flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
+          >
+            <Plus className="h-4 w-4 stroke-[3] text-cyan-400" />
+            <span>Añadir Trabajo</span>
+          </button>
+        </div>
       </div>
 
       {/* 2. SEARCH & STATUS FILTER TABS */}
@@ -467,6 +479,13 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
           </div>
         </div>
       )}
+      {/* Modal para Añadir Trabajo Manualmente */}
+      <AddJobModal
+        isOpen={isAddJobOpen}
+        onClose={() => setIsAddJobOpen(false)}
+        onJobAdded={onOrderUpdated}
+        defaultTech="Javier (P0G1)"
+      />
     </div>
   );
 }

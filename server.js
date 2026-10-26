@@ -278,8 +278,8 @@ app.post('/api/orders', (req, res) => {
       premise_access: data.premise_access || 'N',
       neighbor_notice: data.neighbor_notice || 'N',
       raw_notes: data.raw_notes || '',
-      rate_calculated: parseFloat(data.rate_calculated) || 65,
-      status: data.status || 'Completado',
+      rate_calculated: parseFloat(data.rate_calculated) || (data.bore_type && data.bore_type.includes('DW') ? 130 : 100),
+      status: data.status || 'Pendiente',
       payment_status: data.payment_status || 'En Fondo (3 Sem)'
     });
 
