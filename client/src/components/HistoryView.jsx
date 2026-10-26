@@ -85,11 +85,16 @@ export default function HistoryView({ summaryData, onRefresh }) {
     const completedList = w.orders.filter(o => o.status === 'Completado');
     const jobLines = completedList.map((o, idx) => {
       const boreTxt = o.bore_type && o.bore_type.includes('DW') ? ' [DW BORE +$30]' : '';
+      const footageBonus = o.drop_footage > 300 ? Math.floor((o.drop_footage - 300) / 100) * 25 : 0;
+      const footTxt = footageBonus > 0 ? ` [METRAJE >300ft: +$${footageBonus}]` : '';
+      const adjTxt = o.manual_adjustment && o.manual_adjustment !== 0 
+        ? ` [AJUSTE SUPERVISOR: ${o.manual_adjustment > 0 ? `+$${o.manual_adjustment}` : `-$${Math.abs(o.manual_adjustment)}`} (${o.adjustment_reason || 'Inconsistencia'})]`
+        : '';
       const photosTxt = o.photos_count > 0 ? ` (${o.photos_count} fotos de respaldo)` : ' (Sin fotos)';
       return `${idx + 1}. Job #${o.job_id} | ${o.work_date}
    📍 ${o.address}, ${o.city}
-   📏 ${o.drop_footage} ft (${o.cable_type})${boreTxt}${photosTxt}
-   💵 Valor: $${o.rate_calculated}`;
+   📏 ${o.drop_footage} ft (${o.cable_type})${boreTxt}${footTxt}${adjTxt}${photosTxt}
+   💵 Valor Cobrable: $${o.rate_calculated}`;
     }).join('\n\n');
 
     const text = `📁 *CONSTANCIA DE AUDITORÍA & RECLAMACIÓN - XFINITY*
@@ -103,7 +108,7 @@ export default function HistoryView({ summaryData, onRefresh }) {
 📋 *DESGLOSE DE ÓRDENES:*
 ${jobLines}
 
-⚠️ *Nota:* Cada orden cuenta con registro de Comcast, metraje y fotos de respaldo en el sistema.`;
+⚠️ *Nota:* Cada orden cuenta con registro de Comcast, metraje, ajustes y fotos de respaldo en el sistema.`;
 
     navigator.clipboard.writeText(text);
     setCopiedWeekKey(w.key);
@@ -112,15 +117,23 @@ ${jobLines}
 
   // Copy proof for single order dispute
   const copySingleJobClaim = (order) => {
+    let extraLine = '';
+    if (order.drop_footage > 300) {
+      const extraBlocks = Math.floor((order.drop_footage - 300) / 100);
+      if (extraBlocks > 0) extraLine += `\n📏 *Bono Metraje (>300 ft):* +$${extraBlocks * 25}`;
+    }
+    if (order.manual_adjustment && order.manual_adjustment !== 0) {
+      extraLine += `\n⚖️ *Ajuste Supervisor:* ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`} (${order.adjustment_reason || 'Inconsistencia'})`;
+    }
+
     const text = `📋 *COMPROBANTE DE TRABAJO - XFINITY*
 🔢 *Work Order #:* ${order.job_id}
 📅 *Fecha Ejecución:* ${order.work_date}
 📍 *Dirección:* ${order.address}, ${order.city}
-📏 *Metraje Instalado:* ${order.drop_footage} ft
-🛠️ *Tipo Cable:* ${order.cable_type}
+📏 *Metraje Instalado:* ${order.drop_footage} ft (${order.cable_type})${extraLine}
 🚧 *Bore:* ${order.bore_type && order.bore_type !== 'N' ? order.bore_type : 'Ninguno'}
 📸 *Fotos de Evidencia:* ${order.photos_count || 0} archivada(s)
-💵 *Monto:* $${order.rate_calculated}
+💵 *Monto Total:* $${order.rate_calculated}
 ✅ *Estado:* ${order.status}`;
 
     navigator.clipboard.writeText(text);
@@ -495,6 +508,11 @@ ${jobLines}
                             DW Bore +$30
                           </span>
                         )}
+                        {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
+                          <span className="bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800 font-bold">
+                            Drop &gt;300ft: +${Math.floor((order.drop_footage - 300) / 100) * 25}
+                          </span>
+                        )}
                         <span className={`px-2 py-0.5 rounded border text-[9px] ${
                           order.payment_status === 'Cobrado'
                             ? 'bg-emerald-950/60 border-emerald-800 text-emerald-400'
@@ -503,6 +521,19 @@ ${jobLines}
                           {order.payment_status || 'Pendiente'}
                         </span>
                       </div>
+
+                      {/* Badge de Ajuste del Supervisor si existe */}
+                      {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
+                        <div className={`p-2 rounded-xl border text-[10px] flex items-center justify-between gap-1.5 ${
+                          order.manual_adjustment > 0
+                            ? 'bg-cyan-950/40 border-cyan-800/60 text-cyan-300'
+                            : 'bg-amber-950/40 border-amber-800/60 text-amber-300'
+                        }`}>
+                          <span>
+                            <strong>Ajuste Supervisor ({order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}):</strong> {order.adjustment_reason || 'Inconsistencia acordada'}
+                          </span>
+                        </div>
+                      )}
 
                       {/* Galería de Fotos de Evidencia de esa Orden */}
                       <div className="pt-1.5 border-t border-slate-800/80">

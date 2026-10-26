@@ -105,9 +105,13 @@ function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
     let city = 'ELKHART';
     if (/ELKHART/i.test(line)) city = 'ELKHART';
 
-    // Rate calculation: $100 base + $30 for Driveway Bore (DW)
+    // Rate calculation: $100 base + $30 for Driveway Bore (DW) + $25 por cada 100 ft > 300 ft
     let rate = 100;
     if (boreType === 'DW:1' || boreType.includes('DW')) rate += 30;
+    if (dropFootage > 300) {
+      const extraBlocks = Math.floor((dropFootage - 300) / 100);
+      if (extraBlocks > 0) rate += extraBlocks * 25;
+    }
 
     candidates.push({
       work_date: defaultDate || new Date().toISOString().split('T')[0],
@@ -127,8 +131,10 @@ function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
       neighbor_notice: /NBR[:\s]*2/i.test(line) ? '2' : 'N',
       raw_notes: line,
       rate_calculated: rate,
+      manual_adjustment: 0,
+      adjustment_reason: '',
       status: 'Pendiente',
-      payment_status: 'En Fondo (3 Sem)',
+      payment_status: 'Pendiente',
       cancel_reason: ''
     });
   }
@@ -283,11 +289,13 @@ app.post('/api/orders', (req, res) => {
         work_date, tech_id, job_id, address, city, zip_code, phone,
         call_first, drop_footage, cable_type, bore_type, is_temp,
         obstacles, premise_access, neighbor_notice, raw_notes, rate_calculated,
+        manual_adjustment, adjustment_reason,
         status, payment_status
       ) VALUES (
         @work_date, @tech_id, @job_id, @address, @city, @zip_code, @phone,
         @call_first, @drop_footage, @cable_type, @bore_type, @is_temp,
         @obstacles, @premise_access, @neighbor_notice, @raw_notes, @rate_calculated,
+        @manual_adjustment, @adjustment_reason,
         @status, @payment_status
       )
     `);
@@ -310,6 +318,8 @@ app.post('/api/orders', (req, res) => {
       neighbor_notice: data.neighbor_notice || 'N',
       raw_notes: data.raw_notes || '',
       rate_calculated: parseFloat(data.rate_calculated) || (data.bore_type && data.bore_type.includes('DW') ? 130 : 100),
+      manual_adjustment: parseFloat(data.manual_adjustment) || 0,
+      adjustment_reason: data.adjustment_reason || '',
       status: data.status || 'Pendiente',
       payment_status: data.payment_status || 'Pendiente'
     });
@@ -343,6 +353,8 @@ app.put('/api/orders/:id', (req, res) => {
         premise_access = @premise_access,
         neighbor_notice = @neighbor_notice,
         rate_calculated = @rate_calculated,
+        manual_adjustment = @manual_adjustment,
+        adjustment_reason = @adjustment_reason,
         status = @status,
         cancel_reason = @cancel_reason,
         payment_status = @payment_status,
@@ -368,6 +380,8 @@ app.put('/api/orders/:id', (req, res) => {
       premise_access: data.premise_access || 'N',
       neighbor_notice: data.neighbor_notice || 'N',
       rate_calculated: parseFloat(data.rate_calculated) || 0,
+      manual_adjustment: parseFloat(data.manual_adjustment) || 0,
+      adjustment_reason: data.adjustment_reason || '',
       status: data.status || 'Completado',
       cancel_reason: data.cancel_reason || '',
       payment_status: data.payment_status || 'Pendiente'
@@ -375,6 +389,31 @@ app.put('/api/orders/:id', (req, res) => {
 
     const updated = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(req.params.id);
     res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 4b. Adjust order price and reason directly
+app.post('/api/orders/:id/adjust', (req, res) => {
+  try {
+    const { rate_calculated, manual_adjustment, adjustment_reason } = req.body;
+    const stmt = db.prepare(`
+      UPDATE work_orders SET
+        rate_calculated = ?,
+        manual_adjustment = ?,
+        adjustment_reason = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    stmt.run(
+      parseFloat(rate_calculated) || 0,
+      parseFloat(manual_adjustment) || 0,
+      adjustment_reason || '',
+      req.params.id
+    );
+    const updated = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(req.params.id);
+    res.json({ success: true, order: updated });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -472,11 +511,13 @@ app.post('/api/batch-import', (req, res) => {
         work_date, tech_id, job_id, address, city, zip_code, phone,
         call_first, drop_footage, cable_type, bore_type, is_temp,
         obstacles, premise_access, neighbor_notice, raw_notes, rate_calculated,
+        manual_adjustment, adjustment_reason,
         status, payment_status
       ) VALUES (
         @work_date, @tech_id, @job_id, @address, @city, @zip_code, @phone,
         @call_first, @drop_footage, @cable_type, @bore_type, @is_temp,
         @obstacles, @premise_access, @neighbor_notice, @raw_notes, @rate_calculated,
+        @manual_adjustment, @adjustment_reason,
         @status, @payment_status
       )
       ON CONFLICT(job_id) DO UPDATE SET
@@ -485,6 +526,8 @@ app.post('/api/batch-import', (req, res) => {
         cable_type = excluded.cable_type,
         bore_type = excluded.bore_type,
         rate_calculated = excluded.rate_calculated,
+        manual_adjustment = excluded.manual_adjustment,
+        adjustment_reason = excluded.adjustment_reason,
         raw_notes = excluded.raw_notes,
         updated_at = CURRENT_TIMESTAMP
     `);

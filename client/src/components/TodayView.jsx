@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   Camera, Check, X, Phone, MapPin, Share2, Clock, 
-  CheckCircle2, AlertCircle, Search, Plus, Sparkles, AlertTriangle, ArrowRight, Shield
+  CheckCircle2, AlertCircle, Search, Plus, Sparkles, AlertTriangle, ArrowRight, Shield,
+  SlidersHorizontal, Edit3, Minus, DollarSign
 } from 'lucide-react';
 import AddJobModal from './AddJobModal';
 
@@ -12,6 +13,104 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [isAddJobOpen, setIsAddJobOpen] = useState(false);
+
+  // Manual Price Adjustment Modal State
+  const [adjustModalOrder, setAdjustModalOrder] = useState(null);
+  const [adjustType, setAdjustType] = useState('add'); // 'add' | 'sub'
+  const [adjustAmount, setAdjustAmount] = useState('');
+  const [adjustReason, setAdjustReason] = useState('');
+  const [savingAdjust, setSavingAdjust] = useState(false);
+
+  // Base calculation without manual adjustment
+  const getOrderBaseCalculation = (order) => {
+    if (!order) return { base: 100, dwBonus: 0, footageBonus: 0, autoSubtotal: 100 };
+    let base = 100;
+    let dwBonus = (order.bore_type && order.bore_type.includes('DW')) ? 30 : 0;
+    let footageBonus = 0;
+    if (order.drop_footage > 300) {
+      const extraBlocks = Math.floor((order.drop_footage - 300) / 100);
+      if (extraBlocks > 0) footageBonus = extraBlocks * 25;
+    }
+    const autoSubtotal = base + dwBonus + footageBonus;
+    return { base, dwBonus, footageBonus, autoSubtotal };
+  };
+
+  const openAdjustModal = (order) => {
+    setAdjustModalOrder(order);
+    const currentAdj = order.manual_adjustment || 0;
+    if (currentAdj < 0) {
+      setAdjustType('sub');
+      setAdjustAmount(String(Math.abs(currentAdj)));
+    } else if (currentAdj > 0) {
+      setAdjustType('add');
+      setAdjustAmount(String(currentAdj));
+    } else {
+      setAdjustType('add');
+      setAdjustAmount('');
+    }
+    setAdjustReason(order.adjustment_reason || '');
+  };
+
+  const handleSaveAdjustment = async () => {
+    if (!adjustModalOrder) return;
+    setSavingAdjust(true);
+
+    const { autoSubtotal } = getOrderBaseCalculation(adjustModalOrder);
+    const rawAmt = parseFloat(adjustAmount) || 0;
+    const finalAdjustment = adjustType === 'sub' ? -Math.abs(rawAmt) : Math.abs(rawAmt);
+    const finalRate = Math.max(0, autoSubtotal + finalAdjustment);
+
+    try {
+      const res = await fetch(`/api/orders/${adjustModalOrder.id}/adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rate_calculated: finalRate,
+          manual_adjustment: finalAdjustment,
+          adjustment_reason: adjustReason.trim()
+        })
+      });
+
+      if (res.ok) {
+        onOrderUpdated();
+        setAdjustModalOrder(null);
+      } else {
+        const err = await res.json();
+        alert('Error: ' + err.error);
+      }
+    } catch (err) {
+      alert('Error guardando ajuste: ' + err.message);
+    } finally {
+      setSavingAdjust(false);
+    }
+  };
+
+  const handleResetAdjustment = async () => {
+    if (!adjustModalOrder) return;
+    const { autoSubtotal } = getOrderBaseCalculation(adjustModalOrder);
+    setSavingAdjust(true);
+
+    try {
+      const res = await fetch(`/api/orders/${adjustModalOrder.id}/adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rate_calculated: autoSubtotal,
+          manual_adjustment: 0,
+          adjustment_reason: ''
+        })
+      });
+
+      if (res.ok) {
+        onOrderUpdated();
+        setAdjustModalOrder(null);
+      }
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      setSavingAdjust(false);
+    }
+  };
 
   // Daily summary calculations
   const pendingOrders = orders.filter(o => o.status === 'Pendiente');
@@ -96,14 +195,25 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   const handleShareWhatsApp = async (order) => {
     setSharingId(order.id);
 
+    let extraFootageText = '';
+    if (order.drop_footage > 300) {
+      const extraBlocks = Math.floor((order.drop_footage - 300) / 100);
+      if (extraBlocks > 0) extraFootageText = `\n📏 *Bono Metraje Largo (>300 ft):* +$${extraBlocks * 25}`;
+    }
+
+    let adjustmentText = '';
+    if (order.manual_adjustment && order.manual_adjustment !== 0) {
+      adjustmentText = `\n⚖️ *Ajuste Supervisor:* ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`} (${order.adjustment_reason || 'Ajuste de precio'})`;
+    }
+
     const reportText = `📋 *REPORTE DE TRABAJO - XFINITY*
 📅 *Fecha:* ${order.work_date}
 🔢 *Work Order #:* ${order.job_id}
 📍 *Dirección:* ${order.address}, ${order.city}
-📏 *Drop:* ${order.drop_footage} ft (${order.cable_type})
+📏 *Drop:* ${order.drop_footage} ft (${order.cable_type})${extraFootageText}
 🛠️ *Bore:* ${order.bore_type && order.bore_type !== 'N' ? order.bore_type : 'Ninguno'}
-⚠️ *Obstáculos:* ${order.obstacles && order.obstacles !== 'N' ? order.obstacles : 'Ninguno'}
-💵 *Tarifa:* $${order.rate_calculated}
+⚠️ *Obstáculos:* ${order.obstacles && order.obstacles !== 'N' ? order.obstacles : 'Ninguno'}${adjustmentText}
+💵 *Tarifa Cobrable:* $${order.rate_calculated}
 ✅ *Estado:* COMPLETADO Y VERIFICADO`;
 
     try {
@@ -304,11 +414,20 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                     </span>
                   </div>
 
-                  <span className={`text-base font-black font-mono ${
-                    isCancelled ? 'line-through text-slate-500' : 'text-emerald-400'
-                  }`}>
-                    ${order.rate_calculated}
-                  </span>
+                  {/* Clickable price to open adjustment modal */}
+                  <button
+                    type="button"
+                    onClick={() => openAdjustModal(order)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 rounded-xl transition group active:scale-95"
+                    title="Ajustar precio o registrar cambio del supervisor"
+                  >
+                    <span className={`text-base font-black font-mono ${
+                      isCancelled ? 'line-through text-slate-500' : 'text-emerald-400'
+                    }`}>
+                      ${order.rate_calculated}
+                    </span>
+                    <Edit3 className="h-3 w-3 text-slate-500 group-hover:text-cyan-400 transition" />
+                  </button>
                 </div>
 
                 {/* Customer Address & Phone */}
@@ -359,12 +478,42 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                     </span>
                   ) : null}
 
+                  {/* Bono por Metraje Largo (>300 ft) */}
+                  {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
+                    <span className="bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800 font-bold">
+                      Drop &gt;300ft: +${Math.floor((order.drop_footage - 300) / 100) * 25}
+                    </span>
+                  )}
+
                   {order.obstacles && order.obstacles !== 'N' && (
                     <span className="bg-slate-950 text-slate-400 px-1.5 py-0.5 rounded border border-slate-800 text-[9px]">
                       {order.obstacles}
                     </span>
                   )}
                 </div>
+
+                {/* Badge de Ajuste Manual si existe */}
+                {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
+                  <div className={`p-2 rounded-xl border text-[11px] flex items-center justify-between gap-2 ${
+                    order.manual_adjustment > 0
+                      ? 'bg-cyan-950/40 border-cyan-800/60 text-cyan-300'
+                      : 'bg-amber-950/40 border-amber-800/60 text-amber-300'
+                  }`}>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Sparkles className="h-3.5 w-3.5 flex-shrink-0" />
+                      <span className="truncate">
+                        <strong>Ajuste {order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}:</strong> {order.adjustment_reason || 'Inconsistencia de precio'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openAdjustModal(order)}
+                      className="text-[10px] text-cyan-400 hover:text-cyan-300 underline font-semibold flex-shrink-0"
+                    >
+                      Editar
+                    </button>
+                  </div>
+                )}
 
                 {/* If Cancelled: Show Reason */}
                 {isCancelled && order.cancel_reason && (
@@ -479,6 +628,214 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
           </div>
         </div>
       )}
+      {/* MODAL: Ajustar Tarifa / Inconsistencia de Pago */}
+      {adjustModalOrder && (() => {
+        const { base, dwBonus, footageBonus, autoSubtotal } = getOrderBaseCalculation(adjustModalOrder);
+        const parsedAmt = parseFloat(adjustAmount) || 0;
+        const calcAdj = adjustType === 'sub' ? -Math.abs(parsedAmt) : Math.abs(parsedAmt);
+        const finalEstRate = Math.max(0, autoSubtotal + calcAdj);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+            <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-4 sm:p-5 shadow-2xl space-y-3.5 max-h-[92vh] overflow-y-auto">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-cyan-500/10 text-cyan-400 rounded-xl">
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Ajustar Precio de la Orden</h3>
+                    <p className="text-[10px] text-slate-400 font-mono">Job #{adjustModalOrder.job_id}</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setAdjustModalOrder(null)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Dirección */}
+              <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 text-xs">
+                <p className="font-bold text-slate-200">{adjustModalOrder.address}</p>
+                <p className="text-[10px] text-slate-400">{adjustModalOrder.city}</p>
+              </div>
+
+              {/* Desglose Automático */}
+              <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1 text-xs font-mono">
+                <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                  <span>Tarifa Base:</span>
+                  <span className="text-white font-bold">$100.00</span>
+                </div>
+
+                {dwBonus > 0 && (
+                  <div className="flex items-center justify-between text-cyan-400 text-[11px]">
+                    <span>Driveway Bore (DW):</span>
+                    <span className="font-bold">+$30.00</span>
+                  </div>
+                )}
+
+                {footageBonus > 0 && (
+                  <div className="flex items-center justify-between text-amber-300 text-[11px]">
+                    <span>Drop Extra ({adjustModalOrder.drop_footage} ft):</span>
+                    <span className="font-bold">+${footageBonus.toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div className="pt-1 border-t border-slate-800 flex items-center justify-between font-bold text-xs">
+                  <span className="text-slate-300 font-sans">Subtotal Automático:</span>
+                  <span className="text-emerald-400">${autoSubtotal.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Ajuste Manual: Sumar o Restar */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-slate-300 block">
+                  Ajuste / Inconsistencia del Supervisor:
+                </label>
+
+                {/* Switch Sumar vs Restar */}
+                <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setAdjustType('add')}
+                    className={`py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1 ${
+                      adjustType === 'add'
+                        ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Plus className="h-3 w-3 stroke-[3]" />
+                    <span>Sumar (+ Bono)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAdjustType('sub')}
+                    className={`py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1 ${
+                      adjustType === 'sub'
+                        ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Minus className="h-3 w-3 stroke-[3]" />
+                    <span>Restar (- Descuento)</span>
+                  </button>
+                </div>
+
+                {/* Campo de Monto */}
+                <div className="relative">
+                  <span className={`absolute left-3 top-2.5 text-xs font-mono font-black ${
+                    adjustType === 'add' ? 'text-emerald-400' : 'text-amber-400'
+                  }`}>
+                    {adjustType === 'add' ? '+$' : '-$'}
+                  </span>
+                  <input
+                    type="number"
+                    step="1"
+                    placeholder="Monto a ajustar (ej. 30 o 25)"
+                    value={adjustAmount}
+                    onChange={(e) => setAdjustAmount(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-8 pr-3 py-2 text-xs sm:text-sm text-white font-mono font-bold focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+
+                {/* Chips rápidos de monto común */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <span className="text-[10px] text-slate-500">Rápidos:</span>
+                  <button
+                    type="button"
+                    onClick={() => { setAdjustType('sub'); setAdjustAmount('30'); setAdjustReason('Supervisor descontó DW (no se perforó)'); }}
+                    className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] rounded-lg hover:bg-slate-700"
+                  >
+                    -30 (Sin DW)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAdjustType('add'); setAdjustAmount('25'); setAdjustReason('Bono metraje extra autorizado'); }}
+                    className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] rounded-lg hover:bg-slate-700"
+                  >
+                    +25 (Bono)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAdjustType('add'); setAdjustAmount('50'); setAdjustReason('Trabajo complejo / rocoso'); }}
+                    className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] rounded-lg hover:bg-slate-700"
+                  >
+                    +50 (Extra)
+                  </button>
+                </div>
+              </div>
+
+              {/* Motivo de la Inconsistencia */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-300 block">
+                  Motivo / Constancia del Ajuste:
+                </label>
+                <input
+                  type="text"
+                  placeholder="ej. Supervisor descontó DW / Terreno rocoso aprobado"
+                  value={adjustReason}
+                  onChange={(e) => setAdjustReason(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              {/* Previsualización del Total Final */}
+              <div className="p-3 bg-gradient-to-r from-slate-950 to-slate-900 border border-cyan-500/30 rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">
+                    Tarifa Final Cobrable
+                  </span>
+                  {calcAdj !== 0 ? (
+                    <span className="text-[11px] text-cyan-300 font-mono">
+                      ${autoSubtotal} {calcAdj > 0 ? `+ $${Math.abs(calcAdj)}` : `- $${Math.abs(calcAdj)}`}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-500 font-mono">Sin ajuste manual</span>
+                  )}
+                </div>
+
+                <div className="text-right">
+                  <span className="text-xl font-black text-emerald-400 font-mono">
+                    ${finalEstRate.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Botones de acción */}
+              <div className="flex items-center gap-2 pt-1">
+                {adjustModalOrder.manual_adjustment !== 0 && (
+                  <button
+                    type="button"
+                    disabled={savingAdjust}
+                    onClick={handleResetAdjustment}
+                    className="py-2.5 px-3 bg-slate-800 hover:bg-rose-950 text-slate-300 hover:text-rose-300 text-xs font-bold rounded-xl transition"
+                    title="Eliminar ajuste y volver a la tarifa automática"
+                  >
+                    Restablecer
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  disabled={savingAdjust}
+                  onClick={handleSaveAdjustment}
+                  className="flex-1 py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 active:scale-95 transition"
+                >
+                  <Check className="h-4 w-4 stroke-[3]" />
+                  <span>{savingAdjust ? 'Guardando...' : 'Guardar Ajuste'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Modal para Añadir Trabajo Manualmente */}
       <AddJobModal
         isOpen={isAddJobOpen}

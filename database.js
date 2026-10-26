@@ -35,6 +35,9 @@ function initDb() {
       neighbor_notice TEXT DEFAULT 'N',
       raw_notes TEXT,
       rate_calculated REAL DEFAULT 0,
+      manual_adjustment REAL DEFAULT 0,
+      adjustment_reason TEXT DEFAULT '',
+      cancel_reason TEXT DEFAULT '',
       status TEXT DEFAULT 'Pendiente',
       payment_status TEXT DEFAULT 'Pendiente',
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -63,9 +66,15 @@ function initDb() {
     );
   `);
 
-  // Ensure cancel_reason column exists
+  // Ensure extra columns exist
   try {
     db.exec("ALTER TABLE work_orders ADD COLUMN cancel_reason TEXT");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE work_orders ADD COLUMN manual_adjustment REAL DEFAULT 0");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE work_orders ADD COLUMN adjustment_reason TEXT DEFAULT ''");
   } catch (e) {}
 
   // Default settings if not already set
@@ -79,6 +88,12 @@ function initDb() {
   insertSetting.run('bore_dw_bonus', '30.00'); // Driveway bore: $30
   if (!getSetting.get('cutoff_day')) {
     insertSetting.run('cutoff_day', '0'); // 0 = Domingo (Lunes a Domingo por defecto)
+  }
+  if (!getSetting.get('footage_base')) {
+    insertSetting.run('footage_base', '300'); // Metraje base sin cargo extra: 300 ft
+  }
+  if (!getSetting.get('footage_extra_rate')) {
+    insertSetting.run('footage_extra_rate', '25.00'); // +$25 por cada 100 ft extra
   }
   // Clean up obsolete settings
   try {
@@ -156,10 +171,16 @@ function parseDispatchLine(line) {
     }
   }
 
-  // Calculate rate based on technician rules: $100 base + $30 for Driveway Bore (DW)
+  // Calculate rate based on technician rules: $100 base + $30 for Driveway Bore (DW) + $25 por cada 100 ft > 300 ft
   let rate = 100;
   if (bore_type.toUpperCase().includes('DW')) {
     rate += 30; // Driveway bore: $30
+  }
+  if (drop_footage > 300) {
+    const extraBlocks = Math.floor((drop_footage - 300) / 100);
+    if (extraBlocks > 0) {
+      rate += extraBlocks * 25;
+    }
   }
 
   return {
@@ -180,6 +201,8 @@ function parseDispatchLine(line) {
     neighbor_notice,
     raw_notes: notes,
     rate_calculated: rate,
+    manual_adjustment: 0,
+    adjustment_reason: '',
     status: 'Pendiente',
     payment_status: 'Pendiente',
     cancel_reason: ''

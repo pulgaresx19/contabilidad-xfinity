@@ -16,6 +16,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
     tech_default: 'Javier (P0G1)',
     base_rate: '100.00',
     bore_dw_bonus: '30.00',
+    footage_base: '300',
+    footage_extra_rate: '25.00',
     cutoff_day: '0'
   });
   const [loading, setLoading] = useState(false);
@@ -42,6 +44,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
               tech_default: data.tech_default || 'Javier (P0G1)',
               base_rate: data.base_rate || '100.00',
               bore_dw_bonus: data.bore_dw_bonus || '30.00',
+              footage_base: data.footage_base || '300',
+              footage_extra_rate: data.footage_extra_rate || '25.00',
               cutoff_day: String(cutoffVal)
             });
           }
@@ -67,6 +71,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
           tech_default: settings.tech_default,
           base_rate: settings.base_rate,
           bore_dw_bonus: settings.bore_dw_bonus,
+          footage_base: settings.footage_base,
+          footage_extra_rate: settings.footage_extra_rate,
           cutoff_day: settings.cutoff_day
         })
       });
@@ -176,6 +182,53 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
                 </div>
                 <span className="text-[10px] text-slate-500 block leading-tight">Extra si requiere perforación</span>
               </div>
+            </div>
+
+            {/* Bono por Metraje Largo (>300 ft) */}
+            <div className="pt-2.5 border-t border-slate-800/80 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-200">
+                  Bono por Metraje Largo (Drop Extendido)
+                </span>
+                <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800 font-bold">
+                  +${settings.footage_extra_rate || '25'} cada 100 ft
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-0.5 font-medium">Metraje Base Incluido:</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="50"
+                      required
+                      value={settings.footage_base || '300'}
+                      onChange={(e) => setSettings({ ...settings, footage_base: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold font-mono focus:outline-none focus:border-cyan-500"
+                    />
+                    <span className="absolute right-2.5 top-1.5 text-[10px] text-slate-500">ft</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-0.5 font-medium">Bono cada 100 ft Extra:</label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1.5 text-[10px] text-slate-500 font-mono">+$</span>
+                    <input
+                      type="number"
+                      step="5"
+                      required
+                      value={settings.footage_extra_rate || '25.00'}
+                      onChange={(e) => setSettings({ ...settings, footage_extra_rate: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700/80 rounded-xl pl-6 pr-3 py-1.5 text-xs text-emerald-400 font-bold font-mono focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-tight">
+                Al pasar de {settings.footage_base || '300'} ft, se pagan +${settings.footage_extra_rate || '25'} automáticamente por cada 100 ft extra.
+              </p>
             </div>
           </div>
 
