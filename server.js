@@ -478,11 +478,15 @@ app.post('/api/batch-import', (req, res) => {
 app.get('/api/weekly-summary', (req, res) => {
   try {
     const allOrders = db.prepare('SELECT * FROM work_orders ORDER BY work_date DESC').all();
+    const photosStmt = db.prepare('SELECT id, filename, original_name, category, created_at FROM job_photos WHERE work_order_id = ? ORDER BY id DESC');
 
     // Group orders by week
     const weeksMap = {};
 
     for (const order of allOrders) {
+      order.photos = photosStmt.all(order.id);
+      order.photos_count = order.photos.length;
+
       const weekInfo = getWeekInfo(order.work_date);
       const key = `${weekInfo.year}-W${String(weekInfo.weekNumber).padStart(2, '0')}`;
 
