@@ -736,20 +736,6 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                       </span>
                     </div>
 
-                    {/* Mini pill de ajuste al lado del precio si existe */}
-                    {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
-                      <span 
-                        className={`text-[9px] font-mono font-black px-1.5 py-0.5 rounded-lg border shadow-2xs ${
-                          order.manual_adjustment > 0 
-                            ? 'bg-cyan-100 text-cyan-800 border-cyan-300 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800' 
-                            : 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800'
-                        }`}
-                        title={`Ajuste manual aplicado: ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}${order.adjustment_reason ? ` (${order.adjustment_reason})` : ''}`}
-                      >
-                        {order.manual_adjustment > 0 ? `+${order.manual_adjustment}` : `${order.manual_adjustment}`}
-                      </span>
-                    )}
-
                     {/* Botón de Edición Completa */}
                     <button
                       type="button"
