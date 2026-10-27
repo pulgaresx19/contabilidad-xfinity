@@ -4,7 +4,7 @@ import {
   FileSpreadsheet, Download, Upload, Trash2, Smartphone, Check, AlertCircle, RefreshCw
 } from 'lucide-react';
 import { exportOrdersToExcel } from '../services/excelExport';
-import { exportAllData, importAllData, clearAllData } from '../services/localDb';
+import { exportAllData, importAllData, clearAllData, loadSampleData } from '../services/localDb';
 
 const CUTOFF_LABELS = {
   '0': 'Domingos (Lunes a Domingo)',
@@ -99,6 +99,20 @@ export default function ProfileView({ techName, summaryData, onRefresh }) {
     } catch (err) {
       console.error(err);
       showNotification('Error al reiniciar: ' + err.message, 'error');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleLoadSample = async () => {
+    try {
+      setProcessing(true);
+      const res = await loadSampleData();
+      showNotification(`¡Datos de ejemplo cargados (${res.count} trabajos)!`);
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error(err);
+      showNotification('Error al cargar datos de ejemplo', 'error');
     } finally {
       setProcessing(false);
     }
@@ -330,15 +344,25 @@ export default function ProfileView({ techName, summaryData, onRefresh }) {
           />
 
           {/* Clear Data Button (For coworkers starting fresh) */}
-          <div className="pt-2">
+          <div className="pt-2 space-y-1">
             {!showConfirmClear ? (
-              <button
-                onClick={() => setShowConfirmClear(true)}
-                className="w-full flex items-center justify-center gap-1.5 p-2.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 text-[11px] font-medium transition"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                <span>Reiniciar datos y empezar en blanco</span>
-              </button>
+              <>
+                <button
+                  onClick={() => setShowConfirmClear(true)}
+                  className="w-full flex items-center justify-center gap-1.5 p-2 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 text-[11px] font-medium transition"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Reiniciar datos y empezar en blanco</span>
+                </button>
+                <button
+                  onClick={handleLoadSample}
+                  disabled={processing}
+                  className="w-full flex items-center justify-center gap-1.5 p-1.5 text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 text-[10px] font-medium transition"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  <span>Cargar datos de prueba (opcional)</span>
+                </button>
+              </>
             ) : (
               <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-2xl space-y-2">
                 <p className="text-[11px] text-rose-800 dark:text-rose-300 text-center font-medium">

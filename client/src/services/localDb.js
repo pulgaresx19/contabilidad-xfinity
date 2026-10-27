@@ -61,70 +61,27 @@ export function getDb() {
   return dbPromise;
 }
 
-// Seed initial data if the database is newly created
+// Initialize default settings if the database is newly created (starts 100% clean with 0 orders)
 async function checkAndSeedInitialData(db) {
   return new Promise((resolve) => {
     try {
-      const tx = db.transaction(['work_orders', 'settings', 'job_photos', 'monthly_expenses', 'dispatch_sheets'], 'readwrite');
-      const ordersStore = tx.objectStore('work_orders');
-      const countReq = ordersStore.count();
+      const tx = db.transaction(['settings'], 'readwrite');
+      const settingsStore = tx.objectStore('settings');
+      const countReq = settingsStore.count();
 
       countReq.onsuccess = () => {
-        if (countReq.result === 0 && initialSeedData) {
-          console.log('Seeding initial data into IndexedDB...');
-
-          // Seed Settings
-          const settingsStore = tx.objectStore('settings');
+        if (countReq.result === 0) {
+          console.log('Initializing fresh system settings (clean state)...');
           const defaultSettings = {
             tech_default: 'Javier (P0G1)',
             base_rate: '100.00',
             bore_dw_bonus: '30.00',
             cutoff_day: '0',
             footage_base: '300',
-            footage_extra_rate: '25.00',
-            ...(initialSeedData.settings || {})
+            footage_extra_rate: '25.00'
           };
           for (const [key, value] of Object.entries(defaultSettings)) {
             settingsStore.put({ key, value: String(value) });
-          }
-
-          // Seed Orders
-          if (Array.isArray(initialSeedData.orders)) {
-            initialSeedData.orders.forEach((o) => {
-              ordersStore.put({
-                ...o,
-                rate_calculated: parseFloat(o.rate_calculated) || 100,
-                manual_adjustment: parseFloat(o.manual_adjustment) || 0,
-                drop_footage: parseFloat(o.drop_footage) || 0
-              });
-            });
-          }
-
-          // Seed Photos
-          if (Array.isArray(initialSeedData.photos)) {
-            const photosStore = tx.objectStore('job_photos');
-            initialSeedData.photos.forEach((p) => {
-              photosStore.put(p);
-            });
-          }
-
-          // Seed Expenses
-          if (Array.isArray(initialSeedData.expenses)) {
-            const expStore = tx.objectStore('monthly_expenses');
-            initialSeedData.expenses.forEach((e) => {
-              expStore.put({
-                ...e,
-                amount: parseFloat(e.amount) || 0
-              });
-            });
-          }
-
-          // Seed Sheets
-          if (Array.isArray(initialSeedData.sheets)) {
-            const sheetsStore = tx.objectStore('dispatch_sheets');
-            initialSeedData.sheets.forEach((s) => {
-              sheetsStore.put(s);
-            });
           }
         }
         resolve();
@@ -132,8 +89,64 @@ async function checkAndSeedInitialData(db) {
 
       countReq.onerror = () => resolve();
     } catch (e) {
-      console.warn('Error during seed check:', e);
+      console.warn('Error during settings initialization:', e);
       resolve();
+    }
+  });
+}
+
+// Optional helper: Load sample orders if requested by user
+export async function loadSampleData() {
+  const db = await getDb();
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction(['work_orders', 'settings', 'job_photos', 'monthly_expenses', 'dispatch_sheets'], 'readwrite');
+      const ordersStore = tx.objectStore('work_orders');
+      const photosStore = tx.objectStore('job_photos');
+      const expStore = tx.objectStore('monthly_expenses');
+      const sheetsStore = tx.objectStore('dispatch_sheets');
+      const settingsStore = tx.objectStore('settings');
+
+      // Orders
+      if (Array.isArray(initialSeedData.orders)) {
+        initialSeedData.orders.forEach((o) => {
+          ordersStore.put({
+            ...o,
+            rate_calculated: parseFloat(o.rate_calculated) || 100,
+            manual_adjustment: parseFloat(o.manual_adjustment) || 0,
+            drop_footage: parseFloat(o.drop_footage) || 0
+          });
+        });
+      }
+
+      // Photos
+      if (Array.isArray(initialSeedData.photos)) {
+        initialSeedData.photos.forEach((p) => {
+          photosStore.put(p);
+        });
+      }
+
+      // Expenses
+      if (Array.isArray(initialSeedData.expenses)) {
+        initialSeedData.expenses.forEach((e) => {
+          expStore.put({
+            ...e,
+            amount: parseFloat(e.amount) || 0
+          });
+        });
+      }
+
+      // Sheets
+      if (Array.isArray(initialSeedData.sheets)) {
+        initialSeedData.sheets.forEach((s) => {
+          sheetsStore.put(s);
+        });
+      }
+
+      tx.oncomplete = () => resolve({ success: true, count: initialSeedData.orders?.length || 0 });
+      tx.onerror = () => reject(tx.error);
+    } catch (e) {
+      reject(e);
     }
   });
 }
