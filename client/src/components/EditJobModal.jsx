@@ -225,6 +225,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
                 value={formData.job_id}
                 onChange={(e) => setFormData({ ...formData, job_id: e.target.value })}
                 className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs shadow-2xs"
+                style={{ height: '40px', minHeight: '40px', maxHeight: '40px', fontSize: '12px', lineHeight: 'normal' }}
               />
             </div>
 
@@ -237,7 +238,8 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
                 required
                 value={formData.work_date}
                 onChange={(e) => setFormData({ ...formData, work_date: e.target.value })}
-                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500 font-mono text-xs [color-scheme:light] dark:[color-scheme:dark] shadow-2xs"
+                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500 font-mono font-bold text-xs [color-scheme:light] dark:[color-scheme:dark] shadow-2xs"
+                style={{ height: '40px', minHeight: '40px', maxHeight: '40px', fontSize: '12px', lineHeight: 'normal' }}
               />
             </div>
           </div>

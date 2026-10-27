@@ -141,10 +141,10 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech }
             </div>
           </div>
 
-          {/* Fila 1: Job ID y Fecha (Lineales lado a lado en 2 columnas) */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* Fila 1: Job ID y Fecha (Lineales lado a lado en 2 columnas 50% / 50%) */}
+          <div className="grid grid-cols-2 gap-2.5">
             <div className="min-w-0">
-              <label className="block text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-0.5 truncate">
+              <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 truncate">
                 Work Order # (Job ID) *
               </label>
               <input
@@ -153,12 +153,13 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech }
                 placeholder="ej. 734521"
                 value={formData.job_id}
                 onChange={(e) => setFormData({ ...formData, job_id: e.target.value })}
-                className="w-full h-8 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700/80 rounded-xl px-2.5 py-1 text-cyan-700 dark:text-cyan-400 font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs"
+                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3 py-2 text-cyan-700 dark:text-cyan-400 font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs shadow-2xs"
+                style={{ height: '40px', minHeight: '40px', maxHeight: '40px', fontSize: '12px', lineHeight: 'normal' }}
               />
             </div>
 
             <div className="min-w-0">
-              <label className="block text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-0.5 truncate">
+              <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 truncate">
                 Fecha Asignada
               </label>
               <input
@@ -166,7 +167,8 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech }
                 required
                 value={formData.work_date}
                 onChange={(e) => setFormData({ ...formData, work_date: e.target.value })}
-                className="w-full h-8 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700/80 rounded-xl px-1.5 py-0.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[10px] sm:text-xs [color-scheme:light] dark:[color-scheme:dark]"
+                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500 font-mono font-bold text-xs [color-scheme:light] dark:[color-scheme:dark] shadow-2xs"
+                style={{ height: '40px', minHeight: '40px', maxHeight: '40px', fontSize: '12px', lineHeight: 'normal' }}
               />
             </div>
           </div>

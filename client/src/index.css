@@ -243,6 +243,36 @@ html.light textarea:focus {
   box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2) !important;
 }
 
+/* 9.1 Mobile WebKit & Date Input Normalization (iOS Safari / Android Chrome) */
+input[type="date"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  box-sizing: border-box !important;
+  line-height: normal !important;
+}
+
+input[type="date"]::-webkit-datetime-edit,
+input[type="date"]::-webkit-date-and-time-value {
+  min-height: 1.15rem !important;
+  line-height: normal !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-align: left !important;
+  font-size: inherit !important;
+  font-family: inherit !important;
+  font-weight: inherit !important;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+  opacity: 0.6 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 1rem !important;
+  height: 1rem !important;
+}
+
 /* 10. Box Shadows for Premium Tactile Feel */
 html.light .shadow-xl,
 html.light .shadow-2xl {
