@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  Camera, Check, X, Phone, MapPin, Share2, Clock, 
+  Camera, Check, X, Phone, MapPin, Share2, Clock, Copy,
   CheckCircle2, AlertCircle, Plus, Sparkles, AlertTriangle, Shield,
   SlidersHorizontal, Edit3, Minus, DollarSign, Calendar, ChevronLeft, ChevronRight, Pencil, Info,
   Image as ImageIcon
@@ -41,12 +41,13 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   const [isAddJobOpen, setIsAddJobOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
 
-  // WhatsApp Share Modal State (Primero Texto, Luego Fotos)
+  // WhatsApp Share Modal State (Texto Editable + Fotos Todo en Uno)
   const [shareModalOrder, setShareModalOrder] = useState(null);
-  const [shareStep1Done, setShareStep1Done] = useState(false);
   const [shareOrderPhotos, setShareOrderPhotos] = useState([]);
   const [loadingSharePhotos, setLoadingSharePhotos] = useState(false);
-  const [sharingAllInOne, setSharingAllInOne] = useState(false);
+  const [shareReportText, setShareReportText] = useState('');
+  const [sharingReport, setSharingReport] = useState(false);
+  const [copiedShareText, setCopiedShareText] = useState(false);
 
   // Manual Price Adjustment Modal State
   const [adjustModalOrder, setAdjustModalOrder] = useState(null);
@@ -335,7 +336,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
     }
   };
 
-  // Funciones para Reporte WhatsApp (Primero Texto, Luego Fotos)
+  // Funciones para Reporte WhatsApp (Texto Editable + Fotos Todo en Uno)
   const markOrderAsShared = (order) => {
     order.whatsapp_shared = 1;
     order.whatsapp_shared_at = new Date().toISOString();
@@ -364,7 +365,9 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
 
   const openShareModal = async (order) => {
     setShareModalOrder(order);
-    setShareStep1Done(Boolean(order.whatsapp_shared || localSharedMap[order.id]));
+    const initialText = getReportText(order);
+    setShareReportText(initialText);
+    setCopiedShareText(false);
     setLoadingSharePhotos(true);
 
     try {
@@ -379,115 +382,106 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
     }
   };
 
-  // Paso 1: Enviar primero el texto del trabajo por WhatsApp
-  const handleSendText = async () => {
-    if (!shareModalOrder) return;
-    const reportText = getReportText(shareModalOrder);
-
+  const dataUrlToBlob = (dataUrl) => {
     try {
-      await navigator.clipboard.writeText(reportText);
-    } catch (e) {}
-
-    markOrderAsShared(shareModalOrder);
-    setShareStep1Done(true);
-
-    const waUrl = `https://wa.me/?text=${encodeURIComponent(reportText)}`;
-    window.open(waUrl, '_blank');
-  };
-
-  // Paso 2: Enviar fotos de evidencia para que bajen justo después del texto
-  const handleSendPhotos = async () => {
-    if (!shareModalOrder || shareOrderPhotos.length === 0) return;
-    setSharingId(shareModalOrder.id);
-    markOrderAsShared(shareModalOrder);
-
-    try {
-      const filesToShare = [];
-      for (let i = 0; i < shareOrderPhotos.length; i++) {
-        const p = shareOrderPhotos[i];
-        try {
-          const imgRes = await fetch(`/uploads/${p.filename}`);
-          const blob = await imgRes.blob();
-          const cleanCat = (p.category || 'evidencia').replace(/[^a-zA-Z0-9]/g, '_');
-          const file = new File(
-            [blob], 
-            `Orden_${shareModalOrder.job_id}_${i + 1}_${cleanCat}.jpg`, 
-            { type: blob.type || 'image/jpeg' }
-          );
-          filesToShare.push(file);
-        } catch (e) {
-          console.error('Error fetching photo blob:', e);
-        }
+      const parts = dataUrl.split(',');
+      const mimeMatch = parts[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      const bstr = atob(parts[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
       }
-
-      if (filesToShare.length > 0 && navigator.canShare && navigator.canShare({ files: filesToShare })) {
-        await navigator.share({
-          title: `Fotos #${shareModalOrder.job_id}`,
-          files: filesToShare,
-        });
-      } else {
-        alert('No se pudieron compartir directamente las fotos. Puedes verlas o descargarlas desde el visor de fotos.');
-      }
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error('Error sharing photos:', err);
-      }
-    } finally {
-      setSharingId(null);
+      return new Blob([u8arr], { type: mime });
+    } catch (e) {
+      console.error('Error in dataUrlToBlob:', e);
+      return null;
     }
   };
 
-  // Opción Todo en Uno
-  const handleShareAllInOne = async () => {
+  // Enviar Reporte Unificado (Texto Editado + Todas las Fotos de una)
+  const handleSendReportAndPhotos = async () => {
     if (!shareModalOrder) return;
-    setSharingAllInOne(true);
-    markOrderAsShared(shareModalOrder);
-    const reportText = getReportText(shareModalOrder);
+    setSharingReport(true);
+
+    const orderToShare = shareModalOrder;
+    const textToSend = (shareReportText || '').trim() || getReportText(orderToShare);
+
+    // 1. Marcar inmediatamente como reportado en estado y base de datos
+    markOrderAsShared(orderToShare);
+
+    // 2. Guardar texto en el portapapeles como respaldo de seguridad
+    try {
+      await navigator.clipboard.writeText(textToSend);
+      setCopiedShareText(true);
+    } catch (e) {}
 
     try {
-      try {
-        await navigator.clipboard.writeText(reportText);
-      } catch (e) {}
-
-      if (navigator.canShare && shareOrderPhotos.length > 0) {
-        const filesToShare = [];
+      // 3. Preparar archivos de fotos (tanto offline dataURL como fetch)
+      const filesToShare = [];
+      if (shareOrderPhotos.length > 0) {
         for (let i = 0; i < shareOrderPhotos.length; i++) {
           const p = shareOrderPhotos[i];
           try {
-            const imgRes = await fetch(`/uploads/${p.filename}`);
-            const blob = await imgRes.blob();
-            const cleanCat = (p.category || 'evidencia').replace(/[^a-zA-Z0-9]/g, '_');
-            const file = new File(
-              [blob], 
-              `Orden_${shareModalOrder.job_id}_${i + 1}_${cleanCat}.jpg`, 
-              { type: blob.type || 'image/jpeg' }
-            );
-            filesToShare.push(file);
-          } catch (e) {
-            console.error('Error fetching photo blob:', e);
+            let blob = null;
+            if (p.photo_data && typeof p.photo_data === 'string' && p.photo_data.startsWith('data:')) {
+              blob = dataUrlToBlob(p.photo_data);
+            }
+            if (!blob && p.filename) {
+              const imgRes = await fetch(`/uploads/${p.filename}`);
+              if (imgRes.ok) {
+                blob = await imgRes.blob();
+              }
+            }
+            if (blob) {
+              const cleanCat = (p.category || 'evidencia').replace(/[^a-zA-Z0-9]/g, '_');
+              const file = new File(
+                [blob], 
+                `Job_${orderToShare.job_id}_${i + 1}_${cleanCat}.jpg`, 
+                { type: blob.type || 'image/jpeg' }
+              );
+              filesToShare.push(file);
+            }
+          } catch (errPhoto) {
+            console.error('Error preparing photo file for share:', errPhoto);
           }
         }
-
-        if (filesToShare.length > 0 && navigator.canShare({ files: filesToShare })) {
-          await navigator.share({
-            title: `Reporte #${shareModalOrder.job_id}`,
-            text: reportText,
-            files: filesToShare,
-          });
-          setSharingAllInOne(false);
-          return;
-        }
       }
 
-      const waUrl = `https://wa.me/?text=${encodeURIComponent(reportText)}`;
+      // 4. Compartir nativamente con Web Share (archivos + texto juntos)
+      if (filesToShare.length > 0 && navigator.canShare && navigator.canShare({ files: filesToShare })) {
+        await navigator.share({
+          title: `Reporte #${orderToShare.job_id}`,
+          text: textToSend,
+          files: filesToShare
+        });
+        setShareModalOrder(null);
+        return;
+      }
+
+      // 5. Compartir nativamente solo texto si no hay fotos
+      if (filesToShare.length === 0 && navigator.share && navigator.canShare && navigator.canShare({ text: textToSend })) {
+        await navigator.share({
+          title: `Reporte #${orderToShare.job_id}`,
+          text: textToSend
+        });
+        setShareModalOrder(null);
+        return;
+      }
+
+      // 6. Si Web Share no está disponible (ej. navegador de escritorio): abrir WhatsApp
+      const waUrl = `https://wa.me/?text=${encodeURIComponent(textToSend)}`;
       window.open(waUrl, '_blank');
+      setShareModalOrder(null);
     } catch (err) {
       if (err.name !== 'AbortError') {
-        const waUrl = `https://wa.me/?text=${encodeURIComponent(reportText)}`;
+        const waUrl = `https://wa.me/?text=${encodeURIComponent(textToSend)}`;
         window.open(waUrl, '_blank');
+        setShareModalOrder(null);
       }
     } finally {
-      setSharingAllInOne(false);
+      setSharingReport(false);
     }
   };
 
@@ -1515,142 +1509,140 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
         </div>
       )}
 
-      {/* MODAL: Enviar Reporte a WhatsApp (Primero Texto, Luego Fotos) */}
-      {shareModalOrder && (() => {
-        const reportText = getReportText(shareModalOrder);
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-4 sm:p-5 shadow-2xl space-y-3.5 max-h-[92vh] overflow-y-auto">
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
-                    <Share2 className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                      Reportar por WhatsApp
-                    </h3>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono font-bold">
-                      Orden #{shareModalOrder.job_id}
-                    </span>
-                  </div>
+      {/* MODAL: Enviar Reporte a WhatsApp (Texto Editable + Todas las Fotos Juntas) */}
+      {shareModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div 
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-4 sm:p-5 shadow-2xl space-y-3.5 max-h-[92vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                  <Share2 className="h-4 w-4" />
                 </div>
-                <button
-                  onClick={() => setShareModalOrder(null)}
-                  className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
-                  title="Cerrar"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                    Reportar por WhatsApp
+                  </h3>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono font-bold">
+                    Orden #{shareModalOrder.job_id} • {shareModalOrder.address}
+                  </span>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setShareModalOrder(null)}
+                className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+                title="Cerrar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
-              {/* Burbuja con vista previa del texto */}
-              <div className="bg-slate-50 dark:bg-slate-950/80 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-[11px] font-mono text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed shadow-xs">
-                {reportText}
-              </div>
-
-              {/* Botón Paso 1: Enviar primero el texto */}
-              <div className="space-y-1">
+            {/* Texto del Reporte Editable */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                  Mensaje del Reporte (Editable):
+                </label>
                 <button
                   type="button"
-                  onClick={handleSendText}
-                  className={`w-full py-2.5 px-3.5 rounded-xl font-black text-xs flex items-center justify-between transition shadow-md ${
-                    shareStep1Done
-                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 active:scale-95'
-                      : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-500/25 active:scale-95 ring-2 ring-emerald-400/40'
-                  }`}
+                  onClick={() => {
+                    navigator.clipboard.writeText(shareReportText);
+                    setCopiedShareText(true);
+                    setTimeout(() => setCopiedShareText(false), 2000);
+                  }}
+                  className="text-[10px] text-cyan-600 dark:text-cyan-400 font-bold hover:underline flex items-center gap-1"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-slate-950/10 dark:bg-white/10 flex items-center justify-center font-mono text-[11px] font-bold">1</span>
-                    <span>{shareStep1Done ? 'Reenviar Texto del Trabajo' : '1. Enviar Texto del Trabajo'}</span>
-                  </div>
-                  {shareStep1Done ? (
-                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]">
-                      <Check className="h-3.5 w-3.5 stroke-[3]" />
-                      <span>Enviado</span>
-                    </span>
-                  ) : (
-                    <Share2 className="h-3.5 w-3.5" />
-                  )}
+                  {copiedShareText ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                  <span>{copiedShareText ? '¡Copiado!' : 'Copiar texto'}</span>
                 </button>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 px-1">
-                  Abre WhatsApp con los datos completos listos para que el supervisor los reciba primero.
-                </p>
               </div>
 
-              {/* Botón Paso 2: Enviar fotos para que bajen justo después */}
+              <textarea
+                rows={6}
+                value={shareReportText}
+                onChange={(e) => setShareReportText(e.target.value)}
+                placeholder="Escribe o modifica los detalles del reporte..."
+                className="w-full bg-slate-50 dark:bg-slate-950/90 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500 leading-relaxed shadow-inner"
+              />
+              <span className="text-[10px] text-slate-400 block px-0.5">
+                💡 Puedes editar cualquier dato o agregar notas antes de enviarlo al supervisor.
+              </span>
+            </div>
+
+            {/* Galería de Fotos (Todas de una) */}
+            <div className="space-y-1.5 pt-1 border-t border-slate-100 dark:border-slate-800/80">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Camera className="h-3.5 w-3.5 text-cyan-500" />
+                  <span>Fotos de Evidencia ({shareOrderPhotos.length})</span>
+                </label>
+                {shareOrderPhotos.length > 0 && (
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    Se enviarán juntas con el texto
+                  </span>
+                )}
+              </div>
+
               {loadingSharePhotos ? (
-                <div className="py-2 text-center text-xs text-slate-400">Cargando fotos...</div>
+                <div className="py-3 text-center text-xs text-slate-400">Cargando fotos del trabajo...</div>
               ) : shareOrderPhotos.length > 0 ? (
-                <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800/80">
-                  <button
-                    type="button"
-                    onClick={handleSendPhotos}
-                    disabled={sharingId === shareModalOrder.id}
-                    className={`w-full py-2.5 px-3.5 rounded-xl font-black text-xs flex items-center justify-between transition shadow-md ${
-                      shareStep1Done
-                        ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-500/25 active:scale-95 animate-pulse ring-2 ring-emerald-400/40'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 active:scale-95'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-slate-950/10 dark:bg-white/10 flex items-center justify-center font-mono text-[11px] font-bold">2</span>
-                      <span>
-                        {sharingId === shareModalOrder.id 
-                          ? 'Preparando fotos...' 
-                          : `2. Enviar Fotos (${shareOrderPhotos.length})`}
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-36 overflow-y-auto p-1 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800/70">
+                  {shareOrderPhotos.map((p, idx) => (
+                    <div 
+                      key={p.id || idx} 
+                      className="relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-black/40 aspect-video group"
+                    >
+                      <img 
+                        src={p.photo_data || `/uploads/${p.filename}`} 
+                        alt={p.category || `Foto ${idx + 1}`} 
+                        className="w-full h-full object-cover" 
+                      />
+                      <span className="absolute bottom-0.5 left-0.5 bg-black/75 text-[8px] text-white px-1 py-0.2 rounded font-mono truncate max-w-[90%]">
+                        {p.category || `#${idx + 1}`}
                       </span>
                     </div>
-                    <Camera className="h-3.5 w-3.5" />
-                  </button>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 px-1">
-                    Envía las fotos para que bajen justo debajo del mensaje en el chat.
-                  </p>
-
-                  {/* Tira compacta de fotos */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-                    {shareOrderPhotos.map((p, idx) => (
-                      <div key={p.id} className="relative w-16 h-12 flex-shrink-0 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800">
-                        <img src={p.photo_data || `/uploads/${p.filename}`} alt="" className="w-full h-full object-cover" />
-                        <span className="absolute bottom-0.5 left-0.5 bg-black/70 text-[8px] text-white px-1 rounded font-mono">
-                          #{idx + 1}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  ))}
                 </div>
               ) : (
-                <div className="text-[10px] text-slate-400 italic text-center py-1">
-                  Sin fotos de evidencia registradas.
+                <div className="text-[10px] text-slate-400 italic text-center py-2 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                  Sin fotos adjuntas (se enviará solo el mensaje de texto).
                 </div>
               )}
+            </div>
 
-              {/* Botón Cerrar y Opción Todo en Uno */}
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-                {shareOrderPhotos.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleShareAllInOne}
-                    disabled={sharingAllInOne}
-                    className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400 hover:underline"
-                  >
-                    {sharingAllInOne ? 'Enviando...' : 'O enviar fotos + texto a la vez'}
-                  </button>
+            {/* Botón Principal: Enviar TODO JUNTOS a WhatsApp */}
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+              <button
+                type="button"
+                onClick={handleSendReportAndPhotos}
+                disabled={sharingReport}
+                className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 active:scale-95 transition ring-2 ring-emerald-400/40 disabled:opacity-50"
+              >
+                {sharingReport ? (
+                  <span>Preparando y enviando...</span>
+                ) : (
+                  <>
+                    <Share2 className="h-4 w-4 stroke-[2.5]" />
+                    <span>Enviar Reporte y Fotos a WhatsApp</span>
+                  </>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setShareModalOrder(null)}
-                  className="ml-auto px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition"
-                >
-                  Listo
-                </button>
-              </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShareModalOrder(null)}
+                className="w-full py-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 text-xs font-bold transition text-center"
+              >
+                Cancelar
+              </button>
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* Modal para Añadir Trabajo Manualmente */}
       <AddJobModal

@@ -215,7 +215,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
           {/* Job ID y Fecha (Lineales lado a lado) */}
           <div className="grid grid-cols-2 gap-2">
             <div className="min-w-0">
-              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-0.5 uppercase truncate">
+              <label className="block text-[9px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide truncate">
                 Work Order # (Job ID) *
               </label>
               <input
@@ -223,19 +223,19 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
                 required
                 value={formData.job_id}
                 onChange={(e) => setFormData({ ...formData, job_id: e.target.value })}
-                className="w-full min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs"
+                className="w-full h-8 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1 text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs"
               />
             </div>
 
             <div className="min-w-0">
-              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-0.5 uppercase truncate">
+              <label className="block text-[9px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide truncate">
                 Fecha Asignada
               </label>
               <input
                 type="date"
                 value={formData.work_date}
                 onChange={(e) => setFormData({ ...formData, work_date: e.target.value })}
-                className="w-full min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2 py-1.5 text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500 font-mono text-[11px] sm:text-xs [color-scheme:light] dark:[color-scheme:dark]"
+                className="w-full h-8 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-1.5 py-0.5 text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500 font-mono text-[10px] sm:text-xs [color-scheme:light] dark:[color-scheme:dark]"
               />
             </div>
           </div>
@@ -345,15 +345,15 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
             <div className="grid grid-cols-3 gap-1.5">
               {[
                 { id: 'N', label: 'Sin Bore' },
-                { id: 'DW:1', label: 'Driveway (+$30)' },
-                { id: 'SW:1', label: 'Sidewalk' }
+                { id: 'SW:1', label: 'Sidewalk' },
+                { id: 'DW:1', label: 'Driveway (+$30)' }
               ].map((b) => (
                 <button
                   key={b.id}
                   type="button"
                   onClick={() => handleBoreChange(b.id)}
                   className={`py-2 px-1 rounded-xl text-[11px] font-bold border text-center transition ${
-                    formData.bore_type === b.id || (b.id === 'DW:1' && formData.bore_type.includes('DW'))
+                    formData.bore_type === b.id || (b.id === 'DW:1' && (formData.bore_type || '').includes('DW'))
                       ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-sm font-black'
                       : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
                   }`}
