@@ -297,7 +297,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                     className="group relative bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl overflow-hidden aspect-video shadow-sm transition"
                   >
                     <img
-                      src={`/uploads/${photo.filename}`}
+                      src={photo.photo_data || `/uploads/${photo.filename}`}
                       alt={photo.category}
                       className="w-full h-full object-cover"
                     />
@@ -316,7 +316,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                         </button>
                       </div>
                       <a
-                        href={`/uploads/${photo.filename}`}
+                        href={photo.photo_data || `/uploads/${photo.filename}`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-[10px] text-slate-200 truncate hover:underline"
@@ -348,9 +348,9 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
                 {cancelPhotos.map((photo) => (
                   <div key={photo.id} className="w-24 h-18 rounded-xl overflow-hidden border border-amber-500/40 relative shrink-0 group">
-                    <img src={`/uploads/${photo.filename}`} alt="Constancia" className="w-full h-full object-cover" />
+                    <img src={photo.photo_data || `/uploads/${photo.filename}`} alt="Constancia" className="w-full h-full object-cover" />
                     <a
-                      href={`/uploads/${photo.filename}`}
+                      href={photo.photo_data || `/uploads/${photo.filename}`}
                       target="_blank"
                       rel="noreferrer"
                       className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition"

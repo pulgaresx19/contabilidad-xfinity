@@ -1463,12 +1463,12 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                       className="relative w-24 h-16 flex-shrink-0 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-slate-100 dark:bg-slate-800 group"
                     >
                       <img
-                        src={`/uploads/${photo.filename}`}
+                        src={photo.photo_data || `/uploads/${photo.filename}`}
                         alt={`Constancia ${idx + 1}`}
                         className="w-full h-full object-cover"
                       />
                       <a
-                        href={`/uploads/${photo.filename}`}
+                        href={photo.photo_data || `/uploads/${photo.filename}`}
                         target="_blank"
                         rel="noreferrer"
                         className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition backdrop-blur-[1px]"
@@ -1612,7 +1612,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                   <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
                     {shareOrderPhotos.map((p, idx) => (
                       <div key={p.id} className="relative w-16 h-12 flex-shrink-0 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800">
-                        <img src={`/uploads/${p.filename}`} alt="" className="w-full h-full object-cover" />
+                        <img src={p.photo_data || `/uploads/${p.filename}`} alt="" className="w-full h-full object-cover" />
                         <span className="absolute bottom-0.5 left-0.5 bg-black/70 text-[8px] text-white px-1 rounded font-mono">
                           #{idx + 1}
                         </span>

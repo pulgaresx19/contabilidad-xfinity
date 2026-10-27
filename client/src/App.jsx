@@ -182,6 +182,7 @@ export default function App() {
               <ProfileView
                 techName={techName}
                 summaryData={summaryData}
+                onRefresh={refreshAll}
               />
             )}
           </>

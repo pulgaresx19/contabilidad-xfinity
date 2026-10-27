@@ -584,10 +584,10 @@ ${jobLines}
                 className="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex items-center gap-3 shadow-sm"
               >
                 <div
-                  onClick={() => setSelectedPhoto(`/uploads/${s.filename}`)}
+                  onClick={() => setSelectedPhoto(s.photo_data || `/uploads/${s.filename}`)}
                   className="h-16 w-20 rounded-xl overflow-hidden bg-slate-950 flex-shrink-0 cursor-pointer border border-slate-800 relative group"
                 >
-                  <img src={`/uploads/${s.filename}`} alt="" className="w-full h-full object-cover group-hover:scale-105 transition" />
+                  <img src={s.photo_data || `/uploads/${s.filename}`} alt="" className="w-full h-full object-cover group-hover:scale-105 transition" />
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-70 group-hover:opacity-100">
                     <ExternalLink className="h-4 w-4 text-white" />
                   </div>
@@ -867,11 +867,11 @@ ${jobLines}
                             {photos.map((p) => (
                               <div
                                 key={p.id}
-                                onClick={() => setSelectedPhoto(`/uploads/${p.filename}`)}
+                                onClick={() => setSelectedPhoto(p.photo_data || `/uploads/${p.filename}`)}
                                 className="h-14 w-16 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 flex-shrink-0 cursor-pointer relative group"
                               >
                                 <img 
-                                  src={`/uploads/${p.filename}`} 
+                                  src={p.photo_data || `/uploads/${p.filename}`} 
                                   alt={p.category} 
                                   className="w-full h-full object-cover group-hover:scale-105 transition" 
                                 />

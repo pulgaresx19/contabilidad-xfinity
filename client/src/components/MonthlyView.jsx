@@ -578,7 +578,7 @@ ${weeksLines || '  (No hay semanas registradas)'}
                                 {photos.map((p, pIdx) => (
                                   <a
                                     key={pIdx}
-                                    href={`/uploads/${p}`}
+                                    href={exp.receipt_data || `/uploads/${p}`}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="text-cyan-400 hover:text-cyan-300 underline flex items-center gap-0.5 font-medium"
