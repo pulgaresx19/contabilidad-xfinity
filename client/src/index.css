@@ -318,3 +318,15 @@ html.light header {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Hide Netlify Badge & Drawer injection if present in DOM */
+netlify-drawer,
+iframe[src*="netlify"],
+iframe[title*="Netlify"],
+div[data-netlify-drawer],
+#netlify-drawer {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
