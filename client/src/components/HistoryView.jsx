@@ -824,6 +824,17 @@ ${jobLines}
                             Drop &gt;300ft: +${Math.floor((order.drop_footage - 300) / 100) * 25}
                           </span>
                         )}
+                        {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
+                          <span className={`px-2 py-0.5 rounded border text-[9px] font-bold flex items-center gap-1 ${
+                            order.manual_adjustment > 0 ? 'bg-cyan-950 text-cyan-300 border-cyan-800' : 'bg-amber-950 text-amber-300 border-amber-800'
+                          }`}>
+                            <Sparkles className="h-2.5 w-2.5" />
+                            <span>{order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}</span>
+                            {order.adjustment_reason && (
+                              <span className="font-normal opacity-80 text-[8px] max-w-[70px] truncate">({order.adjustment_reason})</span>
+                            )}
+                          </span>
+                        )}
                         <span className={`px-2 py-0.5 rounded border text-[9px] ${
                           order.payment_status === 'Cobrado'
                             ? 'bg-emerald-950/60 border-emerald-800 text-emerald-400'
@@ -832,19 +843,6 @@ ${jobLines}
                           {order.payment_status || 'Pendiente'}
                         </span>
                       </div>
-
-                      {/* Badge de Ajuste del Supervisor si existe */}
-                      {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
-                        <div className={`p-2 rounded-xl border text-[10px] flex items-center justify-between gap-1.5 ${
-                          order.manual_adjustment > 0
-                            ? 'bg-cyan-950/40 border-cyan-800/60 text-cyan-300'
-                            : 'bg-amber-950/40 border-amber-800/60 text-amber-300'
-                        }`}>
-                          <span>
-                            <strong>Ajuste Supervisor ({order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}):</strong> {order.adjustment_reason || 'Inconsistencia acordada'}
-                          </span>
-                        </div>
-                      )}
 
                       {/* Galería de Fotos de Evidencia de esa Orden */}
                       <div className="pt-1.5 border-t border-slate-800/80">

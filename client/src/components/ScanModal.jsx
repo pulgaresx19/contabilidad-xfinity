@@ -439,6 +439,17 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                           <option value="SW:1">Sidewalk (+$0)</option>
                         </select>
                       </div>
+
+                      <div className="flex items-center gap-1 flex-1 min-w-0">
+                        <input
+                          type="text"
+                          placeholder="Nota / Urgente..."
+                          value={o.raw_notes && o.raw_notes !== o.address ? o.raw_notes : ''}
+                          onChange={(e) => updateOrderField(idx, 'raw_notes', e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-amber-300 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                          title="Escribe notas adicionales o Urgente"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}

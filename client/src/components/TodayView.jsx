@@ -76,12 +76,14 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   const getOrderRemark = (order) => {
     const parts = [];
     if (order.obstacles && order.obstacles !== 'N') {
-      parts.push(order.obstacles);
+      const cleanObs = String(order.obstacles).replace(/^remark[:\s-]*/i, '').trim();
+      if (cleanObs && cleanObs !== 'N') parts.push(cleanObs);
     }
     if (order.raw_notes && typeof order.raw_notes === 'string') {
-      const trimmed = order.raw_notes.trim();
+      let trimmed = order.raw_notes.trim();
       if (trimmed && !trimmed.startsWith('P#:') && !trimmed.startsWith('CALLFIRST/P#:')) {
-        if (!parts.includes(trimmed)) {
+        trimmed = trimmed.replace(/^remark[:\s-]*/i, '').trim();
+        if (trimmed && !parts.includes(trimmed)) {
           parts.push(trimmed);
         }
       }
@@ -734,6 +736,20 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                       </span>
                     </div>
 
+                    {/* Mini pill de ajuste al lado del precio si existe */}
+                    {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
+                      <span 
+                        className={`text-[9px] font-mono font-black px-1.5 py-0.5 rounded-lg border shadow-2xs ${
+                          order.manual_adjustment > 0 
+                            ? 'bg-cyan-100 text-cyan-800 border-cyan-300 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800' 
+                            : 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800'
+                        }`}
+                        title={`Ajuste manual aplicado: ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}${order.adjustment_reason ? ` (${order.adjustment_reason})` : ''}`}
+                      >
+                        {order.manual_adjustment > 0 ? `+${order.manual_adjustment}` : `${order.manual_adjustment}`}
+                      </span>
+                    )}
+
                     {/* Botón de Edición Completa */}
                     <button
                       type="button"
@@ -804,43 +820,47 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                         </span>
                       )}
 
-                      {/* Recuadro Amarillo para Remark / Obstáculos Extras al final de la línea */}
-                      {orderRemark && (
+                      {/* Píldora compacta de Ajuste Manual (Bono/Descuento) en la misma fila */}
+                      {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
                         <span 
-                          className="shrink-0 bg-amber-50 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/80 px-2 py-0.5 rounded font-medium flex items-center gap-1 shadow-2xs"
-                          title={`Remark / Obstáculos: ${orderRemark}`}
+                          className={`shrink-0 px-2 py-0.5 rounded font-mono font-bold border flex items-center gap-1 shadow-2xs cursor-pointer ${
+                            order.manual_adjustment > 0 
+                              ? 'bg-cyan-50 text-cyan-800 border-cyan-300 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800' 
+                              : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800'
+                          }`}
+                          onClick={() => setEditingOrder(order)}
+                          title={`Ajuste Supervisor: ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}${order.adjustment_reason ? ` • ${order.adjustment_reason}` : ''} (Toca para editar)`}
                         >
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
-                          <span className="font-bold text-amber-800 dark:text-amber-400">Remark:</span>
-                          <span>{orderRemark}</span>
+                          <Sparkles className="h-2.5 w-2.5" />
+                          <span>{order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}</span>
+                          {order.adjustment_reason && (
+                            <span className="font-normal opacity-85 text-[9px] max-w-[85px] truncate">
+                              ({order.adjustment_reason})
+                            </span>
+                          )}
                         </span>
                       )}
+
+                      {/* Píldora de Información Extra / Urgente directamente SIN prefijo 'Remark:' */}
+                      {orderRemark && (() => {
+                        const isUrgent = /urgent/i.test(orderRemark);
+                        return (
+                          <span 
+                            className={`shrink-0 px-2 py-0.5 rounded font-bold flex items-center gap-1 shadow-2xs border ${
+                              isUrgent
+                                ? 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800 animate-pulse'
+                                : 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-700/80'
+                            }`}
+                            title={`Información extra: ${orderRemark}`}
+                          >
+                            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${isUrgent ? 'bg-rose-600' : 'bg-amber-500'}`} />
+                            <span>{orderRemark}</span>
+                          </span>
+                        );
+                      })()}
                     </div>
                   );
                 })()}
-
-                {/* Badge de Ajuste Manual si existe */}
-                {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
-                  <div className={`p-2 rounded-xl border text-[11px] flex items-center justify-between gap-2 ${
-                    order.manual_adjustment > 0
-                      ? 'bg-cyan-950/40 border-cyan-800/60 text-cyan-300'
-                      : 'bg-amber-950/40 border-amber-800/60 text-amber-300'
-                  }`}>
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <Sparkles className="h-3.5 w-3.5 flex-shrink-0" />
-                      <span className="truncate">
-                        <strong>Ajuste {order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}:</strong> {order.adjustment_reason || 'Inconsistencia de precio'}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEditingOrder(order)}
-                      className="text-[10px] text-cyan-600 dark:text-cyan-400 hover:underline font-semibold flex-shrink-0"
-                    >
-                      Editar
-                    </button>
-                  </div>
-                )}
 
                 {/* Si Cancelado: Rectángulo Curvado con Motivo e Icono Interactivo para Ver Detalle / Foto */}
                 {isCancelled && (

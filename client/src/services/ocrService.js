@@ -143,6 +143,13 @@ export function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
       if (extraBlocks > 0) rate += extraBlocks * 25;
     }
 
+    let detectedNotes = '';
+    if (/urgent[e]?/i.test(line)) {
+      detectedNotes = 'URGENTE';
+    } else if (obstacles && obstacles !== 'N') {
+      detectedNotes = obstacles;
+    }
+
     candidates.push({
       work_date: defaultDate || new Date().toISOString().split('T')[0],
       tech_id: defaultTech || 'Javier (P0G1)',
@@ -159,7 +166,7 @@ export function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
       obstacles,
       premise_access: /RQHM/i.test(line) ? 'RQHM' : 'N',
       neighbor_notice: /NBR[:\s]*2/i.test(line) ? '2' : 'N',
-      raw_notes: line,
+      raw_notes: detectedNotes,
       rate_calculated: rate,
       manual_adjustment: 0,
       adjustment_reason: '',
