@@ -10,7 +10,10 @@ export default function BottomNav({ activeTab, setActiveTab, pendingCount }) {
   ];
 
   return (
-    <div className="fixed bottom-3 inset-x-0 z-40 flex justify-center px-4 pointer-events-none">
+    <div 
+      className="fixed inset-x-0 z-40 flex justify-center px-4 pointer-events-none"
+      style={{ bottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
+    >
       <nav className="pointer-events-auto bg-slate-900/95 border border-slate-800/90 shadow-2xl shadow-black/90 backdrop-blur-xl rounded-3xl px-2 py-1.5 flex items-center gap-1 max-w-sm w-full justify-between">
         {tabs.map((tab) => {
           const Icon = tab.icon;

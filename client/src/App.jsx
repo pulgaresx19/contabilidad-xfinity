@@ -98,8 +98,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-slate-950 font-sans">
-      {/* Top Mobile Header */}
-      <header className="bg-slate-900/90 border-b border-slate-800/80 sticky top-0 z-30 backdrop-blur-md">
+      {/* Top Mobile Header with Safe Area Inset to clear phone status bar / notch / dynamic island */}
+      <header 
+        className="bg-slate-900/90 border-b border-slate-800/80 sticky top-0 z-30 backdrop-blur-md"
+        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 1.25rem)' }}
+      >
         <div className="max-w-md mx-auto px-4 h-13 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-cyan-500/20">
@@ -114,7 +117,7 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-full px-2.5 py-0.5">
+            <div className="hidden xs:flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-full px-2.5 py-0.5">
               <ShieldCheck className="h-3 w-3 text-emerald-400" />
               <span className="text-[10px] text-slate-300 font-mono font-semibold">{techName}</span>
             </div>
@@ -136,6 +139,7 @@ export default function App() {
             <button
               onClick={() => setIsSettingsModalOpen(true)}
               className="p-1.5 text-slate-400 hover:text-white rounded-lg transition"
+              title="Ajustes de Tarifas"
             >
               <Settings className="h-4 w-4" />
             </button>
@@ -183,6 +187,7 @@ export default function App() {
                 techName={techName}
                 summaryData={summaryData}
                 onRefresh={refreshAll}
+                onOpenSettings={() => setIsSettingsModalOpen(true)}
               />
             )}
           </>
