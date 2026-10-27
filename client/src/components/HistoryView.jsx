@@ -5,6 +5,7 @@ import {
   Ruler, ChevronRight, Copy, Camera, AlertCircle, FileText, 
   ShieldAlert, CheckCircle, Search, Filter, Sparkles, MapPin, Phone, ShieldCheck
 } from 'lucide-react';
+import ShareReportModal from './ShareReportModal';
 
 export default function HistoryView({ orders = [], summaryData, onRefresh, onOpenPhotos }) {
   const [subTab, setSubTab] = useState('weeks'); // 'weeks' | 'all_orders' | 'sheets'
@@ -12,6 +13,7 @@ export default function HistoryView({ orders = [], summaryData, onRefresh, onOpe
   const [copiedWeekKey, setCopiedWeekKey] = useState(null);
   const [copiedJobId, setCopiedJobId] = useState(null);
   const [updatingWeekKey, setUpdatingWeekKey] = useState(null);
+  const [reportOrder, setReportOrder] = useState(null); // Order to report via ShareReportModal
 
   // General orders search and status filter
   const [orderSearch, setOrderSearch] = useState('');
@@ -526,7 +528,7 @@ ${jobLines}
                     </div>
 
                     {/* Footer de la tarjeta con Fotos y Copiar Comprobante */}
-                    <div className="pt-1.5 border-t border-slate-800 flex items-center justify-between">
+                    <div className="pt-1.5 border-t border-slate-800 flex items-center justify-between gap-1.5 flex-wrap">
                       {onOpenPhotos ? (
                         <button
                           onClick={() => onOpenPhotos(order)}
@@ -541,22 +543,34 @@ ${jobLines}
                         </span>
                       )}
 
-                      <button
-                        onClick={() => copySingleJobClaim(order)}
-                        className="text-[10px] text-slate-300 hover:text-white bg-slate-800 px-2.5 py-1 rounded-lg flex items-center gap-1 transition"
-                      >
-                        {copiedJobId === order.id ? (
-                          <>
-                            <Check className="h-3 w-3 text-emerald-400" />
-                            <span className="text-emerald-400 font-bold">¡Copiado!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3 w-3 text-cyan-400" />
-                            <span>Copiar Comprobante</span>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => copySingleJobClaim(order)}
+                          className="text-[10px] text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-2xs"
+                          title="Copiar comprobante al portapapeles"
+                        >
+                          {copiedJobId === order.id ? (
+                            <>
+                              <Check className="h-3 w-3 text-emerald-400" />
+                              <span className="text-emerald-400 font-bold">¡Copiado!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3 text-cyan-400" />
+                              <span>Copiar Comprobante</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => setReportOrder(order)}
+                          className="text-[10px] text-emerald-300 hover:text-white bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-800/80 px-2.5 py-1 rounded-lg flex items-center gap-1 font-bold transition shadow-2xs"
+                          title="Reportar trabajo por WhatsApp"
+                        >
+                          <Share2 className="h-3 w-3 text-emerald-400" />
+                          <span>Reportar</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -840,22 +854,32 @@ ${jobLines}
                             <span>Fotos de Evidencia ({photos.length})</span>
                           </span>
 
-                          <button
-                            onClick={() => copySingleJobClaim(order)}
-                            className="text-[10px] text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
-                          >
-                            {copiedJobId === order.id ? (
-                              <>
-                                <Check className="h-3 w-3 text-emerald-400" />
-                                <span className="text-emerald-400">¡Copiado!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="h-3 w-3" />
-                                <span>Copiar Comprobante</span>
-                              </>
-                            )}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => copySingleJobClaim(order)}
+                              className="text-[10px] text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
+                            >
+                              {copiedJobId === order.id ? (
+                                <>
+                                  <Check className="h-3 w-3 text-emerald-400" />
+                                  <span className="text-emerald-400">¡Copiado!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3 w-3" />
+                                  <span>Copiar Comprobante</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              onClick={() => setReportOrder(order)}
+                              className="text-[10px] text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-1 font-bold"
+                            >
+                              <Share2 className="h-3 w-3" />
+                              <span>Reportar</span>
+                            </button>
+                          </div>
                         </div>
 
                         {photos.length === 0 ? (
@@ -923,6 +947,13 @@ ${jobLines}
           </div>
         </div>
       )}
+      {/* MODAL DE REPORTE PARA WHATSAPP */}
+      <ShareReportModal
+        isOpen={!!reportOrder}
+        order={reportOrder}
+        onClose={() => setReportOrder(null)}
+        onOrderUpdated={onRefresh}
+      />
     </div>
   );
 }

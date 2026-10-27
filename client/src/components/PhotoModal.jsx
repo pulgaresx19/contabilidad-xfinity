@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { 
   X, Upload, Trash2, Camera, Image as ImageIcon, 
-  CheckCircle2, AlertCircle, Sparkles, Check, ArrowRight, ShieldCheck, Plus
+  CheckCircle2, AlertCircle, Sparkles, Check, ArrowRight, ShieldCheck, Plus,
+  ExternalLink, Share2, Copy
 } from 'lucide-react';
+import ShareReportModal from './ShareReportModal';
 
 const PHOTO_STEPS = [
   { id: 'Casa/Ground Block', label: 'Casa / Entrada', short: 'Casa', icon: '🏠' },
@@ -18,6 +20,9 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
   const [autoAdvance, setAutoAdvance] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState(null);
+  const [previewPhoto, setPreviewPhoto] = useState(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [copiedReportText, setCopiedReportText] = useState(false);
 
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
@@ -115,9 +120,38 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
     }
   };
 
+  const handleCopyReportDirect = async () => {
+    const isDw = order.bore_type && order.bore_type.includes('DW');
+    const isSw = order.bore_type && order.bore_type.includes('SW');
+    const boreStr = isDw 
+      ? 'Driveway Bore (+$30)' 
+      : isSw 
+      ? 'Sidewalk Bore (SW)' 
+      : (order.bore_type && order.bore_type !== 'N' ? order.bore_type : 'Sin Perforación');
+
+    const text = `📋 *REPORTE DE TRABAJO*
+📅 *Fecha:* ${order.work_date}
+🔢 *Orden #:* ${order.job_id}
+📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
+📏 *Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
+🚗 *Perforación / Bore:* ${boreStr}${order.drop_footage > 300 ? `\n⚡ *Metraje Extra (>300ft):* +$${Math.floor((order.drop_footage - 300) / 100) * 25}` : ''}${order.manual_adjustment ? `\n⚖️ *Ajuste Supervisor:* ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`} (${order.adjustment_reason || 'Bono/Descuento'})` : ''}
+📸 *Fotos:* ${workPhotosCount} evidencia(s)
+💵 *Tarifa Total:* $${order.rate_calculated}
+✅ *Estado:* ${order.status}`;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedReportText(true);
+      setTimeout(() => setCopiedReportText(false), 2000);
+    } catch (e) {}
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-xl rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] transition-colors">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+      <div 
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors mx-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Header Compacto y Directo */}
         <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/70">
@@ -273,10 +307,33 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
 
           {/* Galería Compacta de Fotos de Instalación */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-1 flex-wrap">
               <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Fotos de Instalación ({workPhotosCount})
               </span>
+
+              {/* Botones Rápidos de Reporte y WhatsApp */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleCopyReportDirect}
+                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-2xs"
+                  title="Copiar texto del reporte para pegar en WhatsApp"
+                >
+                  {copiedReportText ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-cyan-500" />}
+                  <span>{copiedReportText ? '¡Copiado!' : 'Copiar Reporte'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsShareModalOpen(true)}
+                  className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-2xs"
+                  title="Abrir ventana para enviar reporte y fotos por WhatsApp"
+                >
+                  <Share2 className="h-3 w-3 text-emerald-500" />
+                  <span>Reportar WhatsApp</span>
+                </button>
+              </div>
             </div>
 
             {workPhotosCount === 0 ? (
@@ -294,15 +351,16 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                 {workPhotos.map((photo) => (
                   <div
                     key={photo.id}
-                    className="group relative bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl overflow-hidden aspect-video shadow-sm transition"
+                    onClick={() => setPreviewPhoto(photo.photo_data || `/uploads/${photo.filename}`)}
+                    className="group relative bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl overflow-hidden aspect-video shadow-sm transition cursor-pointer hover:border-cyan-400/60"
                   >
                     <img
                       src={photo.photo_data || `/uploads/${photo.filename}`}
                       alt={photo.category}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:scale-105 transition"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-between p-1.5">
-                      <div className="flex justify-between items-center">
+                      <div className="flex justify-between items-center" onClick={(e) => e.stopPropagation()}>
                         <span className="text-[9px] bg-black/70 text-cyan-300 px-1.5 py-0.5 rounded font-semibold truncate max-w-[85%]">
                           {photo.category}
                         </span>
@@ -315,14 +373,14 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                           <Trash2 className="h-3 w-3" />
                         </button>
                       </div>
-                      <a
-                        href={photo.photo_data || `/uploads/${photo.filename}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[10px] text-slate-200 truncate hover:underline"
+                      <button
+                        type="button"
+                        onClick={() => setPreviewPhoto(photo.photo_data || `/uploads/${photo.filename}`)}
+                        className="text-[10px] text-slate-200 truncate hover:text-cyan-300 hover:underline flex items-center gap-1 self-start"
                       >
-                        Ver completa ↗
-                      </a>
+                        <span>Ver completa</span>
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -347,16 +405,15 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               </p>
               <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
                 {cancelPhotos.map((photo) => (
-                  <div key={photo.id} className="w-24 h-18 rounded-xl overflow-hidden border border-amber-500/40 relative shrink-0 group">
-                    <img src={photo.photo_data || `/uploads/${photo.filename}`} alt="Constancia" className="w-full h-full object-cover" />
-                    <a
-                      href={photo.photo_data || `/uploads/${photo.filename}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition"
-                    >
+                  <div 
+                    key={photo.id} 
+                    onClick={() => setPreviewPhoto(photo.photo_data || `/uploads/${photo.filename}`)}
+                    className="w-24 h-18 rounded-xl overflow-hidden border border-amber-500/40 relative shrink-0 group cursor-pointer"
+                  >
+                    <img src={photo.photo_data || `/uploads/${photo.filename}`} alt="Constancia" className="w-full h-full object-cover group-hover:scale-105 transition" />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition">
                       Ver ↗
-                    </a>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -364,7 +421,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
           )}
         </div>
 
-        {/* Footer con Acción Directa para Confirmar el Trabajo */}
+        {/* Footer con Acción Directa para Confirmar el Trabajo o Reportar */}
         <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 flex items-center justify-between gap-2.5">
           <button
             type="button"
@@ -395,13 +452,68 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               </span>
             </button>
           ) : (
-            <div className="flex items-center gap-1.5 h-10 px-3 bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-bold">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              <span>Trabajo Completado</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsShareModalOpen(true)}
+                className="h-10 px-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition active:scale-95"
+              >
+                <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
+                <span>Enviar Reporte</span>
+              </button>
+
+              <div className="hidden sm:flex items-center gap-1.5 h-10 px-3 bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-bold">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <span>Completado</span>
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* FULLSCREEN PHOTO PREVIEW MODAL (IN-APP - NUNCA REDIRIGE A OTRA PESTAÑA NI A JORNADA) */}
+      {previewPhoto && (
+        <div
+          onClick={() => setPreviewPhoto(null)}
+          className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-md flex items-center justify-center p-3 animate-fade-in"
+        >
+          <div 
+            className="relative max-w-lg w-full flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewPhoto(null)}
+              className="absolute -top-11 right-0 p-2 text-white hover:text-cyan-400 bg-slate-800/80 rounded-full transition shadow-lg"
+              title="Cerrar foto"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <img
+              src={previewPhoto}
+              alt="Evidencia Completa"
+              className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain border border-slate-700 shadow-2xl"
+            />
+
+            <button
+              type="button"
+              onClick={() => setPreviewPhoto(null)}
+              className="mt-3 px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition shadow"
+            >
+              Cerrar Foto
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE REPORTE Y WHATSAPP COMPARTIDO */}
+      <ShareReportModal
+        isOpen={isShareModalOpen}
+        order={order}
+        onClose={() => setIsShareModalOpen(false)}
+        onOrderUpdated={onPhotoUpdated}
+      />
     </div>
   );
 }

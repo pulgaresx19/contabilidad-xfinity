@@ -48,6 +48,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   const [shareReportText, setShareReportText] = useState('');
   const [sharingReport, setSharingReport] = useState(false);
   const [copiedShareText, setCopiedShareText] = useState(false);
+  const [previewFullPhoto, setPreviewFullPhoto] = useState(null);
 
   // Manual Price Adjustment Modal State
   const [adjustModalOrder, setAdjustModalOrder] = useState(null);
@@ -1471,15 +1472,14 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                         alt={`Constancia ${idx + 1}`}
                         className="w-full h-full object-cover"
                       />
-                      <a
-                        href={photo.photo_data || `/uploads/${photo.filename}`}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => setPreviewFullPhoto(photo.photo_data || `/uploads/${photo.filename}`)}
                         className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition backdrop-blur-[1px]"
-                        title="Ver foto completa en nueva pestaña"
+                        title="Ver foto completa"
                       >
                         Ver ↗
-                      </a>
+                      </button>
                       <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-white/90">
                         #{idx + 1}
                       </span>
@@ -1728,6 +1728,42 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
           if (onOrderUpdated) onOrderUpdated();
         }}
       />
+
+      {/* FULLSCREEN PHOTO PREVIEW MODAL (IN-APP - NUNCA REDIRIGE) */}
+      {previewFullPhoto && (
+        <div
+          onClick={() => setPreviewFullPhoto(null)}
+          className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-md flex items-center justify-center p-3 animate-fade-in"
+        >
+          <div 
+            className="relative max-w-lg w-full flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewFullPhoto(null)}
+              className="absolute -top-11 right-0 p-2 text-white hover:text-cyan-400 bg-slate-800/80 rounded-full transition shadow-lg"
+              title="Cerrar foto"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <img
+              src={previewFullPhoto}
+              alt="Constancia Completa"
+              className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain border border-slate-700 shadow-2xl"
+            />
+
+            <button
+              type="button"
+              onClick={() => setPreviewFullPhoto(null)}
+              className="mt-3 px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition shadow"
+            >
+              Cerrar Foto
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
