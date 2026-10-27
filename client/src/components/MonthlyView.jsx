@@ -488,49 +488,53 @@ ${weeksLines || '  (No hay semanas registradas)'}
 
                   {/* Expanded orders preview */}
                   {isExpanded && w.orders && w.orders.length > 0 && (
-                    <div className="pt-2 border-t border-slate-800/60 space-y-2">
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-800/60 space-y-2">
                       {w.orders.map((ord, idx) => (
                         <div
                           key={ord.id}
-                          className="bg-slate-950/70 hover:bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 hover:border-slate-700 flex items-center justify-between text-xs transition gap-2"
+                          className="bg-white dark:bg-slate-950/70 hover:bg-slate-50 dark:hover:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 flex items-center justify-between text-xs transition gap-2 shadow-2xs"
                         >
                           <div className="min-w-0 flex-1">
-                            <div className="font-bold text-white flex items-center gap-1.5 flex-wrap">
+                            <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
                               <span>#{ord.job_id}</span>
-                              <span className="text-[10px] text-slate-400 font-normal">{ord.work_date}</span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">{ord.work_date}</span>
                               {Number(ord.manual_adjustment) > 0 && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30">
                                   +${ord.manual_adjustment} Bono {ord.adjustment_reason ? `(${ord.adjustment_reason})` : ''}
                                 </span>
                               )}
                               {Number(ord.manual_adjustment) < 0 && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-50 text-amber-800 border border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30">
                                   -${Math.abs(ord.manual_adjustment)} Descuento {ord.adjustment_reason ? `(${ord.adjustment_reason})` : ''}
                                 </span>
                               )}
                             </div>
-                            <div className="text-slate-400 truncate max-w-[260px] sm:max-w-md text-[11px]">
+                            <div className="text-slate-600 dark:text-slate-400 truncate max-w-[260px] sm:max-w-md text-[11px]">
                               {ord.address}
                             </div>
-                            <div className="text-[10px] text-slate-500">
+                            <div className="text-[10px] text-slate-500 font-medium">
                               {ord.drop_footage} ft • {ord.cable_type} {ord.bore_type && ord.bore_type !== 'N' ? `• ${ord.bore_type}` : ''}
                             </div>
                           </div>
 
                           <div className="flex items-center gap-2 shrink-0">
                             <div className="text-right">
-                              <span className="font-mono font-black text-emerald-400 text-sm block">
+                              <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm block">
                                 ${ord.rate_calculated}
                               </span>
-                              <div className="text-[10px] text-slate-400">
-                                {ord.payment_status}
-                              </div>
+                              <span className={`inline-block px-1.5 py-0.5 rounded border text-[9px] font-bold ${
+                                ord.payment_status === 'Cobrado'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/80 dark:border-emerald-800 dark:text-emerald-400'
+                                  : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/80 dark:border-amber-800 dark:text-amber-300'
+                              }`}>
+                                {ord.payment_status || 'Pendiente'}
+                              </span>
                             </div>
 
                             <button
                               type="button"
                               onClick={() => setEditingOrder(ord)}
-                              className="p-1.5 text-slate-400 hover:text-cyan-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 rounded-xl transition shadow-xs"
+                              className="p-1.5 text-slate-500 hover:text-cyan-600 dark:text-slate-400 dark:hover:text-cyan-400 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 hover:border-cyan-500/40 rounded-xl transition shadow-xs"
                               title="Editar trabajo o ajustar bono/descuento"
                             >
                               <Edit3 className="w-3.5 h-3.5" />

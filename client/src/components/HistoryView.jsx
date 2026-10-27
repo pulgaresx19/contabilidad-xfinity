@@ -502,25 +502,25 @@ ${jobLines}
 
                     {/* Specs */}
                     <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
-                      <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-amber-300 font-bold">
+                      <span className="bg-amber-50 text-amber-900 border-amber-200 dark:bg-slate-950 dark:text-amber-300 dark:border-slate-800 px-2 py-0.5 rounded border font-bold">
                         {order.drop_footage} ft
                       </span>
-                      <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
+                      <span className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 px-2 py-0.5 rounded border">
                         {order.cable_type}
                       </span>
                       {hasBore && (
-                        <span className="bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800 font-bold">
+                        <span className="bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800 px-2 py-0.5 rounded border font-bold">
                           DW Bore +$30
                         </span>
                       )}
                       {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
-                        <span className="bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800 font-bold">
+                        <span className="bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded border font-bold">
                           Drop &gt;300ft: +${Math.floor((order.drop_footage - 300) / 100) * 25}
                         </span>
                       )}
                       {order.manual_adjustment && order.manual_adjustment !== 0 ? (
-                        <span className={`px-2 py-0.5 rounded border text-[9px] ${
-                          order.manual_adjustment > 0 ? 'bg-cyan-950 text-cyan-300 border-cyan-800' : 'bg-amber-950 text-amber-300 border-amber-800'
+                        <span className={`px-2 py-0.5 rounded border text-[9px] font-bold ${
+                          order.manual_adjustment > 0 ? 'bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800' : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
                         }`}>
                           Ajuste {order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}
                         </span>
@@ -528,11 +528,11 @@ ${jobLines}
                     </div>
 
                     {/* Footer de la tarjeta con Fotos y Copiar Comprobante */}
-                    <div className="pt-1.5 border-t border-slate-800 flex items-center justify-between gap-1.5 flex-wrap">
+                    <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-1.5 flex-wrap">
                       {onOpenPhotos ? (
                         <button
                           onClick={() => onOpenPhotos(order)}
-                          className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1"
+                          className="text-[10px] text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 font-bold flex items-center gap-1"
                         >
                           <Camera className="h-3 w-3" />
                           <span>{order.photos_count || 0} Fotos</span>
@@ -546,17 +546,17 @@ ${jobLines}
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => copySingleJobClaim(order)}
-                          className="text-[10px] text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-2xs"
+                          className="text-[10px] text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-2xs"
                           title="Copiar comprobante al portapapeles"
                         >
                           {copiedJobId === order.id ? (
                             <>
-                              <Check className="h-3 w-3 text-emerald-400" />
-                              <span className="text-emerald-400 font-bold">¡Copiado!</span>
+                              <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">¡Copiado!</span>
                             </>
                           ) : (
                             <>
-                              <Copy className="h-3 w-3 text-cyan-400" />
+                              <Copy className="h-3 w-3 text-cyan-600 dark:text-cyan-400" />
                               <span>Copiar Comprobante</span>
                             </>
                           )}
@@ -564,10 +564,10 @@ ${jobLines}
 
                         <button
                           onClick={() => setReportOrder(order)}
-                          className="text-[10px] text-emerald-300 hover:text-white bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-800/80 px-2.5 py-1 rounded-lg flex items-center gap-1 font-bold transition shadow-2xs"
+                          className="text-[10px] text-emerald-800 dark:text-emerald-300 hover:text-emerald-950 dark:hover:text-white bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-800/80 px-2.5 py-1 rounded-lg flex items-center gap-1 font-bold transition shadow-2xs"
                           title="Reportar trabajo por WhatsApp"
                         >
-                          <Share2 className="h-3 w-3 text-emerald-400" />
+                          <Share2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                           <span>Reportar</span>
                         </button>
                       </div>
@@ -757,12 +757,12 @@ ${jobLines}
                   return (
                     <div
                       key={order.id}
-                      className={`bg-slate-950/70 border rounded-2xl p-3 space-y-2 text-xs ${
+                      className={`border rounded-2xl p-3 space-y-2 text-xs transition ${
                         isComp 
-                          ? 'border-slate-800' 
+                          ? 'bg-white dark:bg-slate-950/70 border-slate-200 dark:border-slate-800' 
                           : isCanc 
-                          ? 'border-rose-900/40 bg-rose-950/10'
-                          : 'border-amber-900/40'
+                          ? 'bg-rose-50/60 dark:bg-rose-950/10 border-rose-200 dark:border-rose-900/40'
+                          : 'bg-amber-50/60 dark:bg-slate-950/70 border-amber-200 dark:border-amber-900/40'
                       }`}
                     >
                       {/* Job Header con Número en Círculo */}
@@ -801,32 +801,32 @@ ${jobLines}
                       </div>
 
                       {/* Dirección del Cliente */}
-                      <div className="text-slate-200">
+                      <div className="text-slate-800 dark:text-slate-200">
                         <p className="font-semibold">{order.address}</p>
-                        <p className="text-[10px] text-slate-400">{order.city} {order.zip_code}</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">{order.city} {order.zip_code}</p>
                       </div>
 
                       {/* Especificaciones */}
                       <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
-                        <span className="bg-slate-900 px-2 py-0.5 rounded border border-slate-800 text-amber-300 font-bold">
+                        <span className="bg-amber-50 text-amber-900 border-amber-200 dark:bg-slate-900 dark:text-amber-300 dark:border-slate-800 px-2 py-0.5 rounded border font-bold">
                           {order.drop_footage} ft
                         </span>
-                        <span className="bg-slate-900 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
+                        <span className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 px-2 py-0.5 rounded border">
                           {order.cable_type}
                         </span>
                         {hasBore && (
-                          <span className="bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800 font-bold">
+                          <span className="bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800 px-2 py-0.5 rounded border font-bold">
                             DW Bore +$30
                           </span>
                         )}
                         {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
-                          <span className="bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800 font-bold">
+                          <span className="bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded border font-bold">
                             Drop &gt;300ft: +${Math.floor((order.drop_footage - 300) / 100) * 25}
                           </span>
                         )}
                         {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
                           <span className={`px-2 py-0.5 rounded border text-[9px] font-bold flex items-center gap-1 ${
-                            order.manual_adjustment > 0 ? 'bg-cyan-950 text-cyan-300 border-cyan-800' : 'bg-amber-950 text-amber-300 border-amber-800'
+                            order.manual_adjustment > 0 ? 'bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800' : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
                           }`}>
                             <Sparkles className="h-2.5 w-2.5" />
                             <span>{order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}</span>
@@ -835,32 +835,32 @@ ${jobLines}
                             )}
                           </span>
                         )}
-                        <span className={`px-2 py-0.5 rounded border text-[9px] ${
+                        <span className={`px-2 py-0.5 rounded border text-[9px] font-bold ${
                           order.payment_status === 'Cobrado'
-                            ? 'bg-emerald-950/60 border-emerald-800 text-emerald-400'
-                            : 'bg-amber-950/60 border-amber-800 text-amber-300'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/70 dark:border-emerald-700 dark:text-emerald-400'
+                            : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/70 dark:border-amber-700 dark:text-amber-300'
                         }`}>
                           {order.payment_status || 'Pendiente'}
                         </span>
                       </div>
 
                       {/* Galería de Fotos de Evidencia de esa Orden */}
-                      <div className="pt-1.5 border-t border-slate-800/80">
+                      <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800/80">
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-                            <Camera className="h-3 w-3 text-cyan-400" />
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                            <Camera className="h-3 w-3 text-cyan-500 dark:text-cyan-400" />
                             <span>Fotos de Evidencia ({photos.length})</span>
                           </span>
 
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => copySingleJobClaim(order)}
-                              className="text-[10px] text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
+                              className="text-[10px] text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
                             >
                               {copiedJobId === order.id ? (
                                 <>
-                                  <Check className="h-3 w-3 text-emerald-400" />
-                                  <span className="text-emerald-400">¡Copiado!</span>
+                                  <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">¡Copiado!</span>
                                 </>
                               ) : (
                                 <>
@@ -872,7 +872,7 @@ ${jobLines}
 
                             <button
                               onClick={() => setReportOrder(order)}
-                              className="text-[10px] text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-1 font-bold"
+                              className="text-[10px] text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-300 hover:underline flex items-center gap-1 font-bold"
                             >
                               <Share2 className="h-3 w-3" />
                               <span>Reportar</span>

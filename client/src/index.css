@@ -150,22 +150,35 @@ html.light .text-rose-400 {
 /* 6. Tinted Badge Containers in Light Mode */
 html.light .bg-emerald-500\/10,
 html.light .bg-emerald-500\/15,
-html.light .bg-emerald-500\/20 {
+html.light .bg-emerald-500\/20,
+html.light .bg-emerald-950,
+html.light [class*="bg-emerald-950"] {
   background-color: #f0fdf4 !important;
   border-color: #bbf7d0 !important;
+}
+html.light .bg-emerald-950:hover,
+html.light [class*="bg-emerald-950"]:hover {
+  background-color: #dcfce7 !important;
 }
 
 html.light .bg-amber-500\/10,
 html.light .bg-amber-500\/15,
-html.light .bg-amber-500\/20 {
+html.light .bg-amber-500\/20,
+html.light .bg-amber-950,
+html.light [class*="bg-amber-950"] {
   background-color: #fffbeb !important;
   border-color: #fde68a !important;
+}
+html.light .bg-amber-950:hover,
+html.light [class*="bg-amber-950"]:hover {
+  background-color: #fef3c7 !important;
 }
 
 html.light .bg-cyan-500\/10,
 html.light .bg-cyan-500\/15,
 html.light .bg-cyan-500\/20,
-html.light .bg-cyan-950 {
+html.light .bg-cyan-950,
+html.light [class*="bg-cyan-950"] {
   background-color: #f0f9ff !important;
   border-color: #bae6fd !important;
 }
@@ -173,7 +186,8 @@ html.light .bg-cyan-950 {
 html.light .bg-rose-500\/10,
 html.light .bg-rose-500\/15,
 html.light .bg-rose-500\/20,
-html.light .bg-rose-950 {
+html.light .bg-rose-950,
+html.light [class*="bg-rose-950"] {
   background-color: #fff1f2 !important;
   border-color: #fecdd3 !important;
 }
