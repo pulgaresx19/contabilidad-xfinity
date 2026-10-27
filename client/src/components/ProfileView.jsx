@@ -1,11 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { 
   ShieldCheck, Clock, DollarSign, CheckCircle2, Ruler, Briefcase, Calendar, 
-  FileSpreadsheet, Download, Upload, Trash2, Smartphone, Check, AlertCircle, RefreshCw,
+  FileSpreadsheet, Download, Upload, Trash2, Smartphone, Check, AlertCircle,
   Settings, Sun, Moon, ChevronRight
 } from 'lucide-react';
 import { exportOrdersToExcel } from '../services/excelExport';
-import { exportAllData, importAllData, clearAllData, loadSampleData } from '../services/localDb';
+import { exportAllData, importAllData, clearAllData } from '../services/localDb';
 import { useTheme } from '../context/ThemeContext';
 
 const CUTOFF_LABELS = {
@@ -107,19 +107,6 @@ export default function ProfileView({ techName, summaryData, onRefresh, onOpenSe
     }
   };
 
-  const handleLoadSample = async () => {
-    try {
-      setProcessing(true);
-      const res = await loadSampleData();
-      showNotification(`¡Datos de ejemplo cargados (${res.count} trabajos)!`);
-      if (onRefresh) onRefresh();
-    } catch (err) {
-      console.error(err);
-      showNotification('Error al cargar datos de ejemplo', 'error');
-    } finally {
-      setProcessing(false);
-    }
-  };
 
   return (
     <div className="space-y-4 max-w-md mx-auto pb-10">
@@ -400,14 +387,6 @@ export default function ProfileView({ techName, summaryData, onRefresh, onOpenSe
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   <span>Reiniciar datos y empezar en blanco</span>
-                </button>
-                <button
-                  onClick={handleLoadSample}
-                  disabled={processing}
-                  className="w-full flex items-center justify-center gap-1.5 p-1.5 text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 text-[10px] font-medium transition"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                  <span>Cargar datos de prueba (opcional)</span>
                 </button>
               </>
             ) : (
