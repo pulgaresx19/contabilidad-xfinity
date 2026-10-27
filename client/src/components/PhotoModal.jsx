@@ -369,9 +369,9 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-slate-200/80 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition"
+            className="h-10 px-4 bg-slate-200/80 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition shrink-0"
           >
-            {isCompleted ? 'Cerrar' : 'Cerrar sin Confirmar'}
+            Cerrar
           </button>
 
           {!isCompleted ? (
@@ -379,7 +379,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               type="button"
               disabled={workPhotosCount === 0 || confirming || uploading}
               onClick={handleConfirmCompletion}
-              className={`flex-1 py-2.5 px-4 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 shadow-md transition active:scale-95 ${
+              className={`flex-1 h-10 px-4 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 shadow-md transition active:scale-95 ${
                 workPhotosCount > 0
                   ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/25'
                   : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-dashed border-slate-300 dark:border-slate-700'
@@ -390,12 +390,12 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                 {confirming 
                   ? 'Confirmando...' 
                   : workPhotosCount > 0 
-                  ? 'Confirmar Trabajo como Terminado' 
-                  : 'Sube Foto de Trabajo para Confirmar'}
+                  ? 'Confirmar Trabajo' 
+                  : 'Falta Foto de Trabajo'}
               </span>
             </button>
           ) : (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-bold">
+            <div className="flex items-center gap-1.5 h-10 px-3 bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-bold">
               <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               <span>Trabajo Completado</span>
             </div>

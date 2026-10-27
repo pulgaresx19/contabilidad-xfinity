@@ -187,16 +187,16 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
         </div>
 
         {/* Formulario */}
-        <form onSubmit={handleSubmit} className="p-3 sm:p-4 overflow-y-auto space-y-2.5 sm:space-y-3 flex-1 text-xs">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 overflow-y-auto space-y-3.5 flex-1 text-xs">
           {error && (
-            <div className="p-2 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-400 rounded-xl text-xs flex items-center gap-2">
+            <div className="p-2.5 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-400 rounded-xl text-xs flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {/* Saldo Final Destacado (Medallón de Dinero) */}
-          <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 rounded-xl p-2.5 sm:p-3 flex items-center justify-between shadow-xs">
+          <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between shadow-xs">
             <div>
               <span className="text-[10px] text-emerald-800 dark:text-emerald-400 font-bold uppercase tracking-wider block">
                 Valor Total del Trabajo
@@ -212,56 +212,58 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
             </div>
           </div>
 
-          {/* Job ID y Fecha (Lineales lado a lado) */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* Job ID y Fecha Asignada (50% y 50% exactamente simétricos) */}
+          <div className="grid grid-cols-2 gap-3">
             <div className="min-w-0">
-              <label className="block text-[9px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide truncate">
+              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider truncate">
                 Work Order # (Job ID) *
               </label>
               <input
                 type="text"
                 required
+                placeholder="ej. 734521"
                 value={formData.job_id}
                 onChange={(e) => setFormData({ ...formData, job_id: e.target.value })}
-                className="w-full h-8 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1 text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs"
+                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs shadow-2xs"
               />
             </div>
 
             <div className="min-w-0">
-              <label className="block text-[9px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide truncate">
-                Fecha Asignada
+              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider truncate">
+                Fecha Asignada *
               </label>
               <input
                 type="date"
+                required
                 value={formData.work_date}
                 onChange={(e) => setFormData({ ...formData, work_date: e.target.value })}
-                className="w-full h-8 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-1.5 py-0.5 text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500 font-mono text-[10px] sm:text-xs [color-scheme:light] dark:[color-scheme:dark]"
+                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500 font-mono text-xs [color-scheme:light] dark:[color-scheme:dark] shadow-2xs"
               />
             </div>
           </div>
 
-          {/* Dirección */}
+          {/* Dirección de la Vivienda */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-0.5 uppercase">
+            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider">
               Dirección de la Vivienda *
             </label>
             <div className="relative">
-              <MapPin className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+              <MapPin className="h-4 w-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
               <input
                 type="text"
                 required
                 placeholder="ej. 23322 Ironwood Dr"
                 value={formData.address}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-8 pr-2.5 py-1.5 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-cyan-500 text-xs"
+                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-cyan-500 text-xs shadow-2xs"
               />
             </div>
           </div>
 
-          {/* Ciudad y Teléfono (Lineales lado a lado) */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* Ciudad y Teléfono (Lineales 50% / 50%) */}
+          <div className="grid grid-cols-2 gap-3">
             <div className="min-w-0">
-              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-0.5 uppercase truncate">
+              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider truncate">
                 Ciudad (Manual)
               </label>
               <input
@@ -269,62 +271,62 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
                 placeholder="Escribe la ciudad..."
                 value={formData.city}
                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className="w-full min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-cyan-500 uppercase text-xs"
+                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-cyan-500 uppercase text-xs shadow-2xs"
               />
             </div>
 
             <div className="min-w-0">
-              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-0.5 uppercase truncate">
+              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider truncate">
                 Teléfono del Cliente
               </label>
               <div className="relative">
-                <Phone className="h-3 w-3 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+                <Phone className="h-4 w-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
                 <input
                   type="tel"
                   placeholder="ej. 5742094475"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-7 pr-2.5 py-1.5 text-slate-900 dark:text-white font-mono focus:outline-none focus:border-cyan-500 text-xs"
+                  className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-slate-900 dark:text-white font-mono focus:outline-none focus:border-cyan-500 text-xs shadow-2xs"
                 />
               </div>
             </div>
           </div>
 
-          {/* Metraje y Cable */}
-          <div className="grid grid-cols-2 gap-2.5">
+          {/* Metraje y Cable (Lineales 50% / 50%) */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1 uppercase">
+              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider truncate">
                 Metraje de Drop (Pies)
               </label>
               <div className="relative">
-                <Ruler className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-3" />
+                <Ruler className="h-4 w-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
                 <input
                   type="number"
                   step="0.1"
                   placeholder="0.0"
                   value={formData.drop_footage}
                   onChange={(e) => handleFootageChange(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-cyan-500"
+                  className="w-full h-10 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs shadow-2xs"
                 />
               </div>
               {formData.drop_footage > 300 && (
-                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 block mt-0.5 font-bold">
+                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 block mt-1 font-bold">
                   +{Math.floor((formData.drop_footage - 300) / 100) * 25} bono metraje (&gt;300 ft)
                 </span>
               )}
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1 uppercase">
+              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider truncate">
                 Tipo de Cable
               </label>
-              <div className="grid grid-cols-2 gap-1 pt-0.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 {['RG-6', 'RG-11'].map((c) => (
                   <button
                     key={c}
                     type="button"
                     onClick={() => setFormData({ ...formData, cable_type: c })}
-                    className={`py-2 rounded-xl text-xs font-bold border transition ${
+                    className={`h-10 rounded-xl text-xs font-bold border transition ${
                       formData.cable_type === c
                         ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-sm'
                         : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'

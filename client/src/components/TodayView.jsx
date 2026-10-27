@@ -354,12 +354,21 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   };
 
   const getReportText = (order) => {
+    const isDw = order.bore_type && order.bore_type.includes('DW');
+    const isSw = order.bore_type && order.bore_type.includes('SW');
+    const boreStr = isDw 
+      ? 'Driveway Bore (+$30)' 
+      : isSw 
+      ? 'Sidewalk Bore (SW)' 
+      : (order.bore_type && order.bore_type !== 'N' ? order.bore_type : 'Sin Perforación');
+
     return `📋 *REPORTE DE TRABAJO*
 📅 *Fecha:* ${order.work_date}
 🔢 *Orden #:* ${order.job_id}
 📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
-📏 *Drop:* ${order.drop_footage} ft (${order.cable_type})${order.bore_type && order.bore_type !== 'N' ? `\n🛠️ *Bore:* ${order.bore_type}` : ''}
-💵 *Tarifa:* $${order.rate_calculated}
+📏 *Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
+🚗 *Perforación / Bore:* ${boreStr}${order.drop_footage > 300 ? `\n⚡ *Metraje Extra (>300ft):* +$${Math.floor((order.drop_footage - 300) / 100) * 25}` : ''}${order.manual_adjustment ? `\n⚖️ *Ajuste Supervisor:* ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`} (${order.adjustment_reason || 'Bono/Descuento'})` : ''}
+💵 *Tarifa Total:* $${order.rate_calculated}
 ✅ *Estado:* Completado y Verificado`;
   };
 
@@ -1527,7 +1536,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                     Reportar por WhatsApp
                   </h3>
                   <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono font-bold">
-                    Orden #{shareModalOrder.job_id} • {shareModalOrder.address}
+                    Orden #{shareModalOrder.job_id}
                   </span>
                 </div>
               </div>
@@ -1539,6 +1548,63 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
               >
                 <X className="h-4 w-4" />
               </button>
+            </div>
+
+            {/* Tarjeta Visual Estética con el componente Driveway destacado */}
+            <div className="bg-slate-50 dark:bg-slate-950/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs space-y-2 shadow-2xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-900 dark:text-white text-xs truncate">
+                    {shareModalOrder.address}
+                  </p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                    {shareModalOrder.city ? `${shareModalOrder.city} • ` : ''}{shareModalOrder.work_date}
+                  </p>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <span className="text-[9px] text-slate-400 uppercase block font-bold">Tarifa</span>
+                  <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">
+                    ${shareModalOrder.rate_calculated}
+                  </span>
+                </div>
+              </div>
+
+              {/* Especificaciones Técnicas y Componente Driveway */}
+              <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-200 dark:border-slate-800/80 font-mono text-[10px]">
+                <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-300 font-bold border border-slate-200 dark:border-slate-800">
+                  {shareModalOrder.drop_footage} ft
+                </span>
+                <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
+                  {shareModalOrder.cable_type || 'RG-6'}
+                </span>
+
+                {/* Badge Driveway destacado */}
+                {(shareModalOrder.bore_type && shareModalOrder.bore_type.includes('DW')) ? (
+                  <span className="px-2 py-0.5 rounded-lg bg-cyan-100 text-cyan-900 dark:bg-cyan-500/20 dark:text-cyan-300 font-bold border border-cyan-300 dark:border-cyan-500/40 flex items-center gap-1 shadow-2xs">
+                    <span>🚗 Driveway Bore (DW)</span>
+                    <span className="font-black text-cyan-700 dark:text-cyan-400">+$30</span>
+                  </span>
+                ) : (shareModalOrder.bore_type && shareModalOrder.bore_type.includes('SW')) ? (
+                  <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
+                    Sidewalk (SW)
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-lg bg-white/60 dark:bg-slate-900/60 text-slate-400 border border-slate-200 dark:border-slate-800">
+                    Sin Bore
+                  </span>
+                )}
+
+                {shareModalOrder.manual_adjustment !== undefined && shareModalOrder.manual_adjustment !== 0 && (
+                  <span className={`px-2 py-0.5 rounded-lg font-bold border ${
+                    shareModalOrder.manual_adjustment > 0
+                      ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
+                      : 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30'
+                  }`}>
+                    {shareModalOrder.manual_adjustment > 0 ? `+$${shareModalOrder.manual_adjustment}` : `-$${Math.abs(shareModalOrder.manual_adjustment)}`} {shareModalOrder.adjustment_reason || 'Ajuste'}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Texto del Reporte Editable */}
