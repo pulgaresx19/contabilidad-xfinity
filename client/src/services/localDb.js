@@ -105,7 +105,6 @@ export async function loadSampleData() {
       const photosStore = tx.objectStore('job_photos');
       const expStore = tx.objectStore('monthly_expenses');
       const sheetsStore = tx.objectStore('dispatch_sheets');
-      const settingsStore = tx.objectStore('settings');
 
       // Orders
       if (Array.isArray(initialSeedData.orders)) {
@@ -286,7 +285,7 @@ export function calculateOrderRate(order, settings) {
 
 export async function getOrders(filters = {}) {
   const db = await getDb();
-  return new Promise(async (resolve, reject) => {
+  return new Promise((resolve, reject) => {
     try {
       const tx = db.transaction(['work_orders', 'job_photos'], 'readonly');
       const ordersStore = tx.objectStore('work_orders');

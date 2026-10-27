@@ -1,0 +1,18 @@
+{
+  "name": "Contabilidad XFinity",
+  "short_name": "Xfinity Tech",
+  "description": "Sistema de gestión contable, control de órdenes y auditoría para técnicos instaladores de cableado Xfinity / Comcast.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

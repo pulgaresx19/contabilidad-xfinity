@@ -1,5 +1,5 @@
 import * as localDb from './localDb';
-import { compressImage, fileToDataUrl, dataUrlToBlob } from './imageUtils';
+import { compressImage, dataUrlToBlob } from './imageUtils';
 import { recognizeDispatchSheet, parseDispatchLine } from './ocrService';
 
 // Save reference to native fetch
