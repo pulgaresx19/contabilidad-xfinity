@@ -144,8 +144,84 @@ assert.strictEqual(w3.endDate, '2026-11-01');
 
 console.log('✓ Week Cutoff Logic & Date Transitions Passed!');
 
-// 4. TEST EXCEL EXPORT WORKBOOK STRUCTURE
-console.log('--- TEST 4: Excel Export Structure ---');
+// 4. TEST MONTHLY SUMMARY TOTALS & MARGINS
+console.log('--- TEST 4: Monthly Financial Summary & Totals ---');
+function simulateMonthlySummary(allWeeks, expenses, selectedMonth) {
+  const monthWeeks = allWeeks.filter((w) => {
+    return w.startDate.startsWith(selectedMonth) || w.endDate.startsWith(selectedMonth);
+  });
+
+  let totalMonthEarnings = 0;
+  let totalMonthPaid = 0;
+  let totalMonthPending = 0;
+  let totalMonthCompletedJobs = 0;
+  let totalMonthFootage = 0;
+
+  for (const w of monthWeeks) {
+    totalMonthEarnings += w.totalEarnings || 0;
+    totalMonthPaid += w.paidEarnings || 0;
+    totalMonthPending += w.pendingEarnings || 0;
+    totalMonthCompletedJobs += w.completedCount || 0;
+    totalMonthFootage += w.totalFootage || 0;
+  }
+
+  let totalExpenses = 0;
+  const expensesByCategory = {};
+  for (const exp of expenses) {
+    const amt = parseFloat(exp.amount) || 0;
+    totalExpenses += amt;
+    expensesByCategory[exp.category] = (expensesByCategory[exp.category] || 0) + amt;
+  }
+
+  const netPaidBalance = totalMonthPaid - totalExpenses;
+  const netProjectedBalance = totalMonthEarnings - totalExpenses;
+  const marginPercent = totalMonthPaid > 0 ? Math.round((netPaidBalance / totalMonthPaid) * 100) : 0;
+
+  const totals = {
+    totalWeeksCount: monthWeeks.length,
+    completedWeeksCount: monthWeeks.filter((w) => w.isPaid).length,
+    totalJobs: totalMonthCompletedJobs,
+    totalFootage: Math.round(totalMonthFootage),
+    totalEarnings: Math.round(totalMonthEarnings * 100) / 100,
+    totalPaid: Math.round(totalMonthPaid * 100) / 100,
+    totalPending: Math.round(totalMonthPending * 100) / 100,
+    totalExpenses: Math.round(totalExpenses * 100) / 100,
+    netPaidBalance: Math.round(netPaidBalance * 100) / 100,
+    netProjectedBalance: Math.round(netProjectedBalance * 100) / 100,
+    marginPercent
+  };
+
+  return { targetMonth: selectedMonth, weeks: monthWeeks, expenses, expensesByCategory, totals };
+}
+
+const mockWeeks = [
+  { key: 'w1', startDate: '2026-10-19', endDate: '2026-10-25', isPaid: true, completedCount: 7, totalFootage: 820, totalEarnings: 820, paidEarnings: 820, pendingEarnings: 0 },
+  { key: 'w2', startDate: '2026-10-26', endDate: '2026-11-01', isPaid: false, completedCount: 4, totalFootage: 450, totalEarnings: 490, paidEarnings: 0, pendingEarnings: 490 }
+];
+
+const mockExpenses = [
+  { category: 'Vehículo', amount: 50 },
+  { category: 'Combustible', amount: 35 },
+  { category: 'Alimentación', amount: 100 }
+];
+
+const res = simulateMonthlySummary(mockWeeks, mockExpenses, '2026-10');
+assert.strictEqual(res.totals.totalEarnings, 1310);
+assert.strictEqual(res.totals.totalPaid, 820);
+assert.strictEqual(res.totals.totalPending, 490);
+assert.strictEqual(res.totals.totalExpenses, 185);
+assert.strictEqual(res.totals.netPaidBalance, 635);
+assert.strictEqual(res.totals.marginPercent, 77);
+assert.strictEqual(res.totals.completedWeeksCount, 1);
+assert.strictEqual(res.totals.totalWeeksCount, 2);
+assert.strictEqual(res.expensesByCategory['Vehículo'], 50);
+assert.strictEqual(res.expensesByCategory['Combustible'], 35);
+assert.strictEqual(res.expensesByCategory['Alimentación'], 100);
+
+console.log('✓ Monthly Totals & Expenses Calculations Passed!');
+
+// 5. TEST EXCEL EXPORT WORKBOOK STRUCTURE
+console.log('--- TEST 5: Excel Export Structure ---');
 const XLSX = require('./client/node_modules/xlsx');
 const sampleOrders = [
   { job_id: '626746', work_date: '2026-10-22', tech_id: 'Javier (P0G1)', address: '23322 IRONWOOD DR', drop_footage: 103.73, rate_calculated: 130, status: 'Completado', payment_status: 'Cobrado' },
@@ -158,17 +234,6 @@ assert.strictEqual(wb.SheetNames[0], 'Trabajos');
 const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 assert.ok(buf.length > 1000, 'Excel buffer size should be valid');
 console.log('✓ Excel XLSX Generation Passed! Buffer Size: ' + buf.length + ' bytes');
-
-// 5. TEST MONTHLY CALCULATIONS & EXPENSES NET BALANCE
-console.log('--- TEST 5: Monthly Financial Calculations ---');
-const totalBilled = 1450.00;
-const totalPaid = 1200.00;
-const totalExpenses = 345.50;
-const netEarnings = totalPaid - totalExpenses;
-const netMargin = totalPaid > 0 ? ((netEarnings / totalPaid) * 100).toFixed(1) : '0.0';
-assert.strictEqual(netEarnings, 854.50);
-assert.strictEqual(netMargin, '71.2');
-console.log('✓ Monthly Net Margin Calculations Passed!');
 
 console.log('\n========================================');
 console.log('🎉 ALL AUTOMATED TESTS COMPLETED WITH 100% SUCCESS!');

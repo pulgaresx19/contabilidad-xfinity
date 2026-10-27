@@ -712,20 +712,33 @@ export async function getMonthlySummary(monthParam) {
     return w.startDate.startsWith(selectedMonth) || w.endDate.startsWith(selectedMonth);
   });
 
-  const totalBilled = monthWeeks.reduce((acc, w) => acc + (w.totalEarnings || 0), 0);
-  const totalPaid = monthWeeks.reduce((acc, w) => acc + (w.paidEarnings || 0), 0);
-  const totalPending = monthWeeks.reduce((acc, w) => acc + (w.pendingEarnings || 0), 0);
-  const totalJobs = monthWeeks.reduce((acc, w) => acc + (w.totalJobs || 0), 0);
-  const completedJobs = monthWeeks.reduce((acc, w) => acc + (w.completedCount || 0), 0);
-  const totalFootage = monthWeeks.reduce((acc, w) => acc + (w.totalFootage || 0), 0);
+  let totalMonthEarnings = 0;
+  let totalMonthPaid = 0;
+  let totalMonthPending = 0;
+  let totalMonthCompletedJobs = 0;
+  let totalMonthFootage = 0;
+
+  for (const w of monthWeeks) {
+    totalMonthEarnings += w.totalEarnings || 0;
+    totalMonthPaid += w.paidEarnings || 0;
+    totalMonthPending += w.pendingEarnings || 0;
+    totalMonthCompletedJobs += w.completedCount || 0;
+    totalMonthFootage += w.totalFootage || 0;
+  }
 
   // Fetch expenses for this month
   const expenses = await getExpenses(selectedMonth);
-  const totalExpenses = expenses.reduce((acc, e) => acc + (parseFloat(e.amount) || 0), 0);
+  let totalExpenses = 0;
+  const expensesByCategory = {};
+  for (const exp of expenses) {
+    const amt = parseFloat(exp.amount) || 0;
+    totalExpenses += amt;
+    expensesByCategory[exp.category] = (expensesByCategory[exp.category] || 0) + amt;
+  }
 
-  // Net Balance
-  const netEarnings = totalPaid - totalExpenses;
-  const netMarginPercent = totalPaid > 0 ? ((netEarnings / totalPaid) * 100).toFixed(1) : '0.0';
+  const netPaidBalance = totalMonthPaid - totalExpenses;
+  const netProjectedBalance = totalMonthEarnings - totalExpenses;
+  const marginPercent = totalMonthPaid > 0 ? Math.round((netPaidBalance / totalMonthPaid) * 100) : 0;
 
   // Available months list
   const monthsSet = new Set();
@@ -734,25 +747,47 @@ export async function getMonthlySummary(monthParam) {
     monthsSet.add(w.startDate.substring(0, 7));
     monthsSet.add(w.endDate.substring(0, 7));
   });
+  const allExpenses = await getExpenses();
+  allExpenses.forEach((e) => {
+    if (e.month_key) monthsSet.add(e.month_key);
+    else if (e.expense_date) monthsSet.add(e.expense_date.substring(0, 7));
+  });
 
   const availableMonths = Array.from(monthsSet).sort().reverse();
 
+  const totals = {
+    totalWeeksCount: monthWeeks.length,
+    completedWeeksCount: monthWeeks.filter((w) => w.isPaid).length,
+    totalJobs: totalMonthCompletedJobs,
+    totalFootage: Math.round(totalMonthFootage),
+    totalEarnings: Math.round(totalMonthEarnings * 100) / 100,
+    totalPaid: Math.round(totalMonthPaid * 100) / 100,
+    totalPending: Math.round(totalMonthPending * 100) / 100,
+    totalExpenses: Math.round(totalExpenses * 100) / 100,
+    netPaidBalance: Math.round(netPaidBalance * 100) / 100,
+    netProjectedBalance: Math.round(netProjectedBalance * 100) / 100,
+    marginPercent
+  };
+
   return {
+    targetMonth: selectedMonth,
     selectedMonth,
     availableMonths,
-    kpis: {
-      totalBilled,
-      totalPaid,
-      totalPending,
-      totalJobs,
-      completedJobs,
-      totalFootage,
-      totalExpenses,
-      netEarnings,
-      netMarginPercent: parseFloat(netMarginPercent)
-    },
     weeks: monthWeeks,
-    expenses
+    expenses,
+    expensesByCategory,
+    totals,
+    kpis: {
+      totalBilled: totals.totalEarnings,
+      totalPaid: totals.totalPaid,
+      totalPending: totals.totalPending,
+      totalJobs: totals.totalJobs,
+      completedJobs: totals.totalJobs,
+      totalFootage: totals.totalFootage,
+      totalExpenses: totals.totalExpenses,
+      netEarnings: totals.netPaidBalance,
+      netMarginPercent: totals.marginPercent
+    }
   };
 }
 
@@ -766,7 +801,10 @@ export async function getExpenses(monthKey = null) {
     req.onsuccess = () => {
       let list = req.result || [];
       if (monthKey) {
-        list = list.filter((e) => e.month_key === monthKey);
+        list = list.filter((e) => {
+          const mKey = e.month_key || (e.expense_date ? e.expense_date.substring(0, 7) : '');
+          return mKey === monthKey;
+        });
       }
       list.sort((a, b) => {
         if (b.expense_date !== a.expense_date) return b.expense_date.localeCompare(a.expense_date);

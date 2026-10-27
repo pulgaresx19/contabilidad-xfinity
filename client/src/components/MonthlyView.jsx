@@ -102,53 +102,95 @@ export default function MonthlyView({ orders = [], onRefresh }) {
     }
   };
 
-  // WhatsApp / Clipboard monthly export
-  const handleCopyMonthlyReport = () => {
-    if (!data) return;
-    const { totals, weeks = [], expenses = [], expensesByCategory = {} } = data;
+  // Helper to generate formatted WhatsApp text for the monthly closing
+  const getReportText = () => {
+    if (!data) return '';
+    const totals = data.totals || {};
+    const weeks = data.weeks || [];
+    const expensesByCategory = data.expensesByCategory || {};
     const monthLabel = formatMonthFriendly(selectedMonth);
 
-    let weeksLines = weeks.map((w, i) => {
+    const weeksLines = weeks.map((w, i) => {
       const statusIcon = w.isPaid ? '✅ COBRADO' : '⏳ PENDIENTE';
-      return `  ${i + 1}. Semana ${w.displayLabel} (${w.startDate} al ${w.endDate})
-     • Trabajos: ${w.completedCount} órdenes | ${Math.round(w.totalFootage)} ft
-     • Monto: $${w.totalEarnings.toFixed(2)} [${statusIcon}]`;
+      return `  ${i + 1}. Semana ${w.displayLabel || w.key} (${w.startDate} al ${w.endDate})
+     • Trabajos: ${w.completedCount || 0} órdenes | ${Math.round(w.totalFootage || 0)} ft
+     • Monto: $${(w.totalEarnings || 0).toFixed(2)} [${statusIcon}]`;
     }).join('\n\n');
 
     let expenseLines = Object.entries(expensesByCategory).map(([cat, amt]) => {
-      return `  • ${cat}: -$${amt.toFixed(2)}`;
+      return `  • ${cat}: -$${Number(amt).toFixed(2)}`;
     }).join('\n');
 
     if (!expenseLines) expenseLines = '  • Sin gastos registrados este mes';
 
-    const text = `📊 *REPORTE CONTABLE MENSUAL - XFINITY*
+    return `📊 *REPORTE CONTABLE MENSUAL - XFINITY*
 📅 *Mes:* ${monthLabel}
 👤 *Técnico:* Javier (P0G1)
 
 💰 *RESUMEN DE INGRESOS (SEMANAS):*
-• Semanas en el mes: ${totals.totalWeeksCount} (${totals.completedWeeksCount} cobradas)
-• Trabajos completados: ${totals.totalJobs} órdenes
-• Metraje total: ${totals.totalFootage} ft
-• Total Facturado: $${totals.totalEarnings.toFixed(2)}
-💵 *TOTAL COBRADO:* $${totals.totalPaid.toFixed(2)}
-⏳ *PENDIENTE POR COBRAR:* $${totals.totalPending.toFixed(2)}
+• Semanas en el mes: ${totals.totalWeeksCount || 0} (${totals.completedWeeksCount || 0} cobradas)
+• Trabajos completados: ${totals.totalJobs || 0} órdenes
+• Metraje total: ${(totals.totalFootage || 0).toLocaleString()} ft
+• Total Facturado: $${(totals.totalEarnings || 0).toFixed(2)}
+💵 *TOTAL COBRADO:* $${(totals.totalPaid || 0).toFixed(2)}
+⏳ *PENDIENTE POR COBRAR:* $${(totals.totalPending || 0).toFixed(2)}
 
 💸 *RESUMEN DE GASTOS:*
-• Total Gastos: -$${totals.totalExpenses.toFixed(2)}
+• Total Gastos: -$${(totals.totalExpenses || 0).toFixed(2)}
 ${expenseLines}
 
 ━━━━━━━━━━━━━━━━━━━━
 💎 *BALANCE NETO REAL (EN MANO):*
-💵 Total Cobrado: $${totals.totalPaid.toFixed(2)}
-💸 Total Gastos:  -$${totals.totalExpenses.toFixed(2)}
-👉 *GANANCIA NETA:* $${totals.netPaidBalance.toFixed(2)} (${totals.marginPercent}% de margen)
+💵 Total Cobrado: $${(totals.totalPaid || 0).toFixed(2)}
+💸 Total Gastos:  -$${(totals.totalExpenses || 0).toFixed(2)}
+👉 *GANANCIA NETA:* $${(totals.netPaidBalance || 0).toFixed(2)} (${totals.marginPercent || 0}% de margen)
 
 📋 *DETALLE DE SEMANAS DEL MES:*
 ${weeksLines || '  (No hay semanas registradas)'}
 
 ⚠️ *Constancia generada automáticamente desde Contabilidad XFinity.*`;
+  };
 
-    navigator.clipboard.writeText(text);
+  const copyToClipboardSafely = async (text) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (e) {
+      console.warn('Navigator clipboard error, trying fallback:', e);
+    }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      return true;
+    } catch (e) {
+      console.error('Fallback copy failed:', e);
+      return false;
+    }
+  };
+
+  // WhatsApp direct send
+  const handleShareWhatsApp = async () => {
+    const text = getReportText();
+    if (!text) return;
+    await copyToClipboardSafely(text);
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(waUrl, '_blank');
+  };
+
+  // Clipboard monthly export
+  const handleCopyMonthlyReport = async () => {
+    const text = getReportText();
+    if (!text) return;
+    await copyToClipboardSafely(text);
     setCopiedReport(true);
     setTimeout(() => setCopiedReport(false), 3000);
   };
@@ -667,27 +709,39 @@ ${weeksLines || '  (No hay semanas registradas)'}
               </div>
             </div>
 
-            {/* Copy Button */}
-            <button
-              onClick={handleCopyMonthlyReport}
-              className={`w-full py-3.5 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition active:scale-[0.98] ${
-                copiedReport
-                  ? 'bg-emerald-500 text-slate-950 shadow-emerald-500/30'
-                  : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 shadow-cyan-500/20'
-              }`}
-            >
-              {copiedReport ? (
-                <>
-                  <Check className="w-4 h-4 stroke-[3]" />
-                  <span>¡Reporte Mensual Copiado al Portapapeles!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  <span>Copiar Reporte Mensual (WhatsApp)</span>
-                </>
-              )}
-            </button>
+            {/* Action Buttons: WhatsApp & Copy */}
+            <div className="space-y-2 pt-1">
+              {/* Send direct to WhatsApp */}
+              <button
+                onClick={handleShareWhatsApp}
+                className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20 transition active:scale-[0.98]"
+              >
+                <Share2 className="w-4 h-4 stroke-[2.5]" />
+                <span>Enviar Directo a WhatsApp</span>
+              </button>
+
+              {/* Copy to Clipboard */}
+              <button
+                onClick={handleCopyMonthlyReport}
+                className={`w-full py-3 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 border transition active:scale-[0.98] ${
+                  copiedReport
+                    ? 'bg-slate-800 text-emerald-400 border-emerald-500/50'
+                    : 'bg-slate-950/60 hover:bg-slate-800 text-slate-300 border-slate-800'
+                }`}
+              >
+                {copiedReport ? (
+                  <>
+                    <Check className="w-4 h-4 stroke-[3] text-emerald-400" />
+                    <span className="text-emerald-400">¡Texto Copiado al Portapapeles!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>Copiar Texto de la Constancia</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
