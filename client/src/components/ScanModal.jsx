@@ -85,12 +85,21 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
               bore_type: 'N',
               obstacles: 'N',
               rate_calculated: 100,
-              status: 'Completado',
+              status: 'Pendiente',
               payment_status: 'Pendiente',
               raw_notes: ''
             }
           ]);
         } else {
+          // Guarantee that detected orders default to the selected date and status 'Pendiente'
+          setExtractedOrders(
+            (data.parsedOrders || []).map((o) => ({
+              ...o,
+              work_date: sheetDate,
+              status: 'Pendiente',
+              payment_status: 'Pendiente'
+            }))
+          );
           setMessage({
             type: 'success',
             text: `¡Foto guardada en el historial y ${data.parsedOrders.length} orden(es) detectada(s)! Revisa o edita los datos abajo.`
@@ -138,7 +147,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
         bore_type: 'N',
         obstacles: 'N',
         rate_calculated: 100,
-        status: 'Completado',
+        status: 'Pendiente',
         payment_status: 'Pendiente'
       }
     ]);
@@ -247,7 +256,11 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
             <input
               type="date"
               value={sheetDate}
-              onChange={(e) => setSheetDate(e.target.value)}
+              onChange={(e) => {
+                const newDate = e.target.value;
+                setSheetDate(newDate);
+                setExtractedOrders((prev) => prev.map((o) => ({ ...o, work_date: newDate })));
+              }}
               className="bg-transparent text-slate-900 dark:text-slate-200 text-xs font-mono focus:outline-none"
             />
           </div>

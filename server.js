@@ -72,7 +72,7 @@ const uploadExpense = multer({ storage: expenseStorage });
 
 // Helper to extract candidate orders from OCR text
 function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 8);
+  const lines = text.split('\n').map((l) => l.trim()).filter((l) => l.length > 8);
   const candidates = [];
 
   for (let line of lines) {
@@ -80,67 +80,93 @@ function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
     line = line.replace(/V\/OLF/gi, 'WOLF')
                .replace(/\bVi\s+WOLF\b/gi, 'W WOLF')
                .replace(/\\W\s+/gi, 'W ')
+               .replace(/\bWW\s+WOLF\b/gi, 'W WOLF')
                .replace(/['"]OSD/gi, 'OSD');
 
-    // Look for Job ID (typically 6-digit number starting with 6 or 7, or general 6 digits)
-    const jobMatch = line.match(/\b([67]\d{5}|\d{6})\b/);
+    // Look for Job ID (specifically 6 digits starting with 6 or 7)
+    let jobMatch = line.match(/\b([67]\d{5})\b/);
+    if (!jobMatch) {
+      // Fallback: look for 6-digit number that isn't a date (doesn't contain year 2024-2027)
+      const all6 = [...line.matchAll(/\b(\d{6})\b/g)];
+      for (const m of all6) {
+        if (!/202[4-7]/.test(m[1])) {
+          jobMatch = m;
+          break;
+        }
+      }
+    }
     if (!jobMatch) continue;
 
     const jobId = jobMatch[1];
     const postJobText = line.substring(line.indexOf(jobId) + jobId.length).trim();
 
-    // Work Date: check if date is in line (e.g. 10-22-2026 or 2026-10-22)
-    let workDate = defaultDate || new Date().toISOString().split('T')[0];
-    const dateMatch = line.match(/\b(\d{1,2})[-./](\d{1,2})[-./](\d{2,4})\b/);
-    if (dateMatch) {
-      const m = dateMatch[1].padStart(2, '0');
-      const d = dateMatch[2].padStart(2, '0');
-      const y = dateMatch[3].length === 2 ? '20' + dateMatch[3] : dateMatch[3];
-      workDate = `${y}-${m}-${d}`;
-    }
+    // Work Date: always respect defaultDate selected by user, with fallback
+    const workDate = defaultDate || new Date().toISOString().split('T')[0];
 
-    // Drop footage
+    // Drop footage: handles DROP, DR0P, DR0, JR0, etc.
     let dropFootage = 100;
-    const dropMatch = line.match(/DROP[:\s-]*([0-9]{1,4}(?:[.,\s][0-9]{1,2})?)/i);
+    const dropMatch = postJobText.match(/(?:DROP|DR0P|DR0|JR0)[:\s->]*([0-9\s.,¢]+?)(?:\/|Type|BORE|TEMP|$)/i);
     if (dropMatch) {
-      let rawNum = dropMatch[1].replace(/\s+/g, '.').replace(',', '.');
-      dropFootage = parseFloat(rawNum) || 100;
+      let clean = dropMatch[1].trim()
+        .replace(/¢/g, '0')
+        .replace(/^[->\s:]+/, '')
+        .replace(/\s+/g, '.');
+      const parts = clean.split('.');
+      if (parts.length === 3 && parts[0].length <= 2 && parts[1].length >= 2) {
+        clean = parts[1] + '.' + parts[2];
+      } else if (parts.length > 2) {
+        clean = parts[0] + '.' + parts.slice(1).join('');
+      }
+      const val = parseFloat(clean);
+      if (!isNaN(val) && val > 0 && val < 2000) dropFootage = val;
     }
 
     // Cable type
     let cableType = 'RG-6';
-    if (/RG-?11/i.test(line)) cableType = 'RG-11';
+    if (/RG-?11/i.test(postJobText)) cableType = 'RG-11';
 
     // Bore: DW:1 (+30) or SW:1 (+$0)
     let boreType = 'N';
-    if (/BORE[:\s]*(?:DW|DV)[-:\s/]*1/i.test(line) || /\b(?:DW|DV)[-:\s/]*1\b/i.test(line)) {
+    if (/BORE[:\s]*(?:DW|DV)[-:\s/]*1/i.test(postJobText) || /\b(?:DW|DV)[-:\s/]*1\b/i.test(postJobText)) {
       boreType = 'DW:1';
-    } else if (/BORE[:\s]*(?:SW|SV)[-:\s/]*1/i.test(line) || /\b(?:SW|SV)[-:\s/]*1\b/i.test(line) || /BORE[:\s]*(?:SW|SV)\b/i.test(line)) {
+    } else if (/BORE[:\s]*(?:SW|SV)[-:\s/]*1/i.test(postJobText) || /\b(?:SW|SV)[-:\s/]*1\b/i.test(postJobText) || /BORE[:\s]*(?:SW|SV)\b/i.test(postJobText)) {
       boreType = 'SW:1';
     }
 
     // Temp
-    const isTemp = /TEMP[:\s-]*Y/i.test(line);
+    const isTemp = /TEMP[:\s-]*Y/i.test(postJobText);
 
     // Obstacles
     let obstacles = 'N';
-    const obstMatch = line.match(/Obstacl(?:es|ias)[:\s]*([A-Za-z, ]+?)(?:\/|Premise|NBR|$)/i);
+    const obstMatch = postJobText.match(/Obstacl(?:es|ias)?[:\s]*([A-Za-z, ]+?)(?:\/|Premise|NBR|$)/i);
     if (obstMatch) obstacles = obstMatch[1].trim();
 
     // Phone
     let phone = '';
-    const phoneMatch = line.match(/P#[:\s]*(\d{10})/i) || line.match(/\b(\d{10})\b/);
-    if (phoneMatch) phone = phoneMatch[1];
+    const p10 = postJobText.match(/P#[:\s]*(\d{10})/i) || postJobText.match(/\b(\d{10})\b/);
+    if (p10) {
+      phone = p10[1];
+    } else {
+      const pIndiana = postJobText.match(/(?:#|P#|2#|2%)\s*57[:. -]?(\d{7})/i);
+      if (pIndiana) {
+        phone = '574' + pIndiana[1];
+      } else {
+        const pGen = postJobText.match(/(?:#|P#)[:\s]*(\d{2,3})[:. -]?(\d{7})/i);
+        if (pGen) {
+          const area = pGen[1].length === 2 ? pGen[1] + pGen[1].slice(-1) : pGen[1];
+          phone = (area + pGen[2]).padStart(10, '0');
+        }
+      }
+    }
 
     // Zip code
     let zipCode = '46516';
-    const zipMatch = line.match(/\b(46\d{3}(?:-\d{4})?)\b/);
+    const zipMatch = postJobText.match(/\b(46\d{3}(?:-\d{4})?)\b/);
     if (zipMatch) zipCode = zipMatch[1];
 
     // City detection
     let city = 'ELKHART';
-    const cityMatch = line.match(/\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW)\s+46\d{3}/i) ||
-                      line.match(/\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW)\b/i);
+    const cityMatch = postJobText.match(/\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW)\b/i);
     if (cityMatch) {
       city = cityMatch[1].toUpperCase();
     }
@@ -149,9 +175,15 @@ function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
     let address = 'Dirección por verificar';
     const streetTypes = 'AVE|DR|ST|RD|CIR|BLVD|WAY|LN|CT|LANE|COURT|CIRCLE|BOULEVARD|ROAD|STREET|DRIVE|EDGE|TER|TERRACE|LOOP|TRL|TRAIL|PL|PLACE|RUN|PATH';
     const addrRegex = new RegExp(`(\\d{1,5}\\s+.*?\\b(?:${streetTypes})\\b[.,]?)`, 'i');
-    const addrMatch = postJobText.match(addrRegex) || line.match(addrRegex);
+    const addrMatch = postJobText.match(addrRegex);
     if (addrMatch) {
-      address = addrMatch[1].replace(/,\s*$/, '').replace(/^[:\s,]+/, '').replace(/\\W\s+/i, 'W ').trim();
+      address = addrMatch[1]
+        .replace(/,\s*$/, '')
+        .replace(/^[:\s,]+/, '')
+        .replace(/\bWW\s+/i, 'W ')
+        .replace(/\bVi\s+/i, 'W ')
+        .replace(/\\W\s+/i, 'W ')
+        .trim();
     }
 
     // Rate calculation: $100 base + $30 for Driveway Bore (DW) + $25 por cada 100 ft > 300 ft
@@ -177,19 +209,19 @@ function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
       city,
       zip_code: zipCode,
       phone,
-      call_first: /CALLFIRST/i.test(line) ? 1 : 0,
+      call_first: /CALLFIRST/i.test(postJobText) ? 1 : 0,
       drop_footage: dropFootage,
       cable_type: cableType,
       bore_type: boreType,
       is_temp: isTemp ? 1 : 0,
       obstacles,
-      premise_access: /RQHM/i.test(line) ? 'RQHM' : 'N',
-      neighbor_notice: /NBR[:\s]*2/i.test(line) ? '2' : 'N',
+      premise_access: /RQHM/i.test(postJobText) ? 'RQHM' : 'N',
+      neighbor_notice: /NBR[:\s]*2/i.test(postJobText) ? '2' : 'N',
       raw_notes: detectedNotes,
       rate_calculated: rate,
       manual_adjustment: 0,
       adjustment_reason: '',
-      status: 'Completado',
+      status: 'Pendiente',
       payment_status: 'Pendiente',
       cancel_reason: ''
     });
@@ -607,14 +639,21 @@ app.post('/api/batch-import', (req, res) => {
         @status, @payment_status
       )
       ON CONFLICT(job_id) DO UPDATE SET
+        work_date = excluded.work_date,
         address = excluded.address,
+        city = excluded.city,
+        phone = excluded.phone,
+        call_first = excluded.call_first,
         drop_footage = excluded.drop_footage,
         cable_type = excluded.cable_type,
         bore_type = excluded.bore_type,
+        is_temp = excluded.is_temp,
+        obstacles = excluded.obstacles,
         rate_calculated = excluded.rate_calculated,
         manual_adjustment = excluded.manual_adjustment,
         adjustment_reason = excluded.adjustment_reason,
         raw_notes = excluded.raw_notes,
+        status = excluded.status,
         updated_at = CURRENT_TIMESTAMP
     `);
 

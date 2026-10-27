@@ -113,18 +113,50 @@ assert.strictEqual(extracted[0].city, 'ELKHART');
 assert.strictEqual(extracted[0].cable_type, 'RG-11');
 assert.strictEqual(extracted[0].bore_type, 'DW:1');
 assert.strictEqual(extracted[0].rate_calculated, 130);
+assert.strictEqual(extracted[0].status, 'Pendiente');
 
 assert.strictEqual(extracted[1].job_id, '713702');
 assert.strictEqual(extracted[1].address, '1109 E BEARDSLEY AVE');
 assert.strictEqual(extracted[1].bore_type, 'SW:1');
 assert.strictEqual(extracted[1].rate_calculated, 100);
+assert.strictEqual(extracted[1].status, 'Pendiente');
 
 assert.strictEqual(extracted[2].job_id, '717040');
 assert.strictEqual(extracted[2].address, '28747 WOLF AVE');
 assert.strictEqual(extracted[2].drop_footage, 450);
 assert.strictEqual(extracted[2].rate_calculated, 155);
+assert.strictEqual(extracted[2].status, 'Pendiente');
 
-console.log('✓ OCR Dispatch Line Parser & Multi-line OCR Extractor Passed!');
+// Test real-world noisy dispatch sheet from user upload (verifying 7 of 7 orders & both Wolf Ave lines)
+const realWorldOcrSheet = `
+CZ2.005 ORISVAYOUIGE 626745 23322 IRONWOOD DR = KART 6576-6254 CALLFIRST/P#2094475840:DROP 103.73 Type RG-11/BORE DV 1:TEMP:Y/Obstacles SPRKLR. LANDS C Premise ACS RQHM/NE
+0.222025 OHIINAVUIGIL 713762 712 W WOLF AVE. = (ART 6576-2346 # 44:1114444/DROP:140 2/Type RG-11/BORE DV 1:TEMP.N/Obstacles LANDS C:Premise ACS N/NBR 2
+Y0.22.2025 ORISA AVOIGZ. 717040 50612 HUNTERS EDGE. = KART LB526-0000 2# 57:6126697/DR0 132 49/Type RG-5:BORE N/TEMP-N; Obstacles N:Premise ACS:N/NBR'N
+0.222025 OHIINAVOIGIL 716278 1027 WW WOLF AVE = (ART 6576-2239 CALLFIRST:P#5746067749/DROP 118.14 Type RG-6/BORE NTEMP Obstacles N:Premise ACS: /NBR N
+0.222025 ORISA AVOGY 726666 2821 MALLOW ST, = KART 6574-9119 # 57:3037147/DR0 2 42 08/Type RG-6/BORE N'TEMP YiObstacles:N:Premise ACS N/:NBR N
+Y0.22.20@5 OHIIVAVOIGI 729079 708 W MISHAWAKA RD. = (ART 5577-1912 # 57.7425587/DR0 2 6¢ 22/Type RG-6/BORE SV 1:TEMP Y/Obstacles LANDSC/Premise ACS N/NBR N
+©02005  OBIZV AVG 720612 23608 CEDAR KNOLL CIR, ERS 66576-5384 2% 57:2149465/JR0 > 108 37/Type RG-6:BORE:NTEMP:YiObstacles NiPremise ACS N/NBRN
+`;
+const sheetExtracted = extractOrdersFromOcrText(realWorldOcrSheet, '2026-10-27');
+assert.strictEqual(sheetExtracted.length, 7, 'Must extract all 7 orders without dropping duplicates');
+assert.strictEqual(sheetExtracted[0].job_id, '626745');
+assert.strictEqual(sheetExtracted[0].status, 'Pendiente');
+assert.strictEqual(sheetExtracted[1].job_id, '713762');
+assert.strictEqual(sheetExtracted[1].address, '712 W WOLF AVE.');
+assert.strictEqual(sheetExtracted[1].bore_type, 'DW:1');
+assert.strictEqual(sheetExtracted[1].drop_footage, 140.2);
+assert.strictEqual(sheetExtracted[2].job_id, '717040');
+assert.strictEqual(sheetExtracted[3].job_id, '716278');
+assert.strictEqual(sheetExtracted[3].address, '1027 W WOLF AVE');
+assert.strictEqual(sheetExtracted[4].job_id, '726666');
+assert.strictEqual(sheetExtracted[4].drop_footage, 42.08);
+assert.strictEqual(sheetExtracted[5].job_id, '729079');
+assert.strictEqual(sheetExtracted[5].bore_type, 'SW:1');
+assert.strictEqual(sheetExtracted[5].drop_footage, 60.22);
+assert.strictEqual(sheetExtracted[6].job_id, '720612');
+assert.strictEqual(sheetExtracted[6].drop_footage, 108.37);
+
+console.log('✓ OCR Dispatch Line Parser & Multi-line OCR Extractor Passed (All 7 orders verified)!');
 
 // 3. TEST DATE & WEEK CUTOFF LOGIC
 console.log('--- TEST 3: Cutoff & Week Groups ---');

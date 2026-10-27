@@ -912,20 +912,41 @@ export async function deleteDispatchSheet(id) {
 }
 
 // -------------------------------------------------------------
-// BATCH IMPORT ORDERS
+// BATCH IMPORT ORDERS & LOOKUP BY JOB ID
 // -------------------------------------------------------------
+export async function getOrderByJobId(jobId) {
+  if (!jobId) return null;
+  const db = await getDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('work_orders', 'readonly');
+    const store = tx.objectStore('work_orders');
+    const index = store.index('job_id');
+    const req = index.get(String(jobId).trim());
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
 export async function batchImportOrders(ordersList) {
   const results = {
     total: ordersList.length,
     imported: 0,
+    updated: 0,
     skipped: 0,
     errors: []
   };
 
   for (const o of ordersList) {
     try {
-      await createOrder(o);
-      results.imported++;
+      const existing = await getOrderByJobId(o.job_id);
+      if (existing) {
+        // Update existing record to reflect scanned details & preserve/update fields
+        await updateOrder(existing.id, o);
+        results.updated++;
+      } else {
+        await createOrder(o);
+        results.imported++;
+      }
     } catch (err) {
       if (err.name === 'ConstraintError') {
         results.skipped++;
