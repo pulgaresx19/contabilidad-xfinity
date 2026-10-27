@@ -9,6 +9,7 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
   const [orderPhotos, setOrderPhotos] = useState([]);
   const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [previewPhoto, setPreviewPhoto] = useState(null);
 
   useEffect(() => {
     if (!isOpen || !order) return;
@@ -309,13 +310,18 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
               {orderPhotos.map((p, idx) => (
                 <div 
                   key={p.id || idx} 
-                  className="relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-black/40 aspect-video group"
+                  onClick={() => setPreviewPhoto(p.photo_data || `/uploads/${p.filename}`)}
+                  className="relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-black/40 aspect-video group cursor-pointer hover:border-cyan-400/80 transition"
+                  title="Toca para ver la foto en grande"
                 >
                   <img 
                     src={p.photo_data || `/uploads/${p.filename}`} 
                     alt={p.category || `Foto ${idx + 1}`} 
-                    className="w-full h-full object-cover" 
+                    className="w-full h-full object-cover group-hover:scale-105 transition" 
                   />
+                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                    <ExternalLink className="h-3.5 w-3.5 text-white" />
+                  </div>
                   <span className="absolute bottom-0.5 left-0.5 bg-black/75 text-[8px] text-white px-1 py-0.2 rounded font-mono truncate max-w-[90%]">
                     {p.category || `#${idx + 1}`}
                   </span>
@@ -356,6 +362,42 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
           </button>
         </div>
       </div>
+
+      {/* FULLSCREEN PHOTO PREVIEW LIGHTBOX (IN-APP - EN GRANDE) */}
+      {previewPhoto && (
+        <div
+          onClick={() => setPreviewPhoto(null)}
+          className="fixed inset-0 z-[70] bg-black/95 backdrop-blur-md flex items-center justify-center p-3 animate-fade-in"
+        >
+          <div 
+            className="relative max-w-lg w-full flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewPhoto(null)}
+              className="absolute -top-11 right-0 p-2 text-white hover:text-cyan-400 bg-slate-800/80 rounded-full transition shadow-lg active:scale-90"
+              title="Cerrar foto"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <img
+              src={previewPhoto}
+              alt="Evidencia en grande"
+              className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain border border-slate-700 shadow-2xl"
+            />
+
+            <button
+              type="button"
+              onClick={() => setPreviewPhoto(null)}
+              className="mt-3 px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition shadow active:scale-95"
+            >
+              Cerrar Foto
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
