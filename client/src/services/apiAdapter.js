@@ -255,12 +255,19 @@ export function initApiAdapter() {
               console.warn('Servidor no disponible para OCR, ejecutando OCR local en cliente:', netErr);
             }
 
-            // 2. Client-side OCR with Tesseract fallback
-            if (!serverSuccess) {
+            const ocrInputFile = formData.get('ocrPhoto') || sheetFile;
+
+            // 2. Client-side OCR with Tesseract fallback if server failed or detected 0 orders
+            if (!serverSuccess || parsedOrders.length === 0) {
               try {
-                const ocrResult = await recognizeDispatchSheet(sheetFile, sheetDate, techId);
-                text = ocrResult.text || '';
-                parsedOrders = ocrResult.parsedOrders || [];
+                const ocrResult = await recognizeDispatchSheet(ocrInputFile, sheetDate, techId);
+                if (ocrResult.parsedOrders && ocrResult.parsedOrders.length > 0) {
+                  text = ocrResult.text || text;
+                  parsedOrders = ocrResult.parsedOrders;
+                } else if (!serverSuccess) {
+                  text = ocrResult.text || '';
+                  parsedOrders = [];
+                }
               } catch (ocrErr) {
                 console.error('Error en OCR local del cliente:', ocrErr);
               }

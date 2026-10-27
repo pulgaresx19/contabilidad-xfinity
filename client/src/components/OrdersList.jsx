@@ -130,7 +130,7 @@ export default function OrdersList({ orders, onOpenPhotos, onOrderUpdated, onDel
             onClick={onOpenScan}
             className="px-3 py-1.5 bg-cyan-600 text-slate-950 font-bold text-xs rounded-xl"
           >
-            Escanear Hoja
+            Escanear Foto
           </button>
         </div>
       ) : (

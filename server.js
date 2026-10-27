@@ -75,55 +75,83 @@ function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 8);
   const candidates = [];
 
-  for (const line of lines) {
+  for (let line of lines) {
+    // Normalize common OCR artifacts
+    line = line.replace(/V\/OLF/gi, 'WOLF')
+               .replace(/\bVi\s+WOLF\b/gi, 'W WOLF')
+               .replace(/\\W\s+/gi, 'W ')
+               .replace(/['"]OSD/gi, 'OSD');
+
     // Look for Job ID (typically 6-digit number starting with 6 or 7, or general 6 digits)
     const jobMatch = line.match(/\b([67]\d{5}|\d{6})\b/);
     if (!jobMatch) continue;
 
     const jobId = jobMatch[1];
-    
+    const postJobText = line.substring(line.indexOf(jobId) + jobId.length).trim();
+
+    // Work Date: check if date is in line (e.g. 10-22-2026 or 2026-10-22)
+    let workDate = defaultDate || new Date().toISOString().split('T')[0];
+    const dateMatch = line.match(/\b(\d{1,2})[-./](\d{1,2})[-./](\d{2,4})\b/);
+    if (dateMatch) {
+      const m = dateMatch[1].padStart(2, '0');
+      const d = dateMatch[2].padStart(2, '0');
+      const y = dateMatch[3].length === 2 ? '20' + dateMatch[3] : dateMatch[3];
+      workDate = `${y}-${m}-${d}`;
+    }
+
     // Drop footage
-    let dropFootage = 0;
-    const dropMatch = line.match(/DROP[:\s]*([0-9]{1,4}(?:[.,\s][0-9]{1,2})?)/i);
+    let dropFootage = 100;
+    const dropMatch = line.match(/DROP[:\s-]*([0-9]{1,4}(?:[.,\s][0-9]{1,2})?)/i);
     if (dropMatch) {
       let rawNum = dropMatch[1].replace(/\s+/g, '.').replace(',', '.');
-      dropFootage = parseFloat(rawNum) || 0;
+      dropFootage = parseFloat(rawNum) || 100;
     }
 
     // Cable type
     let cableType = 'RG-6';
     if (/RG-?11/i.test(line)) cableType = 'RG-11';
 
-    // Bore
+    // Bore: DW:1 (+30) or SW:1 (+$0)
     let boreType = 'N';
-    if (/BORE[:\s]*DW[-:\s]?1/i.test(line) || /DW[-:\s]?1/i.test(line)) boreType = 'DW:1';
-    else if (/BORE[:\s]*SW[-:\s]?1/i.test(line) || /SW[-:\s]?1/i.test(line)) boreType = 'SW:1';
+    if (/BORE[:\s]*(?:DW|DV)[-:\s/]*1/i.test(line) || /\b(?:DW|DV)[-:\s/]*1\b/i.test(line)) {
+      boreType = 'DW:1';
+    } else if (/BORE[:\s]*(?:SW|SV)[-:\s/]*1/i.test(line) || /\b(?:SW|SV)[-:\s/]*1\b/i.test(line) || /BORE[:\s]*(?:SW|SV)\b/i.test(line)) {
+      boreType = 'SW:1';
+    }
 
     // Temp
-    const isTemp = /TEMP[:\s]*Y/i.test(line);
+    const isTemp = /TEMP[:\s-]*Y/i.test(line);
 
     // Obstacles
     let obstacles = 'N';
-    const obstMatch = line.match(/Obstacl(?:es|ias)[:\s]*([A-Z,]+)/i);
-    if (obstMatch) obstacles = obstMatch[1];
+    const obstMatch = line.match(/Obstacl(?:es|ias)[:\s]*([A-Za-z, ]+?)(?:\/|Premise|NBR|$)/i);
+    if (obstMatch) obstacles = obstMatch[1].trim();
 
     // Phone
     let phone = '';
-    const phoneMatch = line.match(/P#[:\s]*(\d{10})/i);
+    const phoneMatch = line.match(/P#[:\s]*(\d{10})/i) || line.match(/\b(\d{10})\b/);
     if (phoneMatch) phone = phoneMatch[1];
 
-    // Address
-    let address = 'Dirección por verificar';
-    const addrMatch = line.match(/(\d{1,5}\s+[A-Za-z0-9\s]+(?:AVE|DR|ST|RD|CIR|BLVD|WAY|LN|CT)[.,]?)/i);
-    if (addrMatch) {
-      address = addrMatch[1].replace(/,\s*$/, '').trim();
-    }
+    // Zip code
+    let zipCode = '46516';
+    const zipMatch = line.match(/\b(46\d{3}(?:-\d{4})?)\b/);
+    if (zipMatch) zipCode = zipMatch[1];
 
-    // City detection from line or known Indiana service cities
-    let city = '';
-    const cityMatch = line.match(/\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW)\b/i);
+    // City detection
+    let city = 'ELKHART';
+    const cityMatch = line.match(/\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW)\s+46\d{3}/i) ||
+                      line.match(/\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW)\b/i);
     if (cityMatch) {
       city = cityMatch[1].toUpperCase();
+    }
+
+    // Address: search in postJobText
+    let address = 'Dirección por verificar';
+    const streetTypes = 'AVE|DR|ST|RD|CIR|BLVD|WAY|LN|CT|LANE|COURT|CIRCLE|BOULEVARD|ROAD|STREET|DRIVE|EDGE|TER|TERRACE|LOOP|TRL|TRAIL|PL|PLACE|RUN|PATH';
+    const addrRegex = new RegExp(`(\\d{1,5}\\s+.*?\\b(?:${streetTypes})\\b[.,]?)`, 'i');
+    const addrMatch = postJobText.match(addrRegex) || line.match(addrRegex);
+    if (addrMatch) {
+      address = addrMatch[1].replace(/,\s*$/, '').replace(/^[:\s,]+/, '').replace(/\\W\s+/i, 'W ').trim();
     }
 
     // Rate calculation: $100 base + $30 for Driveway Bore (DW) + $25 por cada 100 ft > 300 ft
@@ -134,13 +162,20 @@ function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
       if (extraBlocks > 0) rate += extraBlocks * 25;
     }
 
+    let detectedNotes = '';
+    if (/urgent[e]?/i.test(line)) {
+      detectedNotes = 'URGENTE';
+    } else if (obstacles && obstacles !== 'N') {
+      detectedNotes = obstacles;
+    }
+
     candidates.push({
-      work_date: defaultDate || new Date().toISOString().split('T')[0],
+      work_date: workDate,
       tech_id: defaultTech || 'Javier (P0G1)',
       job_id: jobId,
       address,
       city,
-      zip_code: '46516',
+      zip_code: zipCode,
       phone,
       call_first: /CALLFIRST/i.test(line) ? 1 : 0,
       drop_footage: dropFootage,
@@ -150,11 +185,11 @@ function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
       obstacles,
       premise_access: /RQHM/i.test(line) ? 'RQHM' : 'N',
       neighbor_notice: /NBR[:\s]*2/i.test(line) ? '2' : 'N',
-      raw_notes: line,
+      raw_notes: detectedNotes,
       rate_calculated: rate,
       manual_adjustment: 0,
       adjustment_reason: '',
-      status: 'Pendiente',
+      status: 'Completado',
       payment_status: 'Pendiente',
       cancel_reason: ''
     });
@@ -1037,30 +1072,45 @@ app.post('/api/settings', (req, res) => {
 app.post('/api/dispatch-sheets/scan', (req, res, next) => {
   uploadSheet.any()(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message });
-    req.file = req.files && req.files.length > 0 ? req.files[0] : null;
     next();
   });
 }, async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No se subió ninguna foto de hoja de despacho' });
-    
-    const filePath = req.file.path;
+    const files = req.files || [];
+    const mainFile = files.find(f => f.fieldname === 'sheetPhoto' || f.fieldname === 'sheet_photo') || 
+                     files.find(f => f.fieldname !== 'ocrPhoto') || 
+                     files[0];
+
+    if (!mainFile) return res.status(400).json({ error: 'No se subió ninguna foto de hoja de despacho' });
+
+    const ocrFile = files.find(f => f.fieldname === 'ocrPhoto');
+    const ocrPath = ocrFile ? ocrFile.path : mainFile.path;
+
     const sheetDate = req.body.sheetDate || req.body.sheet_date || new Date().toISOString().split('T')[0];
     const techId = req.body.techId || req.body.tech_id || 'Javier (P0G1)';
 
     // Run OCR with Tesseract
-    const { data: { text } } = await Tesseract.recognize(filePath, 'eng');
+    const { data: { text } } = await Tesseract.recognize(ocrPath, 'eng');
+
+    // Clean up temporary OCR file if distinct from main file
+    if (ocrFile && ocrFile.path !== mainFile.path) {
+      try {
+        if (fs.existsSync(ocrFile.path)) fs.unlinkSync(ocrFile.path);
+      } catch (cleanErr) {
+        console.warn('Could not remove temporary OCR file:', cleanErr);
+      }
+    }
 
     // Extract candidate orders
     const parsedOrders = extractOrdersFromOcrText(text, sheetDate, techId);
 
     // Save record to dispatch_sheets table
-    const relPath = path.join('sheets', req.file.filename).replace(/\\/g, '/');
+    const relPath = path.join('sheets', mainFile.filename).replace(/\\/g, '/');
     const stmt = db.prepare(`
       INSERT INTO dispatch_sheets (sheet_date, filename, original_name, extracted_text, orders_count)
       VALUES (?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(sheetDate, relPath, req.file.originalname, text, parsedOrders.length);
+    const result = stmt.run(sheetDate, relPath, mainFile.originalname, text, parsedOrders.length);
 
     res.json({
       sheetId: result.lastInsertRowid,

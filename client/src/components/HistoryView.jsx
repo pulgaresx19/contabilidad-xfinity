@@ -589,7 +589,7 @@ ${jobLines}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center space-y-1">
               <ImageIcon className="h-8 w-8 text-slate-600 mx-auto mb-1" />
               <p className="text-xs text-slate-300 font-semibold">Sin fotos de hojas todavía.</p>
-              <p className="text-[10px] text-slate-500">Usa "Escanear Hoja" en Jornada para registrar una.</p>
+              <p className="text-[10px] text-slate-500">Usa "Escanear Foto" en Jornada para registrar una.</p>
             </div>
           ) : (
             sheets.map((s) => (

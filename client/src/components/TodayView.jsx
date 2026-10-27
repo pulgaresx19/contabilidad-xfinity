@@ -576,14 +576,14 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
           />
         </div>
 
-        {/* Botones de Acción: Escanear Hoja & Añadir Trabajo */}
+        {/* Botones de Acción: Escanear Foto & Añadir Trabajo */}
         <div className="grid grid-cols-2 gap-2 pt-0.5">
           <button
             onClick={onOpenScan}
             className="py-2.5 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-xs rounded-2xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
           >
             <Camera className="h-4 w-4 stroke-[2.5]" />
-            <span>Escanear Hoja</span>
+            <span>Escanear Foto</span>
           </button>
 
           <button
@@ -647,7 +647,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
               onClick={onOpenScan}
               className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl transition"
             >
-              Escanear Hoja
+              Escanear Foto
             </button>
             <button
               onClick={() => setIsAddJobOpen(true)}

@@ -97,7 +97,34 @@ assert.strictEqual(parsed1.cable_type, 'RG-11');
 assert.strictEqual(parsed1.bore_type, 'DW:1');
 assert.strictEqual(parsed1.call_first, true);
 assert.strictEqual(parsed1.phone, '2094475840');
-console.log('✓ OCR Dispatch Line Parser Passed!');
+
+// Test extractOrdersFromOcrText logic
+const { extractOrdersFromOcrText } = require('./client/src/services/ocrService.js');
+const multiLineOcr = `
+10-22-2026 OSDENINY 626746 23322 IRONWOOD DR, ELKHART 46516 CALLFIRST/P#:2094475840/DROP:103.73/Type:RG-11/BORE:DW:1
+10-22-2026 OSDENINY 713702 1109 E BEARDSLEY AVE, ELKHART 46514 DROP:115.82/Type:RG-6/BORE:SW:1
+10-22-2026 OSDENINY 717040 28747 V/OLF AVE, ELKHART 46514 DROP:450.00/BORE:DW:1
+`;
+const extracted = extractOrdersFromOcrText(multiLineOcr);
+assert.strictEqual(extracted.length, 3, 'Should extract 3 orders');
+assert.strictEqual(extracted[0].job_id, '626746');
+assert.strictEqual(extracted[0].address, '23322 IRONWOOD DR');
+assert.strictEqual(extracted[0].city, 'ELKHART');
+assert.strictEqual(extracted[0].cable_type, 'RG-11');
+assert.strictEqual(extracted[0].bore_type, 'DW:1');
+assert.strictEqual(extracted[0].rate_calculated, 130);
+
+assert.strictEqual(extracted[1].job_id, '713702');
+assert.strictEqual(extracted[1].address, '1109 E BEARDSLEY AVE');
+assert.strictEqual(extracted[1].bore_type, 'SW:1');
+assert.strictEqual(extracted[1].rate_calculated, 100);
+
+assert.strictEqual(extracted[2].job_id, '717040');
+assert.strictEqual(extracted[2].address, '28747 WOLF AVE');
+assert.strictEqual(extracted[2].drop_footage, 450);
+assert.strictEqual(extracted[2].rate_calculated, 155);
+
+console.log('✓ OCR Dispatch Line Parser & Multi-line OCR Extractor Passed!');
 
 // 3. TEST DATE & WEEK CUTOFF LOGIC
 console.log('--- TEST 3: Cutoff & Week Groups ---');

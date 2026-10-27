@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Camera, Upload, Check, AlertCircle, Trash2, Plus, Sparkles, X, Eye, Image as ImageIcon } from 'lucide-react';
 import { getLocalDateStr } from '../utils/dateUtils';
+import { preprocessImageForOcr } from '../services/imageUtils';
 
 export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech }) {
   const [sheetDate, setSheetDate] = useState(() => getLocalDateStr());
@@ -35,9 +36,22 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
     setMessage(null);
     setExtractedOrders([]);
 
+    let ocrBlob = null;
+    try {
+      const preproc = await preprocessImageForOcr(file);
+      if (preproc && preproc.blob) {
+        ocrBlob = preproc.blob;
+      }
+    } catch (procErr) {
+      console.warn('Preprocessing error (using original):', procErr);
+    }
+
     const formData = new FormData();
     formData.append('sheetPhoto', file);
     formData.append('sheet_photo', file);
+    if (ocrBlob) {
+      formData.append('ocrPhoto', ocrBlob, 'ocr.png');
+    }
     formData.append('sheetDate', sheetDate);
     formData.append('sheet_date', sheetDate);
     formData.append('techId', techId);
@@ -192,8 +206,8 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
               <Camera className="h-4 w-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Escanear Hoja de Ruta</h3>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400">Guarda la foto y lee las órdenes automáticamente</p>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Escanear Foto de Despacho</h3>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">Guarda la foto y extrae las órdenes automáticamente</p>
             </div>
           </div>
 
@@ -281,7 +295,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
               {!previewUrl ? (
                 <div className="space-y-2">
                   <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider block px-0.5">
-                    Elige cómo agregar la hoja de despacho:
+                    Elige cómo agregar la foto de despacho:
                   </span>
 
                   <div className="grid grid-cols-2 gap-2.5">

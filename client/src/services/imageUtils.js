@@ -78,3 +78,101 @@ export function dataUrlToBlob(dataUrl) {
 
   return new Blob([uInt8Array], { type: contentType });
 }
+
+// Advanced OCR Image Preprocessing:
+// 1. Scales up low-resolution snippets (so character height is optimal for Tesseract)
+// 2. Erases colored backgrounds (cyan columns, yellow/green highlighters) turning them to clean white
+// 3. Removes vertical table grid lines that break Tesseract word segmentation
+export async function preprocessImageForOcr(fileOrBlob) {
+  return new Promise((resolve, reject) => {
+    // If not an image, pass through
+    if (fileOrBlob.type && !fileOrBlob.type.startsWith('image/')) {
+      return resolve({ blob: fileOrBlob, dataUrl: null });
+    }
+
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        let scale = 1;
+        if (img.height < 300) {
+          scale = 3;
+        } else if (img.height < 600) {
+          scale = 2;
+        } else if (img.width > 3000) {
+          scale = 2200 / img.width;
+        }
+
+        const width = Math.round(img.width * scale);
+        const height = Math.round(img.height * scale);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+
+        try {
+          const imgData = ctx.getImageData(0, 0, width, height);
+          const data = imgData.data;
+
+          // 1. Color removal and contrast thresholding
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+
+            // If any channel is bright or lightness is high, it's background/highlight -> pure white
+            if (r > 115 || g > 115 || b > 115) {
+              data[i] = 255;
+              data[i + 1] = 255;
+              data[i + 2] = 255;
+            } else {
+              data[i] = 0;
+              data[i + 1] = 0;
+              data[i + 2] = 0;
+            }
+          }
+
+          // 2. Erase continuous vertical black table grid lines
+          for (let x = 0; x < width; x++) {
+            let blackCount = 0;
+            for (let y = 0; y < height; y++) {
+              const idx = (y * width + x) * 4;
+              if (data[idx] === 0) blackCount++;
+            }
+            if (blackCount > height * 0.35) {
+              for (let y = 0; y < height; y++) {
+                for (let dx = -2; dx <= 2; dx++) {
+                  const nx = x + dx;
+                  if (nx >= 0 && nx < width) {
+                    const idx = (y * width + nx) * 4;
+                    data[idx] = 255;
+                    data[idx + 1] = 255;
+                    data[idx + 2] = 255;
+                  }
+                }
+              }
+            }
+          }
+
+          ctx.putImageData(imgData, 0, 0);
+        } catch (procErr) {
+          console.warn('Canvas image processing fallback:', procErr);
+        }
+
+        const dataUrl = canvas.toDataURL('image/png');
+        canvas.toBlob((blob) => {
+          resolve({ blob: blob || fileOrBlob, dataUrl });
+        }, 'image/png');
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(fileOrBlob);
+  });
+}

@@ -51,16 +51,16 @@ ${jobLines}`;
               <Zap className="h-3 w-3 fill-cyan-400" />
               Nueva Jornada
             </span>
-            <h2 className="text-base font-extrabold text-white">Escanear Hoja de Ruta</h2>
+            <h2 className="text-base font-extrabold text-white">Escanear Foto de Ruta</h2>
             <p className="text-[11px] text-slate-300">
-              Toma foto a la hoja diaria para archivarla y leer las órdenes al instante.
+              Sube foto o tómala con la cámara para archivarla y leer las órdenes al instante.
             </p>
           </div>
 
           <button
             onClick={onOpenScan}
             className="flex-shrink-0 h-14 w-14 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 text-slate-950 flex items-center justify-center shadow-lg shadow-cyan-500/30 active:scale-95 transition"
-            title="Escanear Hoja con Cámara"
+            title="Escanear Foto con Cámara o Galería"
           >
             <Camera className="h-7 w-7 stroke-[2.5]" />
           </button>
