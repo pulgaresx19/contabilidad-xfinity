@@ -33,7 +33,9 @@ export default function ScanSheetModal({ onOrdersSaved, defaultTech }) {
 
     const formData = new FormData();
     formData.append('sheetPhoto', file);
+    formData.append('sheet_photo', file);
     formData.append('sheetDate', sheetDate);
+    formData.append('sheet_date', sheetDate);
     formData.append('techId', techId);
 
     try {

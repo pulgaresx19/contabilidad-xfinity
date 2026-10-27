@@ -1034,13 +1034,19 @@ app.post('/api/settings', (req, res) => {
 });
 
 // 12. Dispatch Sheet Photo Scanner & OCR
-app.post('/api/dispatch-sheets/scan', uploadSheet.single('sheetPhoto'), async (req, res) => {
+app.post('/api/dispatch-sheets/scan', (req, res, next) => {
+  uploadSheet.any()(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    req.file = req.files && req.files.length > 0 ? req.files[0] : null;
+    next();
+  });
+}, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se subió ninguna foto de hoja de despacho' });
     
     const filePath = req.file.path;
-    const sheetDate = req.body.sheetDate || new Date().toISOString().split('T')[0];
-    const techId = req.body.techId || 'Javier (P0G1)';
+    const sheetDate = req.body.sheetDate || req.body.sheet_date || new Date().toISOString().split('T')[0];
+    const techId = req.body.techId || req.body.tech_id || 'Javier (P0G1)';
 
     // Run OCR with Tesseract
     const { data: { text } } = await Tesseract.recognize(filePath, 'eng');

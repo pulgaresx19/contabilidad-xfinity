@@ -27,6 +27,9 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
     const file = e.target.files[0];
     if (!file) return;
 
+    // Reset input value so re-selecting the same file works smoothly
+    e.target.value = '';
+
     setPreviewUrl(URL.createObjectURL(file));
     setScanning(true);
     setMessage(null);
@@ -34,7 +37,9 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
     const formData = new FormData();
     formData.append('sheetPhoto', file);
+    formData.append('sheet_photo', file);
     formData.append('sheetDate', sheetDate);
+    formData.append('sheet_date', sheetDate);
     formData.append('techId', techId);
 
     try {
@@ -46,15 +51,35 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
       if (res.ok) {
         setExtractedOrders(data.parsedOrders || []);
         setRawOcrText(data.extractedText || '');
-        if (data.parsedOrders.length === 0) {
+        if (!data.parsedOrders || data.parsedOrders.length === 0) {
           setMessage({
             type: 'warning',
-            text: 'Foto guardada. No se reconocieron números de orden automáticamente. Revisa el texto o agrega las filas manualmente.'
+            text: 'Foto guardada con éxito. No se reconocieron números de orden automáticamente. Se ha creado una fila para que puedas ingresar los datos manualmente o tocar "Agregar Fila".'
           });
+          // Auto add a blank row so the user can easily fill in the info
+          setExtractedOrders([
+            {
+              work_date: sheetDate,
+              tech_id: techId,
+              job_id: '',
+              address: '',
+              city: 'ELKHART',
+              zip_code: '46516',
+              phone: '',
+              drop_footage: 100,
+              cable_type: 'RG-6',
+              bore_type: 'N',
+              obstacles: 'N',
+              rate_calculated: 100,
+              status: 'Completado',
+              payment_status: 'Pendiente',
+              raw_notes: ''
+            }
+          ]);
         } else {
           setMessage({
             type: 'success',
-            text: `¡Foto guardada en el historial y ${data.parsedOrders.length} orden(es) detectada(s)! Revisa los datos abajo.`
+            text: `¡Foto guardada en el historial y ${data.parsedOrders.length} orden(es) detectada(s)! Revisa o edita los datos abajo.`
           });
         }
       } else {
@@ -118,9 +143,10 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: 'success', text: `¡Éxito! Se guardaron ${data.count} órdenes en tu contabilidad.` });
+        const count = data.count || data.imported || extractedOrders.length;
+        setMessage({ type: 'success', text: `¡Éxito! Se guardaron ${count} órdenes en tu contabilidad.` });
         setTimeout(() => {
-          onOrdersSaved();
+          if (onOrdersSaved) onOrdersSaved();
           onClose();
         }, 1000);
       } else {
@@ -157,38 +183,42 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] sm:max-h-[92vh] overflow-hidden mx-auto transition-colors">
         {/* Header */}
-        <div className="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/60">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-cyan-500/10 text-cyan-400 rounded-lg">
+            <div className="p-1.5 bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 rounded-lg">
               <Camera className="h-4 w-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">Escanear Hoja de Ruta</h3>
-              <p className="text-[10px] text-slate-400">Guarda la foto y lee las órdenes automáticamente</p>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Escanear Hoja de Ruta</h3>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">Guarda la foto y lee las órdenes automáticamente</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[10px]">
+            <div className="flex bg-slate-200 dark:bg-slate-950 p-0.5 rounded-lg border border-slate-300 dark:border-slate-800 text-[10px]">
               <button
+                type="button"
                 onClick={() => setMode('photo')}
-                className={`px-2 py-0.5 rounded font-bold transition ${mode === 'photo' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400'}`}
+                className={`px-2 py-0.5 rounded font-bold transition ${mode === 'photo' ? 'bg-cyan-500 text-slate-950 shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
               >
                 Foto
               </button>
               <button
+                type="button"
                 onClick={() => setMode('paste')}
-                className={`px-2 py-0.5 rounded font-bold transition ${mode === 'paste' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400'}`}
+                className={`px-2 py-0.5 rounded font-bold transition ${mode === 'paste' ? 'bg-cyan-500 text-slate-950 shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
               >
                 Texto
               </button>
             </div>
             <button
+              type="button"
               onClick={onClose}
-              className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+              className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 transition"
+              title="Cerrar ventana"
             >
               <X className="h-4 w-4" />
             </button>
@@ -198,13 +228,13 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
         {/* Content Body */}
         <div className="p-4 overflow-y-auto space-y-4 flex-1">
           {/* Date selector */}
-          <div className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800/80 text-xs">
-            <span className="text-[11px] text-slate-400 font-medium">Fecha de la hoja:</span>
+          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80 text-xs">
+            <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Fecha de la hoja:</span>
             <input
               type="date"
               value={sheetDate}
               onChange={(e) => setSheetDate(e.target.value)}
-              className="bg-transparent text-slate-200 text-xs font-mono focus:outline-none"
+              className="bg-transparent text-slate-900 dark:text-slate-200 text-xs font-mono focus:outline-none"
             />
           </div>
 
@@ -212,10 +242,10 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
           {message && (
             <div className={`p-2.5 rounded-xl border flex items-start gap-2 text-xs ${
               message.type === 'success'
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
                 : message.type === 'warning'
-                ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-                : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-300'
+                : 'bg-rose-50 dark:bg-rose-500/10 border-rose-300 dark:border-rose-500/30 text-rose-800 dark:text-rose-300'
             }`}>
               {message.type === 'success' ? (
                 <Check className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
@@ -250,7 +280,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
               {!previewUrl ? (
                 <div className="space-y-2">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block px-0.5">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider block px-0.5">
                     Elige cómo agregar la hoja de despacho:
                   </span>
 
@@ -259,14 +289,14 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                     <button
                       type="button"
                       onClick={() => cameraInputRef.current && cameraInputRef.current.click()}
-                      className="py-6 px-3 border border-cyan-500/40 hover:border-cyan-400 bg-cyan-950/25 hover:bg-cyan-950/50 rounded-2xl flex flex-col items-center justify-center gap-2 transition active:scale-95 group shadow-sm text-center"
+                      className="py-6 px-3 border border-cyan-300 dark:border-cyan-500/40 hover:border-cyan-400 bg-cyan-50/70 dark:bg-cyan-950/25 hover:bg-cyan-100 dark:hover:bg-cyan-950/50 rounded-2xl flex flex-col items-center justify-center gap-2 transition active:scale-95 group shadow-sm text-center"
                     >
-                      <div className="h-12 w-12 rounded-2xl bg-cyan-500/20 text-cyan-400 group-hover:bg-cyan-500 group-hover:text-slate-950 flex items-center justify-center transition shadow-md">
+                      <div className="h-12 w-12 rounded-2xl bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 group-hover:bg-cyan-500 group-hover:text-slate-950 flex items-center justify-center transition shadow-md">
                         <Camera className="h-6 w-6 stroke-[2.5]" />
                       </div>
                       <div>
-                        <p className="text-xs font-black text-white">Tomar con Cámara</p>
-                        <p className="text-[10px] text-slate-400">Foto en vivo ahora</p>
+                        <p className="text-xs font-black text-slate-900 dark:text-white">Tomar con Cámara</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">Foto en vivo ahora</p>
                       </div>
                     </button>
 
@@ -274,23 +304,23 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                     <button
                       type="button"
                       onClick={() => galleryInputRef.current && galleryInputRef.current.click()}
-                      className="py-6 px-3 border border-slate-800 hover:border-blue-400/60 bg-slate-950/80 hover:bg-slate-900 rounded-2xl flex flex-col items-center justify-center gap-2 transition active:scale-95 group shadow-sm text-center"
+                      className="py-6 px-3 border border-slate-200 dark:border-slate-800 hover:border-blue-400 bg-slate-50 dark:bg-slate-950/80 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-2xl flex flex-col items-center justify-center gap-2 transition active:scale-95 group shadow-sm text-center"
                     >
-                      <div className="h-12 w-12 rounded-2xl bg-blue-500/20 text-blue-400 group-hover:bg-blue-500 group-hover:text-slate-950 flex items-center justify-center transition shadow-md">
+                      <div className="h-12 w-12 rounded-2xl bg-blue-500/20 text-blue-600 dark:text-blue-400 group-hover:bg-blue-500 group-hover:text-slate-950 flex items-center justify-center transition shadow-md">
                         <ImageIcon className="h-6 w-6 stroke-[2.5]" />
                       </div>
                       <div>
-                        <p className="text-xs font-black text-white">Elegir de Galería</p>
-                        <p className="text-[10px] text-slate-400">Foto ya guardada</p>
+                        <p className="text-xs font-black text-slate-900 dark:text-white">Elegir de Galería</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">Foto ya guardada</p>
                       </div>
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <div className="relative rounded-2xl overflow-hidden border border-slate-700 bg-slate-950 max-h-40 aspect-video shadow-md">
+                  <div className="relative rounded-2xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-950 max-h-40 aspect-video shadow-md">
                     <img src={previewUrl} alt="Hoja" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent flex items-end justify-between p-2.5">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent flex items-end justify-between p-2.5">
                       <span className="text-[10px] bg-slate-900/90 text-cyan-300 border border-slate-700 px-2 py-0.5 rounded-lg font-mono font-bold">
                         Foto Cargada
                       </span>
@@ -302,26 +332,26 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                     <button
                       type="button"
                       onClick={() => cameraInputRef.current && cameraInputRef.current.click()}
-                      className="flex-1 py-2 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95"
+                      className="flex-1 py-2 px-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 border border-slate-200 dark:border-slate-700 shadow-2xs"
                     >
-                      <Camera className="h-3.5 w-3.5 text-cyan-400" />
+                      <Camera className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
                       <span>Otra con Cámara</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => galleryInputRef.current && galleryInputRef.current.click()}
-                      className="flex-1 py-2 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95"
+                      className="flex-1 py-2 px-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 border border-slate-200 dark:border-slate-700 shadow-2xs"
                     >
-                      <ImageIcon className="h-3.5 w-3.5 text-blue-400" />
+                      <ImageIcon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
                       <span>Elegir de Galería</span>
                     </button>
                   </div>
 
                   {scanning && (
-                    <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-xl flex items-center gap-2 text-cyan-400 text-xs">
-                      <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
-                      <span>Reconociendo datos de la imagen con OCR...</span>
+                    <div className="p-3 bg-cyan-50 dark:bg-cyan-500/10 border border-cyan-300 dark:border-cyan-500/30 rounded-xl flex items-center gap-2 text-cyan-700 dark:text-cyan-400 text-xs">
+                      <div className="w-4 h-4 border-2 border-cyan-600 dark:border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="font-semibold">Reconociendo datos de la imagen con OCR...</span>
                     </div>
                   )}
                 </div>
@@ -330,14 +360,15 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
               {rawOcrText && (
                 <div>
                   <button
+                    type="button"
                     onClick={() => setShowRawText(!showRawText)}
-                    className="text-[10px] text-slate-400 hover:text-cyan-400 flex items-center gap-1"
+                    className="text-[10px] text-slate-500 dark:text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 flex items-center gap-1 font-medium"
                   >
                     <Eye className="h-3 w-3" />
                     <span>{showRawText ? 'Ocultar texto OCR' : 'Ver texto OCR leído'}</span>
                   </button>
                   {showRawText && (
-                    <pre className="mt-1.5 p-2 bg-slate-950 border border-slate-800 rounded-lg text-[9px] font-mono text-slate-300 max-h-24 overflow-x-auto">
+                    <pre className="mt-1.5 p-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-[9px] font-mono text-slate-700 dark:text-slate-300 max-h-24 overflow-x-auto">
                       {rawOcrText}
                     </pre>
                   )}
@@ -354,12 +385,13 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                 onChange={(e) => setPasteText(e.target.value)}
                 rows={3}
                 placeholder="Pega las filas aquí (de WhatsApp o Excel)..."
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-mono text-slate-900 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-cyan-500 shadow-inner"
               />
               <button
+                type="button"
                 onClick={handleParsePaste}
                 disabled={scanning || !pasteText.trim()}
-                className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5"
+                className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
               >
                 <Sparkles className="h-3.5 w-3.5" />
                 <span>Interpretar Texto</span>
@@ -369,14 +401,15 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
           {/* Review candidate orders list */}
           {extractedOrders.length > 0 && (
-            <div className="space-y-2 pt-2 border-t border-slate-800">
+            <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-300 uppercase">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase">
                   Órdenes Detectadas ({extractedOrders.length})
                 </span>
                 <button
+                  type="button"
                   onClick={addBlankOrder}
-                  className="text-[11px] text-cyan-400 font-semibold flex items-center gap-1"
+                  className="text-[11px] text-cyan-600 dark:text-cyan-400 hover:underline font-bold flex items-center gap-1"
                 >
                   <Plus className="h-3 w-3" />
                   <span>Agregar Fila</span>
@@ -385,7 +418,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                 {extractedOrders.map((o, idx) => (
-                  <div key={idx} className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 space-y-1.5 text-xs">
+                  <div key={idx} className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 space-y-1.5 text-xs shadow-2xs">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] text-slate-500 font-bold">#{idx + 1}</span>
@@ -394,17 +427,19 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                           placeholder="Job ID"
                           value={o.job_id}
                           onChange={(e) => updateOrderField(idx, 'job_id', e.target.value)}
-                          className="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs font-mono text-cyan-400 font-bold w-24 focus:outline-none"
+                          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-xs font-mono text-cyan-600 dark:text-cyan-400 font-bold w-24 focus:outline-none"
                         />
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        <span className="text-emerald-400 font-mono font-bold">${o.rate_calculated}</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">${o.rate_calculated}</span>
                         <button
+                          type="button"
                           onClick={() => removeOrder(idx)}
-                          className="text-slate-500 hover:text-rose-400 p-0.5"
+                          className="text-slate-400 hover:text-rose-500 p-0.5"
+                          title="Eliminar orden"
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     </div>
@@ -414,25 +449,25 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                       placeholder="Dirección"
                       value={o.address}
                       onChange={(e) => updateOrderField(idx, 'address', e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700/80 rounded px-2 py-0.5 text-[11px] text-slate-200 focus:outline-none"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded px-2 py-0.5 text-[11px] text-slate-800 dark:text-slate-200 focus:outline-none"
                     />
 
                     <div className="flex items-center gap-2 text-[10px]">
                       <div className="flex items-center gap-1">
-                        <span className="text-slate-400">Pies:</span>
+                        <span className="text-slate-500 dark:text-slate-400">Pies:</span>
                         <input
                           type="number"
                           value={o.drop_footage}
                           onChange={(e) => updateOrderField(idx, 'drop_footage', parseFloat(e.target.value) || 0)}
-                          className="w-14 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-amber-300 font-mono"
+                          className="w-14 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 text-amber-700 dark:text-amber-300 font-mono font-bold"
                         />
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className="text-slate-400">Bore:</span>
+                        <span className="text-slate-500 dark:text-slate-400">Bore:</span>
                         <select
                           value={o.bore_type}
                           onChange={(e) => updateOrderField(idx, 'bore_type', e.target.value)}
-                          className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-slate-200"
+                          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 text-slate-800 dark:text-slate-200"
                         >
                           <option value="N">No (+$0)</option>
                           <option value="DW:1">Driveway (+$30)</option>
@@ -446,7 +481,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                           placeholder="Nota / Urgente..."
                           value={o.raw_notes && o.raw_notes !== o.address ? o.raw_notes : ''}
                           onChange={(e) => updateOrderField(idx, 'raw_notes', e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-amber-300 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-300 placeholder-slate-400 focus:outline-none focus:border-cyan-500"
                           title="Escribe notas adicionales o Urgente"
                         />
                       </div>
@@ -459,21 +494,23 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
         </div>
 
         {/* Footer with action button */}
-        <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between gap-2">
+        <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-center justify-between gap-2">
           <button
+            type="button"
             onClick={onClose}
-            className="px-3 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl"
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition"
           >
             Cancelar
           </button>
 
           {extractedOrders.length > 0 && (
             <button
+              type="button"
               onClick={handleSaveOrders}
               disabled={saving}
-              className="flex-1 py-2 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-[0.98]"
+              className="flex-1 py-2 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-[0.98] transition"
             >
-              <Check className="h-4 w-4" />
+              <Check className="h-4 w-4 stroke-[2.5]" />
               <span>{saving ? 'Guardando...' : `Confirmar ${extractedOrders.length} Órdenes`}</span>
             </button>
           )}

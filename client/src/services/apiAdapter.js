@@ -230,15 +230,43 @@ export function initApiAdapter() {
         if (cleanUrl === '/api/dispatch-sheets/scan' && method === 'POST') {
           const formData = init.body;
           if (formData instanceof FormData) {
-            const sheetFile = formData.get('sheet_photo');
-            const sheetDate = formData.get('sheet_date') || new Date().toISOString().split('T')[0];
+            const sheetFile = formData.get('sheetPhoto') || formData.get('sheet_photo');
+            const sheetDate = formData.get('sheetDate') || formData.get('sheet_date') || new Date().toISOString().split('T')[0];
+            const techId = formData.get('techId') || formData.get('tech_id') || 'Javier (P0G1)';
 
             if (!sheetFile) {
-              return jsonResponse({ error: 'No image uploaded' }, 400);
+              return jsonResponse({ error: 'No se subió ninguna imagen de la hoja de despacho' }, 400);
             }
 
-            // Client-side OCR with Tesseract
-            const { text, parsedOrders } = await recognizeDispatchSheet(sheetFile);
+            let text = '';
+            let parsedOrders = [];
+            let serverSuccess = false;
+
+            // 1. Try server OCR first if available
+            try {
+              const serverRes = await originalFetch(input, init);
+              if (serverRes.ok) {
+                const serverData = await serverRes.json();
+                text = serverData.extractedText || '';
+                parsedOrders = serverData.parsedOrders || [];
+                serverSuccess = true;
+              }
+            } catch (netErr) {
+              console.warn('Servidor no disponible para OCR, ejecutando OCR local en cliente:', netErr);
+            }
+
+            // 2. Client-side OCR with Tesseract fallback
+            if (!serverSuccess) {
+              try {
+                const ocrResult = await recognizeDispatchSheet(sheetFile, sheetDate, techId);
+                text = ocrResult.text || '';
+                parsedOrders = ocrResult.parsedOrders || [];
+              } catch (ocrErr) {
+                console.error('Error en OCR local del cliente:', ocrErr);
+              }
+            }
+
+            // Compress image for local IndexedDB storage
             const { dataUrl } = await compressImage(sheetFile, 1280, 1280, 0.75);
             const ext = (sheetFile.name || 'sheet.jpg').split('.').pop();
             const filename = `sheet-${Date.now()}.${ext}`;

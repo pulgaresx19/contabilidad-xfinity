@@ -131,7 +131,7 @@ export function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
     }
 
     let city = 'ELKHART';
-    const cityMatch = line.match(/(ELKHART|GOSHEN|MISHAWAKA|SOUTH BEND|BRISTOL)/i);
+    const cityMatch = line.match(/\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW)\b/i);
     if (cityMatch) {
       city = cityMatch[1].toUpperCase();
     }
@@ -179,7 +179,7 @@ export function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
   return candidates;
 }
 
-export async function recognizeDispatchSheet(imageSource, onProgress = null) {
+export async function recognizeDispatchSheet(imageSource, defaultDate = null, defaultTech = null, onProgress = null) {
   try {
     const result = await Tesseract.recognize(imageSource, 'eng', {
       logger: (m) => {
@@ -190,7 +190,7 @@ export async function recognizeDispatchSheet(imageSource, onProgress = null) {
     });
 
     const text = result.data.text || '';
-    const parsedOrders = extractOrdersFromOcrText(text);
+    const parsedOrders = extractOrdersFromOcrText(text, defaultDate, defaultTech);
 
     return {
       text,
