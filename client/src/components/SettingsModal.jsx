@@ -242,11 +242,11 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
 
             {/* Bono por Metraje Largo (>300 ft) */}
             <div className="pt-2.5 border-t border-slate-800/80 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-200">
-                  Bono por Metraje Largo (Drop Extendido)
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-slate-200 whitespace-nowrap">
+                  Bono por metraje largo
                 </span>
-                <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800 font-bold">
+                <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800 font-bold whitespace-nowrap shrink-0">
                   +${settings.footage_extra_rate || '25'} cada 100 ft
                 </span>
               </div>
