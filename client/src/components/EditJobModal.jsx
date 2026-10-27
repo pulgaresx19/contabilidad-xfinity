@@ -68,7 +68,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
   // Auto-recalculate rate whenever footage, bore or manual adjustment changes
   const calculateRate = (footage, bore, adjType, adjAmount) => {
     let rate = 100; // Base pay
-    if (bore && bore.includes('DW')) {
+    if (bore && typeof bore === 'string' && bore.includes('DW')) {
       rate += 30; // Driveway bore bonus
     }
     const numFootage = parseFloat(footage) || 0;
@@ -77,7 +77,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
       if (extraBlocks > 0) rate += extraBlocks * 25;
     }
 
-    const numAdj = parseFloat(adjAmount) || 0;
+    const numAdj = parseFloat(String(adjAmount).replace(/[^0-9.]/g, '')) || 0;
     let finalAdj = 0;
     if (adjType === 'add') finalAdj = Math.abs(numAdj);
     else if (adjType === 'sub') finalAdj = -Math.abs(numAdj);
@@ -108,11 +108,13 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
 
   const handleAdjustChange = (type, val) => {
     setAdjustType(type);
-    setAdjustVal(val);
-    const calc = calculateRate(formData.drop_footage, formData.bore_type, type, val);
+    const cleanVal = type === 'none' ? '' : String(val).replace(/[^0-9.]/g, '');
+    setAdjustVal(cleanVal);
+    const calc = calculateRate(formData.drop_footage, formData.bore_type, type, cleanVal);
     setFormData(prev => ({
       ...prev,
-      ...calc
+      ...calc,
+      ...(type === 'none' ? { adjustment_reason: '' } : {})
     }));
   };
 
@@ -200,11 +202,11 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
                 Valor Total del Trabajo
               </span>
               <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                Base $100 {formData.bore_type.includes('DW') ? '+ $30 Bore' : ''} {formData.drop_footage > 300 ? '+ Metraje extra' : ''}
+                Base $100 {(formData.bore_type || '').includes('DW') ? '+ $30 Bore' : ''} {formData.drop_footage > 300 ? '+ Metraje extra' : ''} {formData.manual_adjustment > 0 ? `+ $${formData.manual_adjustment} Bono` : formData.manual_adjustment < 0 ? `- $${Math.abs(formData.manual_adjustment)} Descuento` : ''}
               </span>
             </div>
 
-            <div className="flex items-center gap-1 px-3 py-1 bg-emerald-500 text-slate-950 rounded-xl font-mono font-black shadow-xs shrink-0">
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500 text-slate-950 rounded-xl font-mono font-black shadow-xs shrink-0">
               <span className="text-xs">$</span>
               <span className="text-lg sm:text-xl leading-none">{formData.rate_calculated}</span>
             </div>
@@ -382,7 +384,17 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
               <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase">
                 Ajuste Especial de Supervisor
               </span>
-              <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono">Opcional</span>
+              <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono">
+                {formData.manual_adjustment !== 0 ? (
+                  formData.manual_adjustment > 0 ? (
+                    <span className="text-emerald-500 font-bold">+${formData.manual_adjustment}</span>
+                  ) : (
+                    <span className="text-amber-500 font-bold">-${Math.abs(formData.manual_adjustment)}</span>
+                  )
+                ) : (
+                  'Opcional'
+                )}
+              </span>
             </div>
 
             <div className="grid grid-cols-3 gap-1">
@@ -398,9 +410,9 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
                   className={`py-1.5 rounded-lg text-xs font-bold border transition ${
                     adjustType === t.id
                       ? t.id === 'add'
-                        ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                        ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-sm'
                         : t.id === 'sub'
-                        ? 'bg-rose-500 text-white border-rose-400'
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
                         : 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white border-slate-300'
                       : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
                   }`}
@@ -411,28 +423,103 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
             </div>
 
             {adjustType !== 'none' && (
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <div>
-                  <label className="text-[9px] text-slate-500 block mb-0.5">Monto ($):</label>
-                  <input
-                    type="number"
-                    step="5"
-                    min="1"
-                    placeholder="ej. 25"
-                    value={adjustVal}
-                    onChange={(e) => handleAdjustChange(adjustType, e.target.value)}
-                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white font-mono font-bold"
-                  />
+              <div className="space-y-2 pt-1">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[9px] text-slate-500 dark:text-slate-400 block mb-0.5 font-bold uppercase">
+                      {adjustType === 'add' ? 'Monto a Sumar ($)' : 'Monto a Descontar ($)'}:
+                    </label>
+                    <div className="relative">
+                      <span className={`absolute left-2.5 top-1.5 text-xs font-mono font-bold ${
+                        adjustType === 'add' ? 'text-emerald-500' : 'text-amber-500'
+                      }`}>
+                        {adjustType === 'add' ? '+$' : '-$'}
+                      </span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        placeholder="ej. 25 o 30"
+                        value={adjustVal}
+                        onChange={(e) => handleAdjustChange(adjustType, e.target.value)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg pl-7 pr-2.5 py-1.5 text-xs text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-500 dark:text-slate-400 block mb-0.5 font-bold uppercase">
+                      Motivo del ajuste:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ej. Suelo rocoso / Descuento DW"
+                      value={formData.adjustment_reason}
+                      onChange={(e) => setFormData({ ...formData, adjustment_reason: e.target.value })}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-[9px] text-slate-500 block mb-0.5">Motivo del ajuste:</label>
-                  <input
-                    type="text"
-                    placeholder="ej. Suelo rocoso, árbol"
-                    value={formData.adjustment_reason}
-                    onChange={(e) => setFormData({ ...formData, adjustment_reason: e.target.value })}
-                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
-                  />
+
+                {/* Botones rápidos */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <span className="text-[9px] text-slate-400">Rápidos:</span>
+                  {adjustType === 'sub' ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleAdjustChange('sub', '30');
+                          setFormData(prev => ({ ...prev, adjustment_reason: 'Supervisor descontó DW (no se perforó)' }));
+                        }}
+                        className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-300 text-[10px] font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition"
+                      >
+                        -$30 (Sin DW)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleAdjustChange('sub', '25');
+                          setFormData(prev => ({ ...prev, adjustment_reason: 'Deducción / Descuento parcial' }));
+                        }}
+                        className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-300 text-[10px] font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition"
+                      >
+                        -$25
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleAdjustChange('add', '25');
+                          setFormData(prev => ({ ...prev, adjustment_reason: 'Bono metraje extra autorizado' }));
+                        }}
+                        className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-300 text-[10px] font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition"
+                      >
+                        +$25 (Bono)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleAdjustChange('add', '30');
+                          setFormData(prev => ({ ...prev, adjustment_reason: 'Driveway Bore autorizado' }));
+                        }}
+                        className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-300 text-[10px] font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition"
+                      >
+                        +$30 (DW)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleAdjustChange('add', '50');
+                          setFormData(prev => ({ ...prev, adjustment_reason: 'Trabajo complejo / rocoso' }));
+                        }}
+                        className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-300 text-[10px] font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition"
+                      >
+                        +$50 (Extra)
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )}

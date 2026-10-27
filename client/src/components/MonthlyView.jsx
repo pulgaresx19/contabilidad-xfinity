@@ -4,13 +4,14 @@ import {
   CheckCircle2, ChevronLeft, ChevronRight, Plus, Fuel, Wrench, 
   Car, Utensils, Smartphone, Shield, Package, Trash2, Copy, 
   Check, Share2, AlertCircle, FileText, ChevronDown, ChevronUp, Image as ImageIcon,
-  ShieldCheck, CheckCircle
+  ShieldCheck, CheckCircle, Edit3
 } from 'lucide-react';
 import { 
   getCurrentMonthStr, formatMonthFriendly, 
   getPreviousMonth, getNextMonth, formatDateFriendly 
 } from '../utils/dateUtils';
 import AddExpenseModal from './AddExpenseModal';
+import EditJobModal from './EditJobModal';
 
 const CATEGORY_ICONS = {
   Combustible: { icon: Fuel, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
@@ -28,6 +29,7 @@ export default function MonthlyView({ orders = [], onRefresh }) {
   const [loading, setLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState('weeks'); // 'weeks' | 'expenses' | 'report'
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
   const [expandedWeekKey, setExpandedWeekKey] = useState(null);
   const [copiedReport, setCopiedReport] = useState(false);
   const [updatingWeekKey, setUpdatingWeekKey] = useState(null);
@@ -490,27 +492,49 @@ ${weeksLines || '  (No hay semanas registradas)'}
                       {w.orders.map((ord, idx) => (
                         <div
                           key={ord.id}
-                          className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs"
+                          className="bg-slate-950/70 hover:bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 hover:border-slate-700 flex items-center justify-between text-xs transition gap-2"
                         >
-                          <div>
-                            <div className="font-bold text-white flex items-center gap-1.5">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-white flex items-center gap-1.5 flex-wrap">
                               <span>#{ord.job_id}</span>
                               <span className="text-[10px] text-slate-400 font-normal">{ord.work_date}</span>
+                              {Number(ord.manual_adjustment) > 0 && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                  +${ord.manual_adjustment} Bono {ord.adjustment_reason ? `(${ord.adjustment_reason})` : ''}
+                                </span>
+                              )}
+                              {Number(ord.manual_adjustment) < 0 && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                  -${Math.abs(ord.manual_adjustment)} Descuento {ord.adjustment_reason ? `(${ord.adjustment_reason})` : ''}
+                                </span>
+                              )}
                             </div>
-                            <div className="text-slate-400 truncate max-w-[200px] text-[11px]">
+                            <div className="text-slate-400 truncate max-w-[260px] sm:max-w-md text-[11px]">
                               {ord.address}
                             </div>
                             <div className="text-[10px] text-slate-500">
-                              {ord.drop_footage} ft • {ord.cable_type} {ord.bore_type !== 'N' ? `• ${ord.bore_type}` : ''}
+                              {ord.drop_footage} ft • {ord.cable_type} {ord.bore_type && ord.bore_type !== 'N' ? `• ${ord.bore_type}` : ''}
                             </div>
                           </div>
-                          <div className="text-right">
-                            <span className="font-bold text-emerald-400">
-                              ${ord.rate_calculated}
-                            </span>
-                            <div className="text-[10px] text-slate-400">
-                              {ord.payment_status}
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <div className="text-right">
+                              <span className="font-mono font-black text-emerald-400 text-sm block">
+                                ${ord.rate_calculated}
+                              </span>
+                              <div className="text-[10px] text-slate-400">
+                                {ord.payment_status}
+                              </div>
                             </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setEditingOrder(ord)}
+                              className="p-1.5 text-slate-400 hover:text-cyan-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 rounded-xl transition shadow-xs"
+                              title="Editar trabajo o ajustar bono/descuento"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -753,6 +777,19 @@ ${weeksLines || '  (No hay semanas registradas)'}
         onExpenseAdded={() => fetchMonthlyData(selectedMonth)}
         initialDate={selectedMonth === getCurrentMonthStr() ? undefined : `${selectedMonth}-01`}
       />
+
+      {/* MODAL PARA EDITAR TRABAJO O AJUSTAR BONO/DESCUENTO DE SUPERVISIÓN */}
+      {editingOrder && (
+        <EditJobModal
+          order={editingOrder}
+          isOpen={Boolean(editingOrder)}
+          onClose={() => setEditingOrder(null)}
+          onJobUpdated={() => {
+            fetchMonthlyData(selectedMonth);
+            if (onRefresh) onRefresh();
+          }}
+        />
+      )}
     </div>
   );
 }

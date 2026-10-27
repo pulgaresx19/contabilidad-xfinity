@@ -1059,10 +1059,11 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                   </span>
                   <input
                     type="number"
-                    step="1"
+                    step="any"
+                    min="0"
                     placeholder="Monto a ajustar (ej. 30 o 25)"
                     value={adjustAmount}
-                    onChange={(e) => setAdjustAmount(e.target.value)}
+                    onChange={(e) => setAdjustAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-8 pr-3 py-2 text-xs sm:text-sm text-white font-mono font-bold focus:outline-none focus:border-cyan-500"
                   />
                 </div>

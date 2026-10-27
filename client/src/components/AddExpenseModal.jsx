@@ -51,9 +51,10 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const numAmount = parseFloat(amount);
+    const cleanAmount = String(amount).replace(/[^0-9.]/g, '');
+    const numAmount = parseFloat(cleanAmount);
     if (isNaN(numAmount) || numAmount <= 0) {
-      setError('Ingresa un monto válido mayor a 0');
+      setError('Por favor ingresa una cantidad numérica válida en dólares mayor a $0.00 (ej. 45.00)');
       return;
     }
 
@@ -121,6 +122,14 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
           </button>
         </div>
 
+        {/* Guía visual para evitar confusiones */}
+        <div className="px-5 py-2.5 bg-slate-950/80 border-b border-slate-800 text-[11px] text-slate-400 flex items-start gap-2">
+          <span className="text-amber-400 shrink-0 font-bold">ℹ️</span>
+          <span>
+            <strong className="text-slate-300">Nota:</strong> Este formulario registra <u>gastos que pagas de tu bolsillo</u> (gasolina, herramientas, vehículo) que se restan de tu balance neto. Si necesitas aplicar un <strong>bono o descuento de supervisión en una orden</strong>, haz clic en el botón ✏️ <strong>Editar</strong> en la orden correspondiente dentro de la semana.
+          </span>
+        </div>
+
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
           {error && (
@@ -138,11 +147,11 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-slate-400">$</span>
               <input
                 type="number"
-                step="0.01"
+                step="any"
                 min="0.01"
                 placeholder="0.00"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                 autoFocus
                 required
                 className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 rounded-2xl py-3 pl-10 pr-4 text-2xl font-black text-white placeholder-slate-600 outline-none transition"
