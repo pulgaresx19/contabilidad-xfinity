@@ -267,7 +267,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               className="py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-95 text-slate-950 font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-cyan-500/25 transition"
             >
               <Camera className="h-5 w-5 stroke-[2.5]" />
-              <span>{uploading ? 'Guardando foto...' : 'Abrir Cámara (Tirar Foto)'}</span>
+              <span>{uploading ? 'Guardando foto...' : 'Abrir Cámara'}</span>
             </button>
 
             {/* Botón Secundario: Seleccionar de Galería */}
