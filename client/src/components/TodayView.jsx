@@ -242,7 +242,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   };
 
   // Confirm No Realizado
-  const handleConfirmCancelled = async () => {
+  const handleConfirmCancelled = async (andShareWhatsApp = false) => {
     if (!cancelModalOrder) return;
     setSavingCancel(true);
     try {
@@ -257,19 +257,36 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
       });
 
       if (res.ok) {
+        let uploadedPhotos = [];
         if (cancelPhotoFiles.length > 0) {
           const formData = new FormData();
           formData.append('category', 'Constancia No Realizado');
           cancelPhotoFiles.forEach(f => formData.append('photos', f));
-          await fetch(`/api/orders/${cancelModalOrder.id}/photos`, {
+          const photoRes = await fetch(`/api/orders/${cancelModalOrder.id}/photos`, {
             method: 'POST',
             body: formData
           });
+          if (photoRes.ok) {
+            const photoData = await photoRes.json();
+            uploadedPhotos = photoData.photos || [];
+          }
         }
+
+        const targetOrder = {
+          ...cancelModalOrder,
+          status: 'No Realizado',
+          cancel_reason: cancelReason.trim() || 'No realizado por inconveniente en la propiedad',
+          photos: uploadedPhotos.length > 0 ? uploadedPhotos : cancelModalOrder.photos
+        };
+
         onOrderUpdated();
         setCancelModalOrder(null);
         setCancelPhotoFiles([]);
         setCancelPhotoPreviews([]);
+
+        if (andShareWhatsApp) {
+          setShareModalOrder(targetOrder);
+        }
       }
     } catch (err) {
       alert('Error: ' + err.message);
@@ -358,6 +375,18 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   };
 
   const getReportText = (order) => {
+    const isCancelled = order.status === 'No Realizado' || order.status === 'Cancelado';
+    if (isCancelled) {
+      return `🚫 *CONSTANCIA DE TRABAJO NO REALIZADO*
+📅 *Fecha:* ${order.work_date}
+🔢 *Orden #:* ${order.job_id}
+📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}${order.phone ? `\n📞 *Teléfono:* ${order.phone}` : ''}
+❌ *Estado:* NO REALIZADO
+⚠️ *Motivo / Inconveniente:* ${order.cancel_reason || 'Inconveniente en la propiedad'}
+👷 *Técnico:* Javier (P0G1)
+${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})\n` : ''}📸 *Evidencia:* Constancia fotográfica adjunta`;
+    }
+
     const isDw = order.bore_type && order.bore_type.includes('DW');
     const isSw = order.bore_type && order.bore_type.includes('SW');
     const boreStr = isDw 
@@ -386,8 +415,11 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
     try {
       const res = await fetch(`/api/orders/${order.id}`);
       const fullOrder = await res.json();
-      const photos = (fullOrder.photos || []).filter((p) => p.category !== 'Constancia No Realizado');
-      setShareOrderPhotos(photos);
+      const isCancelled = order.status === 'No Realizado' || order.status === 'Cancelado';
+      const photos = (fullOrder.photos || []).filter((p) => 
+        isCancelled ? p.category === 'Constancia No Realizado' : p.category !== 'Constancia No Realizado'
+      );
+      setShareOrderPhotos(photos.length > 0 ? photos : (isCancelled ? (fullOrder.photos || []) : []));
     } catch (e) {
       setShareOrderPhotos([]);
     } finally {
@@ -848,39 +880,68 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
                   );
                 })()}
 
-                {/* Si Cancelado: Rectángulo Curvado con Motivo e Icono Interactivo para Ver Detalle / Foto */}
+                {/* Si Cancelado: Rectángulo Curvado con Motivo, Foto y WhatsApp Directo (Mismo tamaño sin agrandar la tarjeta) */}
                 {isCancelled && (
-                  <div
-                    onClick={() => openCancelDetail(order)}
-                    className="p-2.5 rounded-2xl bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 hover:border-rose-400 dark:hover:border-rose-700 text-xs transition cursor-pointer flex items-center justify-between gap-2 shadow-sm group active:scale-[0.99]"
-                    title="Toca para ver el detalle y la foto de constancia"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="p-1 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 shrink-0">
+                  <div className="p-2 sm:p-2.5 rounded-2xl bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 text-xs transition flex items-center justify-between gap-2 shadow-sm">
+                    {/* Zona interactiva izquierda: Toca para ver motivo completo y fotos */}
+                    <div
+                      onClick={() => openCancelDetail(order)}
+                      className="flex items-center gap-2 min-w-0 cursor-pointer flex-1 group"
+                      title="Toca para ver el detalle y las fotos de constancia"
+                    >
+                      <div className="p-1 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 shrink-0 group-hover:scale-105 transition">
                         <AlertTriangle className="h-4 w-4" />
                       </div>
-                      <div className="min-w-0">
-                        <span className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400 block tracking-wider">
-                          Motivo No Realizado:
-                        </span>
-                        <p className="text-xs font-semibold text-rose-900 dark:text-rose-100 truncate">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400 tracking-wider">
+                            Motivo:
+                          </span>
+                          {(order.cancel_photos_count > 0 || (order.photos_count > 0 && (!order.work_photos_count || order.work_photos_count === 0))) && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300 text-[9px] font-bold border border-rose-300 dark:border-rose-800 shrink-0">
+                              <Camera className="h-2.5 w-2.5" />
+                              <span>Foto</span>
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-semibold text-rose-900 dark:text-rose-100 truncate group-hover:text-rose-600 dark:group-hover:text-rose-300 transition">
                           {order.cancel_reason || 'Sin motivo detallado'}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 font-bold text-[10px] shrink-0 group-hover:bg-rose-500 group-hover:text-white transition shadow-xs">
-                      {(order.cancel_photos_count > 0 || (order.photos_count > 0 && (!order.work_photos_count || order.work_photos_count === 0))) ? (
-                        <>
-                          <Camera className="h-3.5 w-3.5" />
-                          <span>Ver Foto</span>
-                        </>
-                      ) : (
-                        <>
-                          <Info className="h-3.5 w-3.5" />
-                          <span>Ver Detalle</span>
-                        </>
-                      )}
+                    {/* Zona derecha: Botón WhatsApp integrado sin alterar el alto de la tarjeta */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {(() => {
+                        const isShared = Boolean(order.whatsapp_shared || localSharedMap[order.id]);
+                        return isShared ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openShareModal(order);
+                            }}
+                            className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30 text-[10.5px] font-bold rounded-xl transition flex items-center gap-1 shadow-2xs active:scale-95"
+                            title={`Constancia ya enviada por WhatsApp${order.whatsapp_shared_at ? ` (${order.whatsapp_shared_at.slice(11, 16)})` : ''}. Toca para abrir.`}
+                          >
+                            <Check className="h-3 w-3 stroke-[3] text-rose-600 dark:text-rose-400" />
+                            <span>Reportado ✓</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openShareModal(order);
+                            }}
+                            className="px-2.5 py-1 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-[10.5px] font-black rounded-xl transition flex items-center gap-1 shadow-sm shadow-rose-600/20 active:scale-95"
+                            title="Toca para enviar constancia de trabajo no realizado por WhatsApp"
+                          >
+                            <Share2 className="h-3 w-3 stroke-[2.5]" />
+                            <span>WhatsApp</span>
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
@@ -1362,23 +1423,35 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
             </div>
 
             {/* Botones de Acción */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setCancelModalOrder(null)}
-                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition"
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition text-center"
               >
                 Volver
               </button>
-              <button
-                type="button"
-                disabled={savingCancel}
-                onClick={handleConfirmCancelled}
-                className="flex-1 py-2 px-4 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow-md shadow-rose-600/25 active:scale-95 transition flex items-center justify-center gap-1.5"
-              >
-                <X className="h-4 w-4 stroke-[2.5]" />
-                <span>{savingCancel ? 'Guardando...' : 'Confirmar No Realizado'}</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={savingCancel}
+                  onClick={() => handleConfirmCancelled(false)}
+                  className="px-3 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition active:scale-95 text-center"
+                  title="Solo guardar constancia sin abrir WhatsApp"
+                >
+                  Solo Guardar
+                </button>
+                <button
+                  type="button"
+                  disabled={savingCancel}
+                  onClick={() => handleConfirmCancelled(true)}
+                  className="flex-1 sm:flex-none py-2 px-3.5 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black text-xs rounded-xl shadow-md shadow-rose-600/25 active:scale-95 transition flex items-center justify-center gap-1.5"
+                  title="Guardar constancia y abrir de inmediato para enviar por WhatsApp"
+                >
+                  <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
+                  <span>{savingCancel ? 'Guardando...' : 'Confirmar y WhatsApp'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1501,25 +1574,41 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
             </div>
 
             {/* Botones de Acción */}
-            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setCancelDetailOrder(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition"
-              >
-                Cerrar
-              </button>
-
+            <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => {
-                  handleReopenOrder(cancelDetailOrder);
+                  const ord = cancelDetailOrder;
                   setCancelDetailOrder(null);
+                  openShareModal(ord);
                 }}
-                className="px-3 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition"
+                className="w-full py-2.5 px-4 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black text-xs rounded-xl shadow-md shadow-rose-600/20 active:scale-95 transition flex items-center justify-center gap-1.5"
+                title="Abrir reporte con motivo y fotos de constancia para WhatsApp"
               >
-                Reactivar Trabajo
+                <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
+                <span>Enviar Constancia a WhatsApp</span>
               </button>
+
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCancelDetailOrder(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition"
+                >
+                  Cerrar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleReopenOrder(cancelDetailOrder);
+                    setCancelDetailOrder(null);
+                  }}
+                  className="px-3 py-2 text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 text-xs font-bold rounded-xl transition hover:underline"
+                >
+                  Reactivar Trabajo
+                </button>
+              </div>
             </div>
           </div>
         </div>

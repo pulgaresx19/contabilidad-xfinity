@@ -3,7 +3,7 @@ import {
   Calendar, CheckCircle2, Clock, Share2, Check, 
   Trash2, ExternalLink, Image as ImageIcon, X, DollarSign, 
   Ruler, ChevronRight, Copy, Camera, AlertCircle, FileText, 
-  ShieldAlert, CheckCircle, Search, Filter, Sparkles, MapPin, Phone, ShieldCheck
+  ShieldAlert, CheckCircle, Search, Filter, Sparkles, MapPin, Phone, ShieldCheck, AlertTriangle
 } from 'lucide-react';
 import ShareReportModal from './ShareReportModal';
 
@@ -526,6 +526,21 @@ ${jobLines}
                         </span>
                       ) : null}
                     </div>
+
+                    {/* Si Cancelado: Mostrar Motivo de Cancelación */}
+                    {isCanc && (
+                      <div className="bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 p-2 rounded-xl text-xs text-rose-900 dark:text-rose-100 flex items-start gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <span className="text-[9px] uppercase font-bold text-rose-600 dark:text-rose-400 block tracking-wider">
+                            Motivo No Realizado:
+                          </span>
+                          <p className="font-semibold text-xs leading-tight truncate">
+                            {order.cancel_reason || 'Sin motivo detallado'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Footer de la tarjeta con Fotos y Copiar Comprobante */}
                     <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-1.5 flex-wrap">

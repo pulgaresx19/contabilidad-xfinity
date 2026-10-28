@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  X, Share2, Copy, Check, Camera, ExternalLink, AlertCircle
+  X, Share2, Copy, Check, Camera, ExternalLink, AlertCircle, AlertTriangle
 } from 'lucide-react';
 
 export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdated }) {
@@ -11,19 +11,34 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
   const [sharing, setSharing] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState(null);
 
+  const isCancelled = order ? (order.status === 'No Realizado' || order.status === 'Cancelado') : false;
+
   useEffect(() => {
     if (!isOpen || !order) return;
 
-    // Generar texto inicial del reporte
-    const isDw = order.bore_type && order.bore_type.includes('DW');
-    const isSw = order.bore_type && order.bore_type.includes('SW');
-    const boreStr = isDw 
-      ? 'Driveway Bore (+$30)' 
-      : isSw 
-      ? 'Sidewalk Bore (SW)' 
-      : (order.bore_type && order.bore_type !== 'N' ? order.bore_type : 'Sin Perforación');
+    const isOrderCancelled = order.status === 'No Realizado' || order.status === 'Cancelado';
 
-    const initialText = `📋 *REPORTE DE TRABAJO*
+    let initialText = '';
+    if (isOrderCancelled) {
+      initialText = `🚫 *CONSTANCIA DE TRABAJO NO REALIZADO*
+📅 *Fecha:* ${order.work_date}
+🔢 *Orden #:* ${order.job_id}
+📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}${order.phone ? `\n📞 *Teléfono:* ${order.phone}` : ''}
+❌ *Estado:* NO REALIZADO
+⚠️ *Motivo / Inconveniente:* ${order.cancel_reason || 'Inconveniente en la propiedad'}
+👷 *Técnico:* Javier (P0G1)
+${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})\n` : ''}📸 *Evidencia:* Constancia fotográfica adjunta`;
+    } else {
+      // Generar texto inicial del reporte completado
+      const isDw = order.bore_type && order.bore_type.includes('DW');
+      const isSw = order.bore_type && order.bore_type.includes('SW');
+      const boreStr = isDw 
+        ? 'Driveway Bore (+$30)' 
+        : isSw 
+        ? 'Sidewalk Bore (SW)' 
+        : (order.bore_type && order.bore_type !== 'N' ? order.bore_type : 'Sin Perforación');
+
+      initialText = `📋 *REPORTE DE TRABAJO*
 📅 *Fecha:* ${order.work_date}
 🔢 *Orden #:* ${order.job_id}
 📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
@@ -31,20 +46,29 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
 🚗 *Perforación / Bore:* ${boreStr}${order.drop_footage > 300 ? `\n⚡ *Metraje Extra (>300ft):* +$${Math.floor((order.drop_footage - 300) / 100) * 25}` : ''}${order.manual_adjustment ? `\n⚖️ *Ajuste Supervisor:* ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`} (${order.adjustment_reason || 'Bono/Descuento'})` : ''}
 💵 *Tarifa Total:* $${order.rate_calculated}
 ✅ *Estado:* Completado y Verificado`;
+    }
 
     setReportText(initialText);
     setCopiedText(false);
 
-    // Cargar fotos de la orden
+    // Cargar fotos de la orden con el filtro adecuado según el estado
+    const filterPhotos = (photos) => {
+      if (!Array.isArray(photos)) return [];
+      if (isOrderCancelled) {
+        const cancelPhotos = photos.filter((p) => p.category === 'Constancia No Realizado');
+        return cancelPhotos.length > 0 ? cancelPhotos : photos;
+      }
+      return photos.filter((p) => p.category !== 'Constancia No Realizado');
+    };
+
     if (order.photos && Array.isArray(order.photos) && order.photos.length > 0) {
-      setOrderPhotos(order.photos.filter((p) => p.category !== 'Constancia No Realizado'));
+      setOrderPhotos(filterPhotos(order.photos));
     } else {
       setLoadingPhotos(true);
       fetch(`/api/orders/${order.id}`)
         .then((res) => res.json())
         .then((data) => {
-          const ph = (data.photos || []).filter((p) => p.category !== 'Constancia No Realizado');
-          setOrderPhotos(ph);
+          setOrderPhotos(filterPhotos(data.photos || []));
         })
         .catch(() => setOrderPhotos([]))
         .finally(() => setLoadingPhotos(false));
@@ -123,10 +147,11 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
               if (imgRes.ok) blob = await imgRes.blob();
             }
             if (blob) {
-              const cleanCat = (p.category || 'evidencia').replace(/[^a-zA-Z0-9]/g, '_');
+              const cleanCat = (p.category || (isCancelled ? 'constancia_no_realizado' : 'evidencia')).replace(/[^a-zA-Z0-9]/g, '_');
+              const prefix = isCancelled ? `NoRealizado_${order.job_id}` : `Job_${order.job_id}`;
               const file = new File(
                 [blob], 
-                `Job_${order.job_id}_${i + 1}_${cleanCat}.jpg`, 
+                `${prefix}_${i + 1}_${cleanCat}.jpg`, 
                 { type: blob.type || 'image/jpeg' }
               );
               filesToShare.push(file);
@@ -137,10 +162,14 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
         }
       }
 
+      const shareTitle = isCancelled 
+        ? `Constancia No Realizado #${order.job_id}` 
+        : `Reporte #${order.job_id}`;
+
       // 4. Compartir nativamente con Web Share (archivos + texto juntos)
       if (filesToShare.length > 0 && navigator.canShare && navigator.canShare({ files: filesToShare })) {
         await navigator.share({
-          title: `Reporte #${order.job_id}`,
+          title: shareTitle,
           text: textToSend,
           files: filesToShare
         });
@@ -151,7 +180,7 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
       // 5. Compartir nativamente solo texto
       if (filesToShare.length === 0 && navigator.share && navigator.canShare && navigator.canShare({ text: textToSend })) {
         await navigator.share({
-          title: `Reporte #${order.job_id}`,
+          title: shareTitle,
           text: textToSend
         });
         onClose();
@@ -182,16 +211,27 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
-              <Share2 className="h-4 w-4" />
+            <div className={`p-2 rounded-xl ${
+              isCancelled 
+                ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' 
+                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+            }`}>
+              {isCancelled ? <AlertTriangle className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
             </div>
             <div>
               <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                Reportar por WhatsApp
+                {isCancelled ? 'Constancia No Realizado' : 'Reportar por WhatsApp'}
               </h3>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono font-bold">
-                Orden #{order.job_id}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono font-bold">
+                  Orden #{order.job_id}
+                </span>
+                {isCancelled && (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-900">
+                    Cancelado
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <button
@@ -204,73 +244,110 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
           </button>
         </div>
 
-        {/* Tarjeta Visual Estética con el componente Driveway destacado */}
-        <div className="bg-slate-50 dark:bg-slate-950/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs space-y-2 shadow-2xs">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="font-bold text-slate-900 dark:text-white text-xs truncate">
-                {order.address}
-              </p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                {order.city ? `${order.city} • ` : ''}{order.work_date}
-              </p>
+        {/* Tarjeta Visual Estética */}
+        {isCancelled ? (
+          <div className="bg-rose-50/70 dark:bg-rose-950/30 p-3 rounded-2xl border border-rose-200 dark:border-rose-900/60 text-xs space-y-2 shadow-2xs">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-bold text-slate-900 dark:text-white text-xs truncate">
+                  {order.address}
+                </p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                  {order.city ? `${order.city} • ` : ''}{order.work_date}
+                </p>
+              </div>
+
+              <div className="text-right shrink-0">
+                <span className="text-[9px] text-rose-600 dark:text-rose-400 uppercase block font-bold">Estado</span>
+                <span className="text-xs font-black font-mono text-rose-700 dark:text-rose-300">
+                  No Realizado
+                </span>
+              </div>
             </div>
 
-            <div className="text-right shrink-0">
-              <span className="text-[9px] text-slate-400 uppercase block font-bold">Tarifa</span>
-              <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">
-                ${order.rate_calculated}
-              </span>
+            {/* Motivo de No Realizado */}
+            <div className="pt-2 border-t border-rose-200/80 dark:border-rose-900/60 flex items-start gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <span className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400 block tracking-wider">
+                  Motivo Registrado:
+                </span>
+                <p className="text-xs font-semibold text-rose-950 dark:text-rose-100 leading-snug">
+                  {order.cancel_reason || 'Sin motivo detallado'}
+                </p>
+              </div>
             </div>
           </div>
+        ) : (
+          <div className="bg-slate-50 dark:bg-slate-950/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs space-y-2 shadow-2xs">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-bold text-slate-900 dark:text-white text-xs truncate">
+                  {order.address}
+                </p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                  {order.city ? `${order.city} • ` : ''}{order.work_date}
+                </p>
+              </div>
 
-          {/* Especificaciones Técnicas y Componente Driveway */}
-          <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-200 dark:border-slate-800/80 font-mono text-[10px]">
-            <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-300 font-bold border border-slate-200 dark:border-slate-800">
-              {order.drop_footage} ft
-            </span>
-            <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
-              {order.cable_type || 'RG-6'}
-            </span>
+              <div className="text-right shrink-0">
+                <span className="text-[9px] text-slate-400 uppercase block font-bold">Tarifa</span>
+                <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">
+                  ${order.rate_calculated}
+                </span>
+              </div>
+            </div>
 
-            {/* Badge Driveway destacado */}
-            {(order.bore_type && order.bore_type.includes('DW')) ? (
-              <span className="px-2 py-0.5 rounded-lg bg-cyan-100 text-cyan-900 dark:bg-cyan-500/20 dark:text-cyan-300 font-bold border border-cyan-300 dark:border-cyan-500/40 flex items-center gap-1 shadow-2xs">
-                <span>🚗 Driveway Bore (DW)</span>
-                <span className="font-black text-cyan-700 dark:text-cyan-400">+$30</span>
+            {/* Especificaciones Técnicas y Componente Driveway */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-200 dark:border-slate-800/80 font-mono text-[10px]">
+              <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-300 font-bold border border-slate-200 dark:border-slate-800">
+                {order.drop_footage} ft
               </span>
-            ) : (order.bore_type && order.bore_type.includes('SW')) ? (
               <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
-                Sidewalk (SW)
+                {order.cable_type || 'RG-6'}
               </span>
-            ) : (
-              <span className="px-2 py-0.5 rounded-lg bg-white/60 dark:bg-slate-900/60 text-slate-400 border border-slate-200 dark:border-slate-800">
-                Sin Bore
-              </span>
-            )}
 
-            {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
-              <span className={`px-2 py-0.5 rounded-lg font-bold border ${
-                order.manual_adjustment > 0
-                  ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
-                  : 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30'
-              }`}>
-                {order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`} {order.adjustment_reason || 'Ajuste'}
-              </span>
-            )}
+              {/* Badge Driveway destacado */}
+              {(order.bore_type && order.bore_type.includes('DW')) ? (
+                <span className="px-2 py-0.5 rounded-lg bg-cyan-100 text-cyan-900 dark:bg-cyan-500/20 dark:text-cyan-300 font-bold border border-cyan-300 dark:border-cyan-500/40 flex items-center gap-1 shadow-2xs">
+                  <span>🚗 Driveway Bore (DW)</span>
+                  <span className="font-black text-cyan-700 dark:text-cyan-400">+$30</span>
+                </span>
+              ) : (order.bore_type && order.bore_type.includes('SW')) ? (
+                <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
+                  Sidewalk (SW)
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-lg bg-white/60 dark:bg-slate-900/60 text-slate-400 border border-slate-200 dark:border-slate-800">
+                  Sin Bore
+                </span>
+              )}
+
+              {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
+                <span className={`px-2 py-0.5 rounded-lg font-bold border ${
+                  order.manual_adjustment > 0
+                    ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
+                    : 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30'
+                }`}>
+                  {order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`} {order.adjustment_reason || 'Ajuste'}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Texto del Reporte Editable */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-              Mensaje del Reporte (Editable):
+              {isCancelled ? 'Mensaje de Constancia (Editable):' : 'Mensaje del Reporte (Editable):'}
             </label>
             <button
               type="button"
               onClick={handleCopyText}
-              className="text-[10px] text-cyan-600 dark:text-cyan-400 font-bold hover:underline flex items-center gap-1"
+              className={`text-[10px] font-bold hover:underline flex items-center gap-1 ${
+                isCancelled ? 'text-rose-600 dark:text-rose-400' : 'text-cyan-600 dark:text-cyan-400'
+              }`}
             >
               {copiedText ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
               <span>{copiedText ? '¡Copiado!' : 'Copiar texto'}</span>
@@ -278,11 +355,13 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
           </div>
 
           <textarea
-            rows={6}
+            rows={isCancelled ? 7 : 6}
             value={reportText}
             onChange={(e) => setReportText(e.target.value)}
             placeholder="Escribe o modifica los detalles del reporte..."
-            className="w-full bg-slate-50 dark:bg-slate-950/90 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500 leading-relaxed shadow-inner"
+            className={`w-full bg-slate-50 dark:bg-slate-950/90 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-none leading-relaxed shadow-inner ${
+              isCancelled ? 'focus:border-rose-500' : 'focus:border-emerald-500'
+            }`}
           />
           <span className="text-[10px] text-slate-400 block px-0.5">
             💡 Puedes editar cualquier dato o agregar notas antes de enviarlo al supervisor.
@@ -293,11 +372,11 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
         <div className="space-y-1.5 pt-1 border-t border-slate-100 dark:border-slate-800/80">
           <div className="flex items-center justify-between">
             <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <Camera className="h-3.5 w-3.5 text-cyan-500" />
-              <span>Fotos de Evidencia ({orderPhotos.length})</span>
+              <Camera className={`h-3.5 w-3.5 ${isCancelled ? 'text-rose-500' : 'text-cyan-500'}`} />
+              <span>{isCancelled ? 'Fotos del Obstáculo' : 'Fotos de Evidencia'} ({orderPhotos.length})</span>
             </label>
             {orderPhotos.length > 0 && (
-              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+              <span className={`text-[10px] font-bold ${isCancelled ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                 Se enviarán juntas con el texto
               </span>
             )}
@@ -330,7 +409,7 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
             </div>
           ) : (
             <div className="text-[10px] text-slate-400 italic text-center py-2 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-              Sin fotos adjuntas (se enviará solo el mensaje de texto).
+              {isCancelled ? 'Sin fotos de constancia (se enviará solo el mensaje de texto explicativo).' : 'Sin fotos adjuntas (se enviará solo el mensaje de texto).'}
             </div>
           )}
         </div>
@@ -341,14 +420,18 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
             type="button"
             onClick={handleSendReportAndPhotos}
             disabled={sharing}
-            className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 active:scale-95 transition ring-2 ring-emerald-400/40 disabled:opacity-50"
+            className={`w-full py-3.5 px-4 font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg active:scale-95 transition disabled:opacity-50 ${
+              isCancelled
+                ? 'bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-rose-600/25 ring-2 ring-rose-400/40'
+                : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-500/25 ring-2 ring-emerald-400/40'
+            }`}
           >
             {sharing ? (
               <span>Preparando y enviando...</span>
             ) : (
               <>
                 <Share2 className="h-4 w-4 stroke-[2.5]" />
-                <span>Enviar Reporte y Fotos a WhatsApp</span>
+                <span>{isCancelled ? 'Enviar Constancia y Fotos a WhatsApp' : 'Enviar Reporte y Fotos a WhatsApp'}</span>
               </>
             )}
           </button>
