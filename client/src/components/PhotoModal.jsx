@@ -283,25 +283,31 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
           </div>
 
           {/* Estado de Requisito de Fotos de Trabajo */}
-          <div className={`p-2.5 rounded-xl border text-xs flex items-center justify-between ${
+          <div className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
             workPhotosCount > 0
               ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
               : 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300'
           }`}>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               {workPhotosCount > 0 ? (
                 <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
               ) : (
                 <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
               )}
-              <span className="font-semibold">
+              <span className="font-semibold truncate">
                 {workPhotosCount > 0 
                   ? `Requisito de instalación cumplido: ${workPhotosCount} ${workPhotosCount === 1 ? 'foto subida' : 'fotos subidas'}`
                   : 'Falta foto de instalación para poder confirmar'}
               </span>
             </div>
-            <span className="font-mono font-bold text-xs">
-              {workPhotosCount} / min 1
+            <span className={`font-mono font-bold text-xs shrink-0 px-2 py-0.5 rounded-lg border ${
+              workPhotosCount > 0
+                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+            }`}>
+              {workPhotosCount > 0 
+                ? `${workPhotosCount} ${workPhotosCount === 1 ? 'foto' : 'fotos'}`
+                : 'Mínimo 1'}
             </span>
           </div>
 
