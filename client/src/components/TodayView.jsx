@@ -3,11 +3,14 @@ import {
   Camera, Check, X, Phone, MapPin, Share2, Clock, Copy,
   CheckCircle2, AlertCircle, Plus, Sparkles, AlertTriangle, Shield,
   SlidersHorizontal, Edit3, Minus, DollarSign, Calendar, ChevronLeft, ChevronRight, Pencil, Info,
-  Image as ImageIcon
+  Image as ImageIcon, Map, List, Navigation
 } from 'lucide-react';
 import AddJobModal from './AddJobModal';
 import EditJobModal from './EditJobModal';
 import ShareReportModal from './ShareReportModal';
+import DayMapView from './DayMapView';
+import UberDriverView from './UberDriverView';
+import { stampPhotoWithWatermark } from '../utils/watermark';
 import { getLocalDateStr, normalizeDateStr, formatDateFriendly } from '../utils/dateUtils';
 
 export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhotos, onOrderUpdated }) {
@@ -29,6 +32,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   });
 
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'Pendiente' | 'Completado' | 'No Realizado'
+  const [viewMode, setViewMode] = useState('uber'); // 'uber' (Default Uber Driver View) | 'classic' (Traditional List)
   const [sharingId, setSharingId] = useState(null);
   const [localSharedMap, setLocalSharedMap] = useState({});
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
@@ -41,6 +45,7 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   const [loadingCancelPhotos, setLoadingCancelPhotos] = useState(false);
   const [isAddJobOpen, setIsAddJobOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
+  const [targetFocusOrderId, setTargetFocusOrderId] = useState(null);
 
   // WhatsApp Share Modal State (Texto Editable + Fotos Todo en Uno)
   const [shareModalOrder, setShareModalOrder] = useState(null);
@@ -224,9 +229,18 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
     setCancelPhotoPreviews([]);
   };
 
-  const handleCancelPhotoSelect = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+  const handleCancelPhotoSelect = async (e) => {
+    const rawFiles = Array.from(e.target.files || []);
+    if (rawFiles.length === 0) return;
+    const files = await Promise.all(
+      rawFiles.map(f => stampPhotoWithWatermark(f, {
+        address: cancelModalOrder?.address,
+        city: cancelModalOrder?.city,
+        zipCode: cancelModalOrder?.zip_code,
+        jobId: cancelModalOrder?.job_id,
+        techName: cancelModalOrder?.tech_id
+      }))
+    );
     const newPreviews = files.map(f => URL.createObjectURL(f));
     setCancelPhotoFiles(prev => [...prev, ...files]);
     setCancelPhotoPreviews(prev => [...prev, ...newPreviews]);
@@ -533,9 +547,41 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
   const isViewingToday = activeDate === todayReal;
 
   return (
-    <div className="space-y-3.5 max-w-md mx-auto">
-      {/* 1. NAVEGADOR DE FECHA & HERO CARD DE LA JORNADA */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3">
+    <div className="w-full">
+      {viewMode === 'uber' ? (
+        <UberDriverView
+          orders={dayOrders}
+          activeDate={activeDate}
+          isViewingToday={isViewingToday}
+          targetFocusOrderId={targetFocusOrderId}
+          onClearTargetFocus={() => setTargetFocusOrderId(null)}
+          onShiftDay={shiftDay}
+          onGoToToday={() => setActiveDate(todayReal)}
+          onOpenScan={onOpenScan}
+          onOpenAddJob={() => setIsAddJobOpen(true)}
+          onOpenPhotos={onOpenPhotos}
+          onMarkCompleted={handleMarkCompleted}
+          onOpenCancelModal={openCancelModal}
+          onOpenEditModal={(ord) => setEditingOrder(ord)}
+          onOpenAdjustModal={openAdjustModal}
+          onOpenShareModal={openShareModal}
+          onOrderUpdated={onOrderUpdated}
+          onSwitchToClassic={() => setViewMode('classic')}
+        />
+      ) : (
+        <div className="space-y-3.5 max-w-md mx-auto">
+          {/* Botón flotante para regresar al Modo Uber */}
+          <button
+            type="button"
+            onClick={() => setViewMode('uber')}
+            className="w-full py-2.5 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-2xl shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 transition active:scale-[0.98]"
+          >
+            <Map className="h-4 w-4 stroke-[2.5]" />
+            <span>Volver al Modo Mapa Uber (Interactivo)</span>
+          </button>
+
+          {/* 1. NAVEGADOR DE FECHA & HERO CARD DE LA JORNADA */}
+          <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3">
         {/* Barra superior de Fecha de la Jornada */}
         <div className="flex items-center justify-between bg-slate-950/70 px-3 py-2 rounded-2xl border border-slate-800/80">
           <button
@@ -782,12 +828,25 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
 
                 {/* Dirección y Teléfono */}
                 <div className="space-y-1">
-                  <div className="flex items-start gap-1.5 text-xs text-slate-800 dark:text-slate-100">
-                    <MapPin className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-slate-900 dark:text-white">{order.address}</p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400">{order.city} {order.zip_code}</p>
+                  <div className="flex items-start justify-between gap-1.5 text-xs text-slate-800 dark:text-slate-100">
+                    <div className="flex items-start gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-slate-900 dark:text-white">{order.address}</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">{order.city} {order.zip_code}</p>
+                      </div>
                     </div>
+
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${order.address}, ${order.city || 'Elkhart'}, IN ${order.zip_code || ''}`)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 px-2.5 py-1 bg-cyan-950 text-cyan-300 border border-cyan-800/80 rounded-xl text-[10px] font-bold hover:bg-cyan-900 active:scale-95 transition shrink-0 shadow-xs"
+                      title="Abrir navegación GPS en Google Maps"
+                    >
+                      <Navigation className="h-3 w-3 text-cyan-400" />
+                      <span>GPS</span>
+                    </a>
                   </div>
 
                   {order.phone && (
@@ -1026,6 +1085,8 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
               </div>
             );
           })}
+        </div>
+      )}
         </div>
       )}
 
@@ -1626,7 +1687,14 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
       <AddJobModal
         isOpen={isAddJobOpen}
         onClose={() => setIsAddJobOpen(false)}
-        onJobAdded={onOrderUpdated}
+        onJobAdded={async (createdOrder) => {
+          if (createdOrder && createdOrder.id) {
+            setTargetFocusOrderId(createdOrder.id);
+          }
+          if (onOrderUpdated) {
+            await onOrderUpdated();
+          }
+        }}
         defaultTech="Javier (P0G1)"
       />
 

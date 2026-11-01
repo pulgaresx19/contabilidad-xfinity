@@ -23,6 +23,19 @@ html.dark body {
 }
 
 /* ==========================================================================
+   APPLE MAPS (IPHONE STYLE) MAP THEME
+   Crisp, clean pastel tones, soft roads and parks matching iOS Maps
+   ========================================================================== */
+.apple-maps-style .leaflet-tile-pane {
+  filter: contrast(102%) brightness(101%) saturate(104%) !important;
+}
+
+.apple-maps-style,
+.apple-maps-style .leaflet-container {
+  background-color: #f7f5f0 !important;
+}
+
+/* ==========================================================================
    LIGHT MODE: HIGH CONTRAST & REFINED AESTHETICS
    ========================================================================== */
 html.light {
@@ -329,4 +342,158 @@ div[data-netlify-drawer],
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
+}
+
+/* ============================================================
+   APPLE MAPS (IPHONE MAPS DARK NAVIGATION MODE) 1:1 REPLICATION
+   ============================================================ */
+.apple-maps-dark {
+  background-color: #1c242e !important;
+}
+
+.apple-maps-dark .leaflet-tile-pane {
+  filter: contrast(112%) brightness(98%) hue-rotate(198deg) saturate(135%);
+}
+
+.apple-maps-dark .leaflet-container {
+  background-color: #1c242e !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+/* Route Badge (Floating on Route Line) */
+.apple-route-badge-container {
+  background: transparent !important;
+  border: none !important;
+}
+
+.apple-route-badge {
+  background-color: #007AFF;
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.45);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.1;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  transform: translate(-50%, -50%);
+}
+
+.apple-route-badge .eta-main {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+}
+
+.apple-route-badge .eta-sub {
+  font-size: 8.5px;
+  font-weight: 600;
+  opacity: 0.92;
+}
+
+/* Destination Pin Badge (Home Icon + Street Name) */
+.apple-dest-badge-container {
+  background: transparent !important;
+  border: none !important;
+}
+
+.apple-dest-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+  cursor: pointer;
+  transform: translate(-50%, -100%);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.apple-dest-badge:hover {
+  transform: translate(-50%, -105%) scale(1.06);
+}
+
+.apple-dest-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #007AFF;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+
+.apple-dest-label {
+  margin-top: 3px;
+  background-color: rgba(22, 28, 36, 0.95);
+  color: #ffffff;
+  padding: 2.5px 7px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.2px;
+}
+
+/* User Location Puck (iOS White Ring + Blue Dot + Radial Glow) */
+.apple-user-puck-container {
+  background: transparent !important;
+  border: none !important;
+}
+
+.apple-user-puck {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+}
+
+.apple-user-pulse {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 122, 255, 0.22);
+  animation: apple-pulse 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+
+.apple-user-dot {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #007AFF;
+  border: 3px solid #ffffff;
+  box-shadow: 0 2px 10px rgba(0, 122, 255, 0.6), 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes apple-pulse {
+  0% { transform: scale(0.65); opacity: 0.9; }
+  50% { transform: scale(1.35); opacity: 0.25; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Custom Scrollbar for Drawer */
+.apple-drawer-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.apple-drawer-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.apple-drawer-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
 }

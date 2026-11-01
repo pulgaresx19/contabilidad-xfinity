@@ -45,6 +45,11 @@ export default function HistoryView({ orders = [], summaryData, onRefresh, onOpe
     }
   };
 
+  // Always refresh live weekly state on mount
+  useEffect(() => {
+    if (onRefresh) onRefresh();
+  }, []);
+
   useEffect(() => {
     if (subTab === 'sheets') {
       fetchSheets();

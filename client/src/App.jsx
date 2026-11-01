@@ -9,6 +9,7 @@ import PhotoModal from './components/PhotoModal';
 import SettingsModal from './components/SettingsModal';
 import { Cable, ShieldCheck, Settings, Sun, Moon } from 'lucide-react';
 import { useTheme } from './context/ThemeContext';
+import { getLocalDateStr } from './utils/dateUtils';
 
 export default function App() {
   const { actualTheme, toggleTheme } = useTheme();
@@ -29,11 +30,57 @@ export default function App() {
       const res = await fetch('/api/orders');
       if (res.ok) {
         const data = await res.json();
-        setOrders(data);
+        if (Array.isArray(data)) {
+          setOrders(data);
+          try {
+            localStorage.setItem('xfinity_cached_orders', JSON.stringify(data));
+          } catch (e) {}
+          return;
+        }
       }
     } catch (err) {
-      console.error('Error fetching orders:', err);
+      console.warn('API /api/orders unreachable, checking offline cache:', err);
     }
+
+    // Fallback for Vercel/Production mobile testing without local server
+    try {
+      const cached = localStorage.getItem('xfinity_cached_orders');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setOrders(parsed);
+          return;
+        }
+      }
+    } catch (e) {}
+
+    // Initial production sample data if empty
+    const seedOrders = [
+      {
+        id: 18,
+        work_date: getLocalDateStr(),
+        tech_id: 'Javier (P0G1)',
+        job_id: '123456',
+        address: '4260 Main ST',
+        city: 'SKOKIE',
+        zip_code: '60076',
+        phone: '5741234567',
+        call_first: 0,
+        drop_footage: 100,
+        cable_type: 'RG-6',
+        bore_type: 'N',
+        status: 'Pendiente',
+        payment_status: 'Pendiente',
+        rate_calculated: 100,
+        latitude: 42.033592,
+        longitude: -87.7345574,
+        raw_notes: ''
+      }
+    ];
+    setOrders(seedOrders);
+    try {
+      localStorage.setItem('xfinity_cached_orders', JSON.stringify(seedOrders));
+    } catch (e) {}
   };
 
   const fetchSummary = async () => {
@@ -42,10 +89,19 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setSummaryData(data);
+        try {
+          localStorage.setItem('xfinity_cached_summary', JSON.stringify(data));
+        } catch (e) {}
+        return;
       }
     } catch (err) {
-      console.error('Error fetching summary:', err);
+      console.warn('API summary unreachable, checking cache:', err);
     }
+
+    try {
+      const cached = localStorage.getItem('xfinity_cached_summary');
+      if (cached) setSummaryData(JSON.parse(cached));
+    } catch (e) {}
   };
 
   const fetchSettings = async () => {
@@ -54,10 +110,22 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         if (data.tech_default) setTechName(data.tech_default);
+        try {
+          localStorage.setItem('xfinity_cached_settings', JSON.stringify(data));
+        } catch (e) {}
+        return;
       }
     } catch (err) {
-      console.error('Error fetching settings:', err);
+      console.warn('API settings unreachable, checking cache:', err);
     }
+
+    try {
+      const cached = localStorage.getItem('xfinity_cached_settings');
+      if (cached) {
+        const data = JSON.parse(cached);
+        if (data.tech_default) setTechName(data.tech_default);
+      }
+    } catch (e) {}
   };
 
   const refreshAll = async () => {
@@ -69,6 +137,14 @@ export default function App() {
   useEffect(() => {
     refreshAll();
   }, []);
+
+  // Guarantee instant fresh data when technician switches to Cierres or Monthly balance
+  useEffect(() => {
+    if (activeTab === 'history' || activeTab === 'monthly') {
+      fetchSummary();
+      fetchOrders();
+    }
+  }, [activeTab]);
 
   const handleOpenPhotos = async (order) => {
     try {
@@ -148,7 +224,7 @@ export default function App() {
       </header>
 
       {/* Main View Area */}
-      <main className="flex-1 max-w-md w-full mx-auto px-3.5 py-3.5 pb-24">
+      <main className="flex-1 max-w-md w-full mx-auto px-3.5 py-2.5 pb-24">
         {loading && orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-500 space-y-2">
             <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>

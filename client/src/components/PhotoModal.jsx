@@ -2,9 +2,10 @@ import React, { useState, useRef } from 'react';
 import { 
   X, Upload, Trash2, Camera, Image as ImageIcon, 
   CheckCircle2, AlertCircle, Sparkles, Check, ArrowRight, ShieldCheck, Plus,
-  ExternalLink, Share2, Copy
+  ExternalLink, Share2, Copy, MapPin
 } from 'lucide-react';
 import ShareReportModal from './ShareReportModal';
+import { stampPhotoWithWatermark } from '../utils/watermark';
 
 const PHOTO_STEPS = [
   { id: 'Casa/Ground Block', label: 'Casa / Entrada', short: 'Casa', icon: '🏠' },
@@ -44,11 +45,20 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
 
     const formData = new FormData();
     formData.append('category', category);
-    for (let i = 0; i < files.length; i++) {
-      formData.append('photos', files[i]);
-    }
 
     try {
+      // Stamp each photo with GPS coordinates, local date/time, and job address
+      for (let i = 0; i < files.length; i++) {
+        const stamped = await stampPhotoWithWatermark(files[i], {
+          address: order.address,
+          city: order.city,
+          zipCode: order.zip_code,
+          jobId: order.job_id,
+          techName: order.tech_id
+        });
+        formData.append('photos', stamped);
+      }
+
       const res = await fetch(`/api/orders/${order.id}/photos`, {
         method: 'POST',
         body: formData,
@@ -267,7 +277,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               className="py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-95 text-slate-950 font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-cyan-500/25 transition"
             >
               <Camera className="h-5 w-5 stroke-[2.5]" />
-              <span>{uploading ? 'Guardando foto...' : 'Abrir Cámara'}</span>
+              <span>{uploading ? 'Estampando GPS...' : 'Abrir Cámara'}</span>
             </button>
 
             {/* Botón Secundario: Seleccionar de Galería */}
@@ -278,8 +288,19 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               className="py-3 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 text-slate-800 dark:text-slate-200 font-bold text-sm rounded-2xl border border-slate-300 dark:border-slate-700/80 flex items-center justify-center gap-2 transition"
             >
               <Upload className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
-              <span>Subir de Galería</span>
+              <span>{uploading ? 'Procesando...' : 'Subir de Galería'}</span>
             </button>
+          </div>
+
+          {/* Sello GPS y Timestamp Activo */}
+          <div className="flex items-center justify-between text-[11px] bg-slate-900/60 dark:bg-slate-950/80 border border-cyan-500/30 rounded-xl px-3 py-1.5 text-slate-300">
+            <div className="flex items-center gap-1.5 font-medium">
+              <MapPin className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+              <span>Sello Automático GPS & Timestamp</span>
+            </div>
+            <span className="text-[10px] font-bold text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded-full border border-cyan-800">
+              Activo ✓
+            </span>
           </div>
 
           {/* Estado de Requisito de Fotos de Trabajo */}

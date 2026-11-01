@@ -14,6 +14,107 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Anti-cache header for all API responses so mobile devices always get fresh, real-time data
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
+// Helper for caching and geocoding addresses via OpenStreetMap Nominatim
+async function geocodeAddress(address, city = '', zipCode = '') {
+  if (!address || typeof address !== 'string') return null;
+  const cleanAddr = address.trim();
+  const cleanCity = (city || '').trim();
+  const cleanZip = (zipCode || '').trim();
+
+  // Detect state from address or city (Skokie -> IL, Elkhart/Goshen -> IN)
+  let state = 'IN';
+  if (/\b(IL|ILLINOIS|SKOKIE|CHICAGO|EVANSTON|NILES)\b/i.test(`${cleanAddr} ${cleanCity}`)) {
+    state = 'IL';
+  } else if (/\b(MI|MICHIGAN)\b/i.test(`${cleanAddr} ${cleanCity}`)) {
+    state = 'MI';
+  } else if (/\b(IN|INDIANA|ELKHART|GOSHEN|MISHAWAKA|SOUTH BEND)\b/i.test(`${cleanAddr} ${cleanCity}`)) {
+    state = 'IN';
+  }
+
+  let effectiveCity = cleanCity;
+  if (!effectiveCity) {
+    effectiveCity = state === 'IL' ? 'Skokie' : 'Elkhart';
+  }
+
+  const queries = [];
+  // 1. Direct query if address already contains state or comma
+  if (cleanAddr.includes(',') || /\b(IL|IN|MI|USA)\b/i.test(cleanAddr)) {
+    queries.push(cleanAddr + (cleanAddr.includes('USA') ? '' : ', USA'));
+  }
+  // 2. Full structured address with city, state, zip
+  queries.push(`${cleanAddr}, ${effectiveCity}, ${state} ${cleanZip}, USA`.trim());
+  // 3. Address with city and state only
+  queries.push(`${cleanAddr}, ${effectiveCity}, ${state}, USA`.trim());
+
+  const cacheKey = `${cleanAddr}_${effectiveCity}_${state}_${cleanZip}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  try {
+    const cached = db.prepare('SELECT lat, lng FROM geocache WHERE address_key = ?').get(cacheKey);
+    if (cached) {
+      return { lat: cached.lat, lng: cached.lng };
+    }
+
+    for (const q of queries) {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`;
+      const resp = await fetch(url, {
+        headers: { 'User-Agent': 'ContabilidadXFinityApp/1.0 (Comcast Cable Tech Javier)' }
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data.length > 0) {
+          const lat = parseFloat(data[0].lat);
+          const lng = parseFloat(data[0].lon);
+          db.prepare('INSERT OR REPLACE INTO geocache (address_key, lat, lng, display_name) VALUES (?, ?, ?, ?)').run(
+            cacheKey, lat, lng, data[0].display_name
+          );
+          return { lat, lng };
+        }
+      }
+    }
+
+    // Fallback to City center with small jitter
+    const fallbackTarget = `${effectiveCity}, ${state}, USA`;
+    const fallbackUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fallbackTarget)}&limit=1`;
+    const fallbackResp = await fetch(fallbackUrl, {
+      headers: { 'User-Agent': 'ContabilidadXFinityApp/1.0 (Comcast Cable Tech Javier)' }
+    });
+
+    if (fallbackResp.ok) {
+      const fallbackData = await fallbackResp.json();
+      if (fallbackData && fallbackData.length > 0) {
+        const jitterLat = (Math.random() - 0.5) * 0.015;
+        const jitterLng = (Math.random() - 0.5) * 0.015;
+        const lat = parseFloat(fallbackData[0].lat) + jitterLat;
+        const lng = parseFloat(fallbackData[0].lon) + jitterLng;
+        db.prepare('INSERT OR REPLACE INTO geocache (address_key, lat, lng, display_name) VALUES (?, ?, ?, ?)').run(
+          cacheKey, lat, lng, fallbackData[0].display_name + ' (Aprox)'
+        );
+        return { lat, lng };
+      }
+    }
+
+    // Default Tech base area fallback (Skokie if IL, Elkhart if IN)
+    const baseLat = (state === 'IL' ? 42.03359 : 41.681995) + (Math.random() - 0.5) * 0.01;
+    const baseLng = (state === 'IL' ? -87.73455 : -85.97667) + (Math.random() - 0.5) * 0.01;
+    db.prepare('INSERT OR REPLACE INTO geocache (address_key, lat, lng, display_name) VALUES (?, ?, ?, ?)').run(
+      cacheKey, baseLat, baseLng, `${effectiveCity}, ${state} (Base)`
+    );
+    return { lat: baseLat, lng: baseLng };
+  } catch (err) {
+    console.warn('[Geocoding] Error resolving address:', address, err.message);
+  }
+  return null;
+}
+
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -359,7 +460,7 @@ app.get('/api/orders', (req, res) => {
       params.push(date);
     }
 
-    query += ` ORDER BY o.work_date DESC, o.id DESC`;
+    query += ` ORDER BY o.work_date DESC, (CASE WHEN o.route_order > 0 THEN o.route_order ELSE 999 END) ASC, o.id ASC`;
 
     const orders = db.prepare(query).all(...params);
     res.json(orders);
@@ -381,23 +482,34 @@ app.get('/api/orders/:id', (req, res) => {
   }
 });
 
-// 3. Create single work order
-app.post('/api/orders', (req, res) => {
+// 3. Create single work order with auto-geocoding
+app.post('/api/orders', async (req, res) => {
   try {
     const data = req.body;
+    let lat = data.latitude ? parseFloat(data.latitude) : null;
+    let lng = data.longitude ? parseFloat(data.longitude) : null;
+
+    if (!lat || !lng) {
+      const geo = await geocodeAddress(data.address, data.city, data.zip_code);
+      if (geo) {
+        lat = geo.lat;
+        lng = geo.lng;
+      }
+    }
+
     const stmt = db.prepare(`
       INSERT INTO work_orders (
         work_date, tech_id, job_id, address, city, zip_code, phone,
         call_first, drop_footage, cable_type, bore_type, is_temp,
         obstacles, premise_access, neighbor_notice, raw_notes, rate_calculated,
         manual_adjustment, adjustment_reason,
-        status, payment_status
+        status, payment_status, latitude, longitude, route_order
       ) VALUES (
         @work_date, @tech_id, @job_id, @address, @city, @zip_code, @phone,
         @call_first, @drop_footage, @cable_type, @bore_type, @is_temp,
         @obstacles, @premise_access, @neighbor_notice, @raw_notes, @rate_calculated,
         @manual_adjustment, @adjustment_reason,
-        @status, @payment_status
+        @status, @payment_status, @latitude, @longitude, @route_order
       )
     `);
 
@@ -422,7 +534,10 @@ app.post('/api/orders', (req, res) => {
       manual_adjustment: parseFloat(data.manual_adjustment) || 0,
       adjustment_reason: data.adjustment_reason || '',
       status: data.status || 'Pendiente',
-      payment_status: data.payment_status || 'Pendiente'
+      payment_status: data.payment_status || 'Pendiente',
+      latitude: lat,
+      longitude: lng,
+      route_order: parseInt(data.route_order, 10) || 0
     });
 
     const newOrder = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(result.lastInsertRowid);
@@ -432,10 +547,21 @@ app.post('/api/orders', (req, res) => {
   }
 });
 
-// 4. Update order
-app.put('/api/orders/:id', (req, res) => {
+// 4. Update order with lat/lng
+app.put('/api/orders/:id', async (req, res) => {
   try {
     const data = req.body;
+    let lat = data.latitude !== undefined && data.latitude !== null ? parseFloat(data.latitude) : null;
+    let lng = data.longitude !== undefined && data.longitude !== null ? parseFloat(data.longitude) : null;
+
+    if (!lat || !lng) {
+      const geo = await geocodeAddress(data.address, data.city, data.zip_code);
+      if (geo) {
+        lat = geo.lat;
+        lng = geo.lng;
+      }
+    }
+
     const stmt = db.prepare(`
       UPDATE work_orders SET
         work_date = @work_date,
@@ -460,6 +586,9 @@ app.put('/api/orders/:id', (req, res) => {
         status = @status,
         cancel_reason = @cancel_reason,
         payment_status = @payment_status,
+        latitude = COALESCE(@latitude, latitude),
+        longitude = COALESCE(@longitude, longitude),
+        route_order = COALESCE(@route_order, route_order),
         updated_at = CURRENT_TIMESTAMP
       WHERE id = @id
     `);
@@ -487,13 +616,67 @@ app.put('/api/orders/:id', (req, res) => {
       adjustment_reason: data.adjustment_reason || '',
       status: data.status || 'Completado',
       cancel_reason: data.cancel_reason || '',
-      payment_status: data.payment_status || 'Pendiente'
+      payment_status: data.payment_status || 'Pendiente',
+      latitude: lat,
+      longitude: lng,
+      route_order: data.route_order !== undefined ? parseInt(data.route_order, 10) : null
     });
 
     const updated = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(req.params.id);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// 4.1 Update note quickly (Apple Maps card style note)
+app.patch('/api/orders/:id/note', (req, res) => {
+  try {
+    const { note } = req.body;
+    db.prepare('UPDATE work_orders SET raw_notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(note || '', req.params.id);
+    const updated = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(req.params.id);
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 4c. Reorder route order for the day
+app.post('/api/orders/reorder-route', (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (Array.isArray(orderedIds) && orderedIds.length > 0) {
+      const updateStmt = db.prepare('UPDATE work_orders SET route_order = ? WHERE id = ?');
+      const tx = db.transaction(() => {
+        orderedIds.forEach((id, idx) => {
+          updateStmt.run(idx + 1, id);
+        });
+      });
+      tx();
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4d. Geocode on demand or backfill missing coordinates
+app.post('/api/orders/geocode-all', async (req, res) => {
+  try {
+    const missing = db.prepare('SELECT id, address, city, zip_code FROM work_orders WHERE latitude IS NULL OR longitude IS NULL').all();
+    let updatedCount = 0;
+    const updateStmt = db.prepare('UPDATE work_orders SET latitude = ?, longitude = ? WHERE id = ?');
+
+    for (const ord of missing) {
+      const geo = await geocodeAddress(ord.address, ord.city, ord.zip_code);
+      if (geo) {
+        updateStmt.run(geo.lat, geo.lng, ord.id);
+        updatedCount++;
+      }
+    }
+    res.json({ success: true, updatedCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -667,6 +850,25 @@ app.post('/api/batch-import', (req, res) => {
     });
 
     const insertedCount = transaction(orders);
+
+    // Background geocode newly imported orders without blocking client response
+    setTimeout(async () => {
+      try {
+        const updateStmt = db.prepare('UPDATE work_orders SET latitude = ?, longitude = ? WHERE id = ?');
+        for (const ord of orders) {
+          const row = db.prepare('SELECT id, address, city, zip_code, latitude, longitude FROM work_orders WHERE job_id = ?').get(ord.job_id);
+          if (row && (!row.latitude || !row.longitude)) {
+            const geo = await geocodeAddress(row.address, row.city, row.zip_code);
+            if (geo) {
+              updateStmt.run(geo.lat, geo.lng, row.id);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Background batch geocoding error:', e.message);
+      }
+    }, 100);
+
     res.json({ success: true, count: insertedCount });
   } catch (error) {
     res.status(500).json({ error: error.message });

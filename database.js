@@ -99,6 +99,26 @@ function initDb() {
   try {
     db.exec("ALTER TABLE work_orders ADD COLUMN whatsapp_shared_at TEXT");
   } catch (e) {}
+  try {
+    db.exec("ALTER TABLE work_orders ADD COLUMN latitude REAL");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE work_orders ADD COLUMN longitude REAL");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE work_orders ADD COLUMN route_order INTEGER DEFAULT 0");
+  } catch (e) {}
+
+  // Cache for geocoding coordinates so we never re-request the same address
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS geocache (
+      address_key TEXT PRIMARY KEY,
+      lat REAL,
+      lng REAL,
+      display_name TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
 
   // Default settings if not already set
   const getSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
