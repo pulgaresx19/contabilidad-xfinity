@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, X, Check, AlertCircle, Phone, MapPin, Ruler, DollarSign, Calendar, Sparkles } from 'lucide-react';
 import { getLocalDateStr } from '../utils/dateUtils';
+import { geocodeAddressWithMapbox } from '../utils/mapboxGeocode';
 
 export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech }) {
   const [formData, setFormData] = useState({
@@ -47,6 +48,11 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech }
     setError(null);
 
     try {
+      // Real-time Mapbox geocoding for immediate pin & road route
+      const geo = await geocodeAddressWithMapbox(formData.address, formData.city, formData.zip_code);
+      const lat = geo?.latitude || null;
+      const lng = geo?.longitude || null;
+
       try {
         const res = await fetch('/api/orders', {
           method: 'POST',
@@ -55,7 +61,9 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech }
             ...formData,
             city: (formData.city || '').trim().toUpperCase(),
             drop_footage: numFootage,
-            rate_calculated: currentTotal
+            rate_calculated: currentTotal,
+            latitude: lat,
+            longitude: lng
           })
         });
 
@@ -77,8 +85,8 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech }
         city: (formData.city || (isSkokie ? 'SKOKIE' : 'ELKHART')).trim().toUpperCase(),
         drop_footage: numFootage,
         rate_calculated: currentTotal,
-        latitude: isSkokie ? 42.033592 : 41.681995,
-        longitude: isSkokie ? -87.7345574 : -85.97667,
+        latitude: lat || (isSkokie ? 42.033592 : 41.681995),
+        longitude: lng || (isSkokie ? -87.7345574 : -85.97667),
         created_at: new Date().toISOString()
       };
       try {

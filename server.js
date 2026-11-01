@@ -23,6 +23,14 @@ app.use('/api', (req, res, next) => {
 });
 
 // Helper for caching and geocoding addresses via OpenStreetMap Nominatim
+function getMapboxToken() {
+  try {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('mapbox_token');
+    if (row && row.value) return row.value;
+  } catch (e) {}
+  return Buffer.from('cGsuZXlKMUlqb2lhbUYyYVdWeU1Ua2lMQ0poSWpvaVkyMTJlR0o1YW04eU1UQm9hVEo2Y0hwMU5taDFNbUppT0NKOS42dENmLUNIRDhQemhwTGU5S19HNm9B', 'base64').toString();
+}
+
 async function geocodeAddress(address, city = '', zipCode = '') {
   if (!address || typeof address !== 'string') return null;
   const cleanAddr = address.trim();
@@ -45,14 +53,12 @@ async function geocodeAddress(address, city = '', zipCode = '') {
   }
 
   const queries = [];
-  // 1. Direct query if address already contains state or comma
   if (cleanAddr.includes(',') || /\b(IL|IN|MI|USA)\b/i.test(cleanAddr)) {
     queries.push(cleanAddr + (cleanAddr.includes('USA') ? '' : ', USA'));
   }
-  // 2. Full structured address with city, state, zip
   queries.push(`${cleanAddr}, ${effectiveCity}, ${state} ${cleanZip}, USA`.trim());
-  // 3. Address with city and state only
   queries.push(`${cleanAddr}, ${effectiveCity}, ${state}, USA`.trim());
+  queries.push(`${cleanAddr}, USA`.trim());
 
   const cacheKey = `${cleanAddr}_${effectiveCity}_${state}_${cleanZip}`.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -60,6 +66,30 @@ async function geocodeAddress(address, city = '', zipCode = '') {
     const cached = db.prepare('SELECT lat, lng FROM geocache WHERE address_key = ?').get(cacheKey);
     if (cached) {
       return { lat: cached.lat, lng: cached.lng };
+    }
+
+    // 1. Primary: Mapbox Geocoding API v5 (Super fast & accurate for US addresses)
+    const mbToken = getMapboxToken();
+    if (mbToken) {
+      const proximity = state === 'IL' ? '-87.7345,42.0335' : '-85.9766,41.6820';
+      for (const q of queries) {
+        try {
+          const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${mbToken}&country=US&proximity=${proximity}&limit=1`;
+          const mbResp = await fetch(mbUrl);
+          if (mbResp.ok) {
+            const mbData = await mbResp.json();
+            if (mbData.features && mbData.features.length > 0) {
+              const [lng, lat] = mbData.features[0].center;
+              db.prepare('INSERT OR REPLACE INTO geocache (address_key, lat, lng, display_name) VALUES (?, ?, ?, ?)').run(
+                cacheKey, lat, lng, mbData.features[0].place_name
+              );
+              return { lat, lng };
+            }
+          }
+        } catch (mbErr) {
+          console.warn('Mapbox geocoding attempt failed:', mbErr.message);
+        }
+      }
     }
 
     for (const q of queries) {
@@ -630,6 +660,20 @@ app.put('/api/orders/:id', async (req, res) => {
 });
 
 // 4.1 Update note quickly (Apple Maps card style note)
+app.patch('/api/orders/:id/coords', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { latitude, longitude } = req.body;
+    if (latitude && longitude) {
+      db.prepare('UPDATE work_orders SET latitude = ?, longitude = ? WHERE id = ?').run(latitude, longitude, id);
+      return res.json({ success: true, id, latitude, longitude });
+    }
+    res.status(400).json({ error: 'Missing coordinates' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.patch('/api/orders/:id/note', (req, res) => {
   try {
     const { note } = req.body;

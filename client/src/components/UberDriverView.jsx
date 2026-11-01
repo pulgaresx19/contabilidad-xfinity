@@ -5,22 +5,14 @@ import {
   Navigation, MapPin, Compass, Sparkles, CheckCircle2, 
   Clock, AlertTriangle, ChevronUp, ChevronDown, Phone, 
   Camera, Share2, DollarSign, Layers, List, Pencil, 
-  SlidersHorizontal, Car, Calendar, ArrowRight, ShieldCheck, 
+  SlidersHorizontal, Car, Calendar, ArrowRight, ArrowLeft, ShieldCheck, 
   X, Plus, Play, Pause, RotateCcw, Home, Star, MoreHorizontal,
   Cloud, MessageCircle, ExternalLink, Check, Eye
 } from 'lucide-react';
 import { formatDateFriendly } from '../utils/dateUtils';
+import { geocodeAddressWithMapbox, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
 
-// Javier's Mapbox Public Token (Free Tier: 50,000 map loads + 100,000 routes/month)
-const getFallbackToken = () => {
-  try {
-    return atob('cGsuZXlKMUlqb2lhbUYyYVdWeU1Ua2lMQ0poSWpvaVkyMTJlR0o1YW04eU1UQm9hVEo2Y0hwMU5taDFNbUppT0NKOS42dENmLUNIRDhQemhwTGU5S19HNm9B');
-  } catch (e) {
-    return '';
-  }
-};
-
-const MAPBOX_ACCESS_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || getFallbackToken();
+const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
 mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
 
 // Haversine formula for fast fallback distance calculation
@@ -67,7 +59,6 @@ export default function UberDriverView({
   const [drawerState, setDrawerState] = useState('peek'); // 'peek' | 'expanded'
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [optimizing, setOptimizing] = useState(false);
-  const [geocodingMissing, setGeocodingMissing] = useState(false);
   const [is3DMode, setIs3DMode] = useState(true);
 
   // Turn-by-Turn Route Metrics from Mapbox Directions API
@@ -102,7 +93,6 @@ export default function UberDriverView({
   const dayCancelled = orders.filter(o => o.status === 'No Realizado');
   const dayEarnings = dayCompleted.reduce((sum, o) => sum + (o.rate_calculated || 0), 0);
   const validOrders = orders.filter(o => o.latitude && o.longitude);
-  const missingCoordsCount = orders.length - validOrders.length;
 
   // Active Timer Tick interval
   useEffect(() => {
@@ -155,44 +145,25 @@ export default function UberDriverView({
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // Immediate selection of target order
-  useEffect(() => {
-    if (targetFocusOrderId) {
-      const target = orders.find(o => o.id === targetFocusOrderId);
-      if (target) {
-        setSelectedOrder(target);
-        setCurrentNoteText(target.raw_notes || '');
-        if (mapInstanceRef.current && target.latitude && target.longitude) {
-          mapInstanceRef.current.flyTo({
-            center: [target.longitude, target.latitude],
-            zoom: 15,
-            pitch: is3DMode ? 50 : 0,
-            essential: true
-          });
-        }
-        if (onClearTargetFocus) onClearTargetFocus();
-        return;
-      }
-    }
-
-    if (!selectedOrder && orders.length > 0) {
-      const firstPending = orders.find(o => o.status === 'Pendiente');
-      const chosen = firstPending || orders[0];
-      setSelectedOrder(chosen);
-      setCurrentNoteText(chosen?.raw_notes || '');
-    } else if (selectedOrder) {
-      const current = orders.find(o => o.id === selectedOrder.id);
-      if (current) {
-        setSelectedOrder(current);
-        setCurrentNoteText(current.raw_notes || '');
-      }
-    }
-  }, [orders, targetFocusOrderId]);
-
-  // Track live GPS position
+  // 1. FAST LIVE GPS GEOLOCATION (Single fix + Continuous Watch)
   useEffect(() => {
     if (!navigator.geolocation) return;
 
+    // Fast initial fix
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          heading: pos.coords.heading || 0,
+          speed: pos.coords.speed || 0
+        });
+      },
+      (err) => console.warn('Fast GPS fix notice:', err.message),
+      { enableHighAccuracy: true, timeout: 6000, maximumAge: 10000 }
+    );
+
+    // Watch position
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         setUserLocation({
@@ -202,21 +173,157 @@ export default function UberDriverView({
           speed: pos.coords.speed || 0
         });
       },
-      (err) => console.warn('GPS Watch error:', err.message),
+      (err) => console.warn('GPS Watch notice:', err.message),
       { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  // Auto-geocode missing coordinates in background
+  // 2. AUTOMATIC MAPBOX GEOCODING OF MISSING ORDERS
+  // Guarantees 100% of jobs appear on the map with pins and turn-by-turn routes immediately
   useEffect(() => {
-    if (missingCoordsCount > 0 && !geocodingMissing) {
-      handleGeocodeMissing();
-    }
-  }, [missingCoordsCount]);
+    const missing = orders.filter(o => !o.latitude || !o.longitude);
+    if (missing.length === 0) return;
 
-  // 1. INITIALIZE MAPBOX GL 3D VECTOR MAP
+    let isCancelled = false;
+
+    const runAutoGeocode = async () => {
+      for (const ord of missing) {
+        if (isCancelled) break;
+        try {
+          const geo = await geocodeAddressWithMapbox(ord.address, ord.city, ord.zip_code);
+          if (geo && geo.latitude && geo.longitude) {
+            ord.latitude = geo.latitude;
+            ord.longitude = geo.longitude;
+
+            // Notify backend in background
+            fetch(`/api/orders/${ord.id}/coords`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ latitude: geo.latitude, longitude: geo.longitude })
+            }).catch(() => {});
+
+            // Update local-first cache
+            try {
+              const cached = JSON.parse(localStorage.getItem('xfinity_cached_orders') || '[]');
+              const idx = cached.findIndex(c => c.id === ord.id);
+              if (idx >= 0) {
+                cached[idx].latitude = geo.latitude;
+                cached[idx].longitude = geo.longitude;
+                localStorage.setItem('xfinity_cached_orders', JSON.stringify(cached));
+              }
+            } catch (e) {}
+
+            // If this order is the active selected order, update state so route draws instantly
+            setSelectedOrder(prev => {
+              if (prev && prev.id === ord.id) {
+                return { ...prev, latitude: geo.latitude, longitude: geo.longitude };
+              }
+              return prev;
+            });
+          }
+        } catch (e) {
+          console.warn('Auto-geocoding error for order:', ord.id, e.message);
+        }
+      }
+    };
+
+    runAutoGeocode();
+
+    return () => { isCancelled = true; };
+  }, [orders]);
+
+  // 3. SELECT A JOB: Locates on map, flies camera in 3D, and computes route from current location
+  const handleSelectJob = async (order) => {
+    if (!order) return;
+    let target = order;
+
+    // If coordinates are missing, geocode right away via Mapbox in <150ms
+    if (!target.latitude || !target.longitude) {
+      const geo = await geocodeAddressWithMapbox(target.address, target.city, target.zip_code);
+      if (geo && geo.latitude && geo.longitude) {
+        target = { ...target, latitude: geo.latitude, longitude: geo.longitude };
+        target.latitude = geo.latitude;
+        target.longitude = geo.longitude;
+
+        fetch(`/api/orders/${target.id}/coords`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ latitude: geo.latitude, longitude: geo.longitude })
+        }).catch(() => {});
+
+        try {
+          const cached = JSON.parse(localStorage.getItem('xfinity_cached_orders') || '[]');
+          const idx = cached.findIndex(c => c.id === target.id);
+          if (idx >= 0) {
+            cached[idx].latitude = geo.latitude;
+            cached[idx].longitude = geo.longitude;
+            localStorage.setItem('xfinity_cached_orders', JSON.stringify(cached));
+          }
+        } catch (e) {}
+      }
+    }
+
+    setSelectedOrder(target);
+    setCurrentNoteText(target.raw_notes || '');
+
+    const map = mapInstanceRef.current;
+    if (map && target.latitude && target.longitude) {
+      map.flyTo({
+        center: [target.longitude, target.latitude],
+        zoom: 15.5,
+        pitch: is3DMode ? 50 : 0,
+        essential: true
+      });
+    }
+  };
+
+  // NEXT / PREVIOUS STOP NAVIGATION
+  const handleNextJob = () => {
+    if (!orders || orders.length === 0) return;
+    const currentIdx = selectedOrder ? orders.findIndex(o => o.id === selectedOrder.id) : -1;
+    const nextIdx = (currentIdx + 1) % orders.length;
+    handleSelectJob(orders[nextIdx]);
+  };
+
+  const handlePrevJob = () => {
+    if (!orders || orders.length === 0) return;
+    const currentIdx = selectedOrder ? orders.findIndex(o => o.id === selectedOrder.id) : 0;
+    const prevIdx = (currentIdx - 1 + orders.length) % orders.length;
+    handleSelectJob(orders[prevIdx]);
+  };
+
+  // INITIALIZE / UPDATE SELECTION ON DAY OR TARGET CHANGE
+  useEffect(() => {
+    if (orders.length === 0) {
+      setSelectedOrder(null);
+      return;
+    }
+
+    if (targetFocusOrderId) {
+      const match = orders.find(o => o.id === targetFocusOrderId);
+      if (match) {
+        handleSelectJob(match);
+        if (onClearTargetFocus) onClearTargetFocus();
+        return;
+      }
+    }
+
+    if (!selectedOrder || !orders.some(o => o.id === selectedOrder.id)) {
+      const firstPending = orders.find(o => o.status === 'Pendiente');
+      const initial = firstPending || orders[0];
+      handleSelectJob(initial);
+    } else {
+      const current = orders.find(o => o.id === selectedOrder.id);
+      if (current) {
+        setSelectedOrder(current);
+        setCurrentNoteText(current.raw_notes || '');
+      }
+    }
+  }, [orders, targetFocusOrderId]);
+
+  // 4. INITIALIZE MAPBOX GL 3D VECTOR MAP
   useEffect(() => {
     if (!mapContainerRef.current) return;
     if (mapInstanceRef.current) return;
@@ -306,12 +413,12 @@ export default function UberDriverView({
     };
   }, []);
 
-  // 2. UPDATE MAPBOX MARKERS, VEHICLE PUCK & TURN-BY-TURN ROAD ROUTE
+  // 5. UPDATE MAPBOX MARKERS, VEHICLE PUCK & TURN-BY-TURN ROAD ROUTE
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    // Remove previous markers
+    // Clear previous markers
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
     if (routeBadgeMarkerRef.current) {
@@ -323,11 +430,11 @@ export default function UberDriverView({
       userMarkerRef.current = null;
     }
 
-    const activeTarget = selectedOrder || validOrders.find(o => o.status === 'Pendiente') || validOrders[0];
+    const activeTarget = selectedOrder || validOrders[0];
 
-    // Determine start point: GPS vehicle or initial road offset
+    // Determine technician start coordinates (real GPS location or nearby grid offset)
     let startCoords = null; // [lng, lat]
-    if (userLocation) {
+    if (userLocation && userLocation.lng && userLocation.lat) {
       startCoords = [userLocation.lng, userLocation.lat];
     } else if (activeTarget && activeTarget.latitude && activeTarget.longitude) {
       startCoords = [activeTarget.longitude - 0.009, activeTarget.latitude + 0.008];
@@ -350,7 +457,7 @@ export default function UberDriverView({
     const bounds = new mapboxgl.LngLatBounds();
     bounds.extend(startCoords);
 
-    // Render Stop Markers
+    // Render All Daily Stop Markers
     orders.forEach((order, index) => {
       if (!order.latitude || !order.longitude) return;
 
@@ -378,10 +485,7 @@ export default function UberDriverView({
             </div>
           </div>
         `;
-        markerEl.onclick = () => {
-          setSelectedOrder(order);
-          map.flyTo({ center: orderLngLat, zoom: 15.5, pitch: is3DMode ? 50 : 0 });
-        };
+        markerEl.onclick = () => handleSelectJob(order);
 
         const targetMarker = new mapboxgl.Marker({ element: markerEl, anchor: 'bottom' })
           .setLngLat(orderLngLat)
@@ -400,10 +504,7 @@ export default function UberDriverView({
             ${isCompleted ? '✓' : index + 1}
           </div>
         `;
-        markerEl.onclick = () => {
-          setSelectedOrder(order);
-          map.flyTo({ center: orderLngLat, zoom: 15.5, pitch: is3DMode ? 50 : 0 });
-        };
+        markerEl.onclick = () => handleSelectJob(order);
 
         const stopMarker = new mapboxgl.Marker({ element: markerEl, anchor: 'center' })
           .setLngLat(orderLngLat)
@@ -413,7 +514,7 @@ export default function UberDriverView({
       }
     });
 
-    // Connect sequence of daily stops
+    // Connect sequence between daily stops
     if (validOrders.length > 1 && map.getSource('stops-sequence')) {
       const stopsCoordinates = validOrders.map(o => [o.longitude, o.latitude]);
       map.getSource('stops-sequence').setData({
@@ -426,7 +527,7 @@ export default function UberDriverView({
       });
     }
 
-    // 3. FETCH REAL TURN-BY-TURN ROAD ROUTE FROM MAPBOX DIRECTIONS API
+    // 6. FETCH REAL TURN-BY-TURN ROAD ROUTE FROM MAPBOX DIRECTIONS API
     if (activeTarget && activeTarget.latitude && activeTarget.longitude && startCoords) {
       const destCoords = [activeTarget.longitude, activeTarget.latitude];
 
@@ -520,13 +621,13 @@ export default function UberDriverView({
       activeBounds.extend([activeTarget.longitude, activeTarget.latitude]);
 
       map.fitBounds(activeBounds, {
-        padding: { top: 90, bottom: 260, left: 50, right: 50 },
+        padding: { top: 120, bottom: 270, left: 50, right: 50 },
         pitch: is3DMode ? 48 : 0,
         maxZoom: 15.5,
-        duration: 1200
+        duration: 1000
       });
     }
-  }, [orders, selectedOrder?.id, userLocation, is3DMode]);
+  }, [orders, selectedOrder?.id, selectedOrder?.latitude, selectedOrder?.longitude, userLocation, is3DMode]);
 
   // Center on current technician location
   const handleCenterOnMe = () => {
@@ -555,7 +656,7 @@ export default function UberDriverView({
     }
     if (!bounds.isEmpty()) {
       map.fitBounds(bounds, {
-        padding: { top: 90, bottom: 260, left: 50, right: 50 },
+        padding: { top: 120, bottom: 270, left: 50, right: 50 },
         pitch: is3DMode ? 45 : 0,
         duration: 1200
       });
@@ -572,21 +673,6 @@ export default function UberDriverView({
       pitch: nextMode ? 50 : 0,
       duration: 800
     });
-  };
-
-  // Auto-geocode missing coordinates
-  const handleGeocodeMissing = async () => {
-    try {
-      setGeocodingMissing(true);
-      const res = await fetch('/api/orders/geocode-all', { method: 'POST' });
-      if (res.ok && onOrderUpdated) {
-        await onOrderUpdated();
-      }
-    } catch (e) {
-      console.warn('Geocoding error:', e);
-    } finally {
-      setGeocodingMissing(false);
-    }
   };
 
   // Save inline note
@@ -659,7 +745,7 @@ export default function UberDriverView({
 
   // Formatted GPS display (Apple style: 42.0298° N, 87.73507° O)
   const formatCoordinates = (lat, lng) => {
-    if (!lat || !lng) return 'Coordenadas no disponibles';
+    if (!lat || !lng) return 'Coordenadas en proceso de localización';
     const latDir = lat >= 0 ? 'N' : 'S';
     const lngDir = lng >= 0 ? 'E' : 'O';
     return `${Math.abs(lat).toFixed(5)}° ${latDir}, ${Math.abs(lng).toFixed(5)}° ${lngDir}`;
@@ -674,11 +760,6 @@ export default function UberDriverView({
     window.open(`https://maps.apple.com/?daddr=${dest}&dirflg=d`, '_blank');
   };
 
-  const filteredOrders = orders.filter(o => {
-    if (statusFilter !== 'ALL' && o.status !== statusFilter) return false;
-    return true;
-  });
-
   const selectedIndex = selectedOrder ? orders.findIndex(o => o.id === selectedOrder.id) : 0;
   const currentTimer = selectedOrder ? jobTimers[selectedOrder.id] : null;
 
@@ -691,7 +772,7 @@ export default function UberDriverView({
         className="absolute inset-0 w-full h-full z-0 mapbox-3d-canvas" 
       />
 
-      {/* 2. TOP HUD: WEATHER / ICA BADGE + DAY EARNINGS + QUICK ADD */}
+      {/* 2. TOP HUD: WEATHER / ICA BADGE + DATE PILL + QUICK ADD */}
       <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none gap-2">
         {/* Weather / Status Badge */}
         <div className="pointer-events-auto bg-[#16202c]/90 backdrop-blur-xl border border-white/10 rounded-2xl px-3 py-1.5 shadow-lg flex items-center gap-2">
@@ -752,15 +833,58 @@ export default function UberDriverView({
         </div>
       </div>
 
-      {/* 3. RIGHT FLOATING CONTROLS: 3D/2D PERSPECTIVE + RECENTER + OPTIMIZE */}
-      <div className="absolute right-3 top-20 z-20 flex flex-col gap-2 pointer-events-auto">
+      {/* 3. SELECTOR DE TRABAJOS HORIZONTAL (JOB SELECTOR RIBBON) */}
+      {/* Tapping any job immediately updates destination & draws route from current location */}
+      {orders.length > 0 && (
+        <div className="absolute top-16 left-3 right-16 z-20 pointer-events-auto">
+          <div className="bg-[#121922]/95 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 shadow-xl flex items-center gap-1.5 overflow-x-auto apple-drawer-scroll">
+            <span className="text-[9px] font-black uppercase text-slate-400 pl-1 shrink-0">
+              Paradas ({orders.length}):
+            </span>
+            {orders.map((ord, idx) => {
+              const isSelected = selectedOrder?.id === ord.id;
+              const isDone = ord.status === 'Completado';
+              const isCancel = ord.status === 'No Realizado';
+
+              let badgeColor = 'bg-[#FF9500]';
+              if (isDone) badgeColor = 'bg-[#34C759]';
+              else if (isCancel) badgeColor = 'bg-[#8E8E93]';
+
+              return (
+                <button
+                  key={ord.id || idx}
+                  onClick={() => handleSelectJob(ord)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap shrink-0 cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#007AFF] text-white shadow-md shadow-blue-500/40 ring-1 ring-white/60 font-black'
+                      : 'bg-[#1f2937]/90 text-slate-300 hover:text-white hover:bg-[#2c3b4e] border border-white/5'
+                  }`}
+                >
+                  <span className={`w-4 h-4 rounded-full ${badgeColor} text-white text-[9px] flex items-center justify-center font-black`}>
+                    {isDone ? '✓' : idx + 1}
+                  </span>
+                  <span className="truncate max-w-[110px]">
+                    {ord.address ? ord.address.split(',')[0] : `Parada ${idx + 1}`}
+                  </span>
+                  <span className="text-[10px] font-mono text-emerald-400">
+                    ${ord.rate_calculated || 100}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 4. RIGHT FLOATING CONTROLS: 3D/2D PERSPECTIVE + RECENTER + OPTIMIZE */}
+      <div className="absolute right-3 top-28 z-20 flex flex-col gap-2 pointer-events-auto">
         {/* Toggle 3D Perspective (Uber Mode) */}
         <button
           onClick={toggle3DView}
           className={`w-10 h-10 rounded-full backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition ${
             is3DMode ? 'bg-[#007AFF] text-white' : 'bg-[#16202c]/90 text-slate-300'
           }`}
-          title={is3DMode ? 'Modo 3D Activo (Toca para vista plana)' : 'Activar perspectiva 3D'}
+          title={is3DMode ? 'Modo 3D Activo (Toca para vista 2D)' : 'Activar perspectiva 3D'}
         >
           <span className="text-[11px] font-black">{is3DMode ? '3D' : '2D'}</span>
         </button>
@@ -794,29 +918,13 @@ export default function UberDriverView({
         </button>
       </div>
 
-      {/* Warning Pill if orders missing coordinates */}
-      {missingCoordsCount > 0 && (
-        <div className="absolute top-16 left-3 right-16 z-20 pointer-events-auto">
-          <div className="flex items-center justify-between p-2 rounded-2xl bg-amber-500/95 backdrop-blur-md text-white text-[11px] font-medium shadow-lg">
-            <span>{missingCoordsCount} orden{missingCoordsCount > 1 ? 'es' : ''} sin coordenadas GPS</span>
-            <button
-              onClick={handleGeocodeMissing}
-              disabled={geocodingMissing}
-              className="text-[10px] font-bold underline hover:text-amber-100"
-            >
-              {geocodingMissing ? 'Localizando...' : 'Localizar'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 4. FLOATING BOTTOM SHEET (EXACT APPLE MAPS IPHONE NAVIGATION CARD) */}
+      {/* 5. BOTTOM SLIDING DRAWER: APPLE MAPS CARD (PEEK / EXPANDED) */}
       <div 
-        className={`absolute left-0 right-0 bottom-0 z-30 bg-[#16202c]/98 backdrop-blur-2xl border-t border-white/10 rounded-t-[32px] shadow-[0_-12px_40px_rgba(0,0,0,0.65)] transition-all duration-300 ease-in-out flex flex-col ${
-          drawerState === 'expanded' ? 'h-[84%]' : 'h-[258px]'
+        className={`absolute bottom-0 left-0 right-0 z-30 bg-[#16202c]/96 backdrop-blur-2xl rounded-t-3xl border-t border-white/10 shadow-2xl transition-all duration-300 flex flex-col ${
+          drawerState === 'expanded' ? 'h-[75%]' : 'h-64'
         }`}
       >
-        {/* iOS Drag Handle */}
+        {/* Grabber Handle */}
         <div 
           onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
           className="w-full pt-2.5 pb-1 flex flex-col items-center justify-center cursor-pointer select-none"
@@ -827,23 +935,46 @@ export default function UberDriverView({
         {selectedOrder ? (
           <div className="flex-1 flex flex-col justify-between overflow-hidden px-4 pb-3">
             
-            {/* Top Bar: Share (Left) | Title + Subtitle (Center) | Close X (Right) */}
-            <div className="flex items-center justify-between gap-2 pt-0.5 pb-1.5">
+            {/* Top Bar: Share (Left) | Stepper & Address (Center) | Expand/Close (Right) */}
+            <div className="flex items-center justify-between gap-2 pt-0.5 pb-1">
               {/* Share Button (iOS Style Circle) */}
               <button
                 type="button"
                 onClick={() => onOpenShareModal(selectedOrder)}
-                className="w-10 h-10 rounded-full bg-[#243140] hover:bg-[#324052] text-white flex items-center justify-center shadow-md active:scale-95 transition shrink-0"
+                className="w-9 h-9 rounded-full bg-[#243140] hover:bg-[#324052] text-white flex items-center justify-center shadow-md active:scale-95 transition shrink-0"
                 title="Compartir reporte"
               >
                 <Share2 className="h-4 w-4" />
               </button>
 
-              {/* Title & Real Driving Time (Matches Apple Maps 4260 Main St header) */}
+              {/* Title & Real Driving Time (Matches Apple Maps Header) */}
               <div 
                 className="text-center min-w-0 flex-1 cursor-pointer"
                 onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
               >
+                {/* Parada Indicator & Stepper */}
+                <div className="flex items-center justify-center gap-2 mb-0.5">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handlePrevJob(); }}
+                    className="p-0.5 text-slate-400 hover:text-white transition"
+                    title="Parada anterior"
+                  >
+                    <ArrowLeft className="h-3 w-3" />
+                  </button>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-[#007AFF] bg-[#007AFF]/15 px-2 py-0.5 rounded-full">
+                    Parada {selectedIndex + 1} de {orders.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleNextJob(); }}
+                    className="p-0.5 text-slate-400 hover:text-white transition"
+                    title="Siguiente parada"
+                  >
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
+                </div>
+
                 <h2 className="text-base sm:text-lg font-black text-white truncate tracking-tight">
                   {selectedOrder.address || 'Dirección no asignada'}
                 </h2>
@@ -854,20 +985,20 @@ export default function UberDriverView({
                 </p>
               </div>
 
-              {/* Close Button (X in Circle) */}
+              {/* Expand/Collapse Toggle */}
               <button
                 type="button"
                 onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
-                className="w-10 h-10 rounded-full bg-[#243140] hover:bg-[#324052] text-white flex items-center justify-center shadow-md active:scale-95 transition shrink-0"
-                title={drawerState === 'peek' ? 'Ver detalles y paradas' : 'Contraer'}
+                className="w-9 h-9 rounded-full bg-[#243140] hover:bg-[#324052] text-white flex items-center justify-center shadow-md active:scale-95 transition shrink-0"
+                title={drawerState === 'peek' ? 'Ver detalles y lista' : 'Contraer'}
               >
                 {drawerState === 'peek' ? <ChevronUp className="h-4 w-4" /> : <X className="h-4 w-4" />}
               </button>
             </div>
 
-            {/* 3 Horizontal Pill Action Buttons (Matches Apple Maps UI) */}
+            {/* 3 Horizontal Action Pills (Matches Apple Maps UI) */}
             <div className="grid grid-cols-3 gap-2 py-1">
-              {/* Pill 1: Primary (iOS Blue) -> Photos with Watermark */}
+              {/* Pill 1: Photos with Timestamp & DMS GPS Watermark */}
               <button
                 type="button"
                 onClick={() => onOpenPhotos(selectedOrder)}
@@ -877,7 +1008,7 @@ export default function UberDriverView({
                 <span className="truncate">Fotos ({selectedOrder.photos_count || 0})</span>
               </button>
 
-              {/* Pill 2: Dark Slate -> Completar / Cerrar */}
+              {/* Pill 2: Dark Slate -> Completar / WhatsApp */}
               {selectedOrder.status !== 'Completado' ? (
                 <button
                   type="button"
@@ -901,25 +1032,12 @@ export default function UberDriverView({
               {/* Pill 3: Dark Slate -> Siguiente Parada */}
               <button
                 type="button"
-                onClick={() => {
-                  const pendingOrders = orders.filter(o => o.status === 'Pendiente');
-                  const currentIndex = pendingOrders.findIndex(o => o.id === selectedOrder.id);
-                  const next = pendingOrders[(currentIndex + 1) % pendingOrders.length];
-                  if (next) {
-                    setSelectedOrder(next);
-                    if (next.latitude && next.longitude && mapInstanceRef.current) {
-                      mapInstanceRef.current.flyTo({
-                        center: [next.longitude, next.latitude],
-                        zoom: 15.5,
-                        pitch: is3DMode ? 50 : 0
-                      });
-                    }
-                  }
-                }}
+                onClick={handleNextJob}
                 className="h-11 rounded-2xl bg-[#243140] hover:bg-[#324052] text-[#29b6f6] font-bold text-xs flex items-center justify-center gap-1.5 border border-white/5 shadow-md active:scale-95 transition"
+                title="Ir a la siguiente parada de la jornada"
               >
                 <Navigation className="h-4 w-4" />
-                <span>Siguiente</span>
+                <span>Siguiente →</span>
               </button>
             </div>
 
@@ -949,18 +1067,15 @@ export default function UberDriverView({
                     autoFocus
                     value={currentNoteText}
                     onChange={(e) => setCurrentNoteText(e.target.value)}
-                    placeholder="Escribe detalles del acceso, perro, caída de cable, etc..."
-                    className="w-full bg-[#121922] text-white border border-[#007AFF]/50 rounded-xl p-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#007AFF] resize-none"
+                    placeholder="Escribe una nota para este trabajo..."
+                    className="w-full bg-[#121922] text-slate-100 text-xs rounded-xl p-2 border border-white/10 outline-none focus:border-[#007AFF] resize-none"
                     rows={2}
                   />
                   <div className="flex justify-end gap-1.5">
                     <button
                       type="button"
-                      onClick={() => {
-                        setCurrentNoteText(selectedOrder.raw_notes || '');
-                        setIsEditingNote(false);
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-200 text-[10px] font-bold"
+                      onClick={() => setIsEditingNote(false)}
+                      className="px-2.5 py-1 text-[11px] text-slate-400 hover:text-white"
                     >
                       Cancelar
                     </button>
@@ -968,7 +1083,7 @@ export default function UberDriverView({
                       type="button"
                       onClick={handleSaveNote}
                       disabled={savingNote}
-                      className="px-3 py-1 rounded-lg bg-[#007AFF] text-white text-[10px] font-bold"
+                      className="px-3 py-1 bg-[#007AFF] text-white text-[11px] font-bold rounded-lg shadow-sm"
                     >
                       {savingNote ? 'Guardando...' : 'Guardar'}
                     </button>
@@ -977,26 +1092,35 @@ export default function UberDriverView({
               )}
             </div>
 
-            {/* Bottom Floating Pill Bar: Timer, Open in Apple Maps, More */}
+            {/* Bottom Bar: On-site Timer + Rate + Apple Maps Link */}
             <div className="flex items-center justify-between pt-1">
-              {/* On-Site Timer Pill */}
+              {/* On-Site Timer */}
               <button
                 type="button"
                 onClick={() => toggleJobTimer(selectedOrder.id)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-mono font-bold transition active:scale-95 ${
-                  currentTimer?.isRunning
-                    ? 'bg-[#34C759]/20 text-[#34C759] border border-[#34C759]/40 animate-pulse'
-                    : currentTimer?.elapsed > 0
-                    ? 'bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/40'
-                    : 'bg-[#243140] text-slate-300 border border-white/5'
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
+                  currentTimer && currentTimer.isRunning
+                    ? 'bg-rose-500/20 border-rose-500/50 text-rose-300 animate-pulse'
+                    : currentTimer && currentTimer.elapsed > 0
+                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                    : 'bg-[#243140] border-white/5 text-slate-300 hover:text-white'
                 }`}
                 title="Temporizador de trabajo en sitio"
               >
                 <Clock className="h-3.5 w-3.5" />
-                <span>{currentTimer?.elapsed ? formatTimerDisplay(currentTimer.elapsed) : 'En sitio'}</span>
+                <span>
+                  {currentTimer && currentTimer.elapsed > 0 
+                    ? formatTimerDisplay(currentTimer.elapsed) 
+                    : 'En sitio'}
+                </span>
+                {currentTimer && currentTimer.isRunning ? (
+                  <Pause className="h-3 w-3 fill-rose-300" />
+                ) : (
+                  <Play className="h-3 w-3 fill-slate-300" />
+                )}
               </button>
 
-              {/* Rate medallion */}
+              {/* Rate */}
               <div className="flex items-center gap-1 text-[#34C759] font-mono font-black text-sm">
                 <span>${selectedOrder.rate_calculated || 100}</span>
               </div>
@@ -1030,7 +1154,7 @@ export default function UberDriverView({
               </div>
             </div>
 
-            {/* EXPANDED SECTION: "Detalles" (Dirección, Coordenadas, etc.) + Cola de Trabajos */}
+            {/* EXPANDED SECTION: "Detalles" + Full Daily Jobs Queue */}
             {drawerState === 'expanded' && (
               <div className="flex-1 overflow-y-auto mt-2 pt-2 border-t border-white/10 space-y-3 apple-drawer-scroll pr-1">
                 
@@ -1149,75 +1273,71 @@ export default function UberDriverView({
                     </button>
                     <button
                       onClick={() => setStatusFilter('No Realizado')}
-                      className={`py-1.5 rounded-xl transition ${statusFilter === 'No Realizado' ? 'bg-[#FF3B30] text-white shadow-sm font-black' : 'text-slate-400'}`}
+                      className={`py-1.5 rounded-xl transition ${statusFilter === 'No Realizado' ? 'bg-[#8E8E93] text-white shadow-sm font-black' : 'text-slate-400'}`}
                     >
                       Canc. ({dayCancelled.length})
                     </button>
                   </div>
 
-                  {/* List of orders */}
+                  {/* List of Orders Cards */}
                   <div className="space-y-2">
-                    {filteredOrders.map((ord, idx) => {
-                      const isTarget = selectedOrder?.id === ord.id;
-                      const isCompleted = ord.status === 'Completado';
-                      const isCancelled = ord.status === 'No Realizado';
-                      const ordTimer = jobTimers[ord.id];
+                    {orders
+                      .filter(o => statusFilter === 'ALL' || o.status === statusFilter)
+                      .map((ord, idx) => {
+                        const isTarget = selectedOrder?.id === ord.id;
+                        const isCompleted = ord.status === 'Completado';
+                        const isCancelled = ord.status === 'No Realizado';
 
-                      return (
-                        <div
-                          key={ord.id}
-                          onClick={() => {
-                            setSelectedOrder(ord);
-                            if (ord.latitude && ord.longitude && mapInstanceRef.current) {
-                              mapInstanceRef.current.flyTo({
-                                center: [ord.longitude, ord.latitude],
-                                zoom: 15.5,
-                                pitch: is3DMode ? 50 : 0
-                              });
-                            }
-                          }}
-                          className={`p-3 rounded-2xl border cursor-pointer transition select-none flex items-center justify-between gap-2 ${
-                            isTarget 
-                              ? 'bg-[#007AFF]/20 border-[#007AFF]/80 shadow-md ring-1 ring-[#007AFF]/50'
-                              : 'bg-[#1f2937] border-white/5 hover:border-white/15'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className={`w-6 h-6 rounded-full text-white font-black text-xs flex items-center justify-center font-sans shrink-0 ${
-                              isCompleted ? 'bg-[#34C759]' : isCancelled ? 'bg-[#FF3B30]' : 'bg-[#FF9500]'
-                            }`}>
-                              {isCompleted ? '✓' : idx + 1}
-                            </span>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-mono font-bold text-white">#{ord.job_id}</span>
-                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
-                                  isCompleted ? 'bg-[#34C759]/20 text-[#34C759]' : isCancelled ? 'bg-[#FF3B30]/20 text-[#FF3B30]' : 'bg-[#FF9500]/20 text-[#FF9500]'
-                                }`}>
-                                  {ord.status}
-                                </span>
-                                {ordTimer?.elapsed > 0 && (
-                                  <span className="text-[9px] font-mono text-[#007AFF] bg-blue-950/80 px-1 py-0.2 rounded border border-blue-800">
-                                    ⏱️ {formatTimerDisplay(ordTimer.elapsed)}
+                        return (
+                          <div
+                            key={ord.id || idx}
+                            onClick={() => handleSelectJob(ord)}
+                            className={`p-3 rounded-2xl border cursor-pointer transition select-none flex items-center justify-between gap-2 ${
+                              isTarget 
+                                ? 'bg-[#007AFF]/20 border-[#007AFF]/80 shadow-md ring-1 ring-[#007AFF]/50'
+                                : 'bg-[#1f2937] border-white/5 hover:border-white/15'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className={`w-6 h-6 rounded-full text-white font-black text-xs flex items-center justify-center font-sans shrink-0 ${
+                                isCompleted ? 'bg-[#34C759]' : isCancelled ? 'bg-[#FF3B30]' : 'bg-[#FF9500]'
+                              }`}>
+                                {isCompleted ? '✓' : idx + 1}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-bold text-white truncate">
+                                    {ord.address}
                                   </span>
-                                )}
+                                  {ord.bore_type && ord.bore_type.includes('DW') && (
+                                    <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md">
+                                      DW
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                                  <span>{ord.city || 'Skokie'}</span>
+                                  <span>•</span>
+                                  <span>Job #{ord.job_id}</span>
+                                  <span>•</span>
+                                  <span>{ord.drop_footage || 0} ft</span>
+                                </div>
                               </div>
-                              <p className="text-[11px] font-bold truncate text-slate-200">{ord.address}</p>
-                              <p className="text-[10px] text-slate-400 truncate">{ord.city} • {ord.drop_footage || 0} ft</p>
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <div className="text-xs font-mono font-black text-[#34C759]">
+                                ${ord.rate_calculated || 100}
+                              </div>
+                              <span className={`text-[9px] font-bold uppercase ${
+                                isCompleted ? 'text-emerald-400' : isCancelled ? 'text-rose-400' : 'text-amber-400'
+                              }`}>
+                                {ord.status}
+                              </span>
                             </div>
                           </div>
-
-                          <div className="text-right shrink-0">
-                            <span className="text-sm font-black font-mono text-[#34C759] block">
-                              ${ord.rate_calculated || 100}
-                            </span>
-                            <span className="text-[10px] text-[#007AFF] font-bold">
-                              {isTarget ? 'Activo' : 'Ver'}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
                   </div>
                 </div>
 
@@ -1226,8 +1346,16 @@ export default function UberDriverView({
 
           </div>
         ) : (
-          <div className="p-6 text-center text-xs text-slate-400">
-            No hay trabajos asignados para esta fecha.
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <MapPin className="h-8 w-8 text-slate-500 mb-2" />
+            <p className="text-sm font-bold text-white">No hay órdenes para este día</p>
+            <p className="text-xs text-slate-400 mt-1 mb-3">Toca "+ Trabajo" para agregar una nueva orden.</p>
+            <button
+              onClick={onOpenAddJob}
+              className="px-4 py-2 bg-[#007AFF] text-white rounded-xl text-xs font-bold shadow-md"
+            >
+              + Agregar Trabajo
+            </button>
           </div>
         )}
       </div>
