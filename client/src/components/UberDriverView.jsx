@@ -7,7 +7,8 @@ import {
   Camera, Share2, DollarSign, Layers, List, Pencil, 
   SlidersHorizontal, Car, Calendar, ArrowRight, ArrowLeft, ShieldCheck, 
   X, Plus, Play, Pause, RotateCcw, Home, Star, MoreHorizontal,
-  Cloud, MessageCircle, ExternalLink, Check, Eye, Sun, Moon, Globe
+  Cloud, MessageCircle, ExternalLink, Check, Eye, Sun, Moon, Globe,
+  Route
 } from 'lucide-react';
 import { formatDateFriendly } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
@@ -15,25 +16,25 @@ import { geocodeAddressWithMapbox, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
 const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
 mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
 
-// Map Theme Definitions (Default is 'streets' - Apple Maps Normal with light gray & white streets)
+// Map Theme Definitions (Default is 'apple_dark' matching user's iPhone screenshot)
 const MAP_THEMES = {
+  apple_dark: {
+    name: 'Apple Maps Oscuro',
+    style: 'mapbox://styles/mapbox/dark-v11',
+    icon: Moon,
+    description: 'Calles en gris claro y parques verdes (Foto iPhone)'
+  },
   streets: {
-    name: 'Normal iPhone',
+    name: 'Apple Maps Día',
     style: 'mapbox://styles/mapbox/streets-v12',
     icon: Sun,
-    description: 'Calles en gris claro y blanco'
-  },
-  night: {
-    name: 'Modo Noche',
-    style: 'mapbox://styles/mapbox/navigation-night-v1',
-    icon: Moon,
-    description: 'Estilo Uber / Apple oscuro'
+    description: 'Mapa claro tradicional'
   },
   satellite: {
     name: 'Satélite Real',
     style: 'mapbox://styles/mapbox/satellite-streets-v12',
     icon: Globe,
-    description: 'Foto aérea con calles'
+    description: 'Fotos aéreas para ver tejados y postes'
   }
 };
 
@@ -73,29 +74,25 @@ export default function UberDriverView({
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
-  const routeBadgeMarkerRef = useRef(null);
+  const routeBadgeMarkersRef = useRef([]);
   const userMarkerRef = useRef(null);
-  const currentRouteCoordsRef = useRef([]);
 
   const [userLocation, setUserLocation] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [drawerState, setDrawerState] = useState('peek'); // 'peek' | 'expanded'
+  const [drawerState, setDrawerState] = useState('peek');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [optimizing, setOptimizing] = useState(false);
   const [is3DMode, setIs3DMode] = useState(true);
 
-  // Map Theme state: Default is 'streets' (Apple Maps Normal)
+  // Map Theme state: Default is 'apple_dark' (Matches user's iPhone screenshot exactly)
   const [mapTheme, setMapTheme] = useState(() => {
-    return localStorage.getItem('xfinity_map_theme') || 'streets';
+    return localStorage.getItem('xfinity_map_theme') || 'apple_dark';
   });
   const [showThemePicker, setShowThemePicker] = useState(false);
 
-  // Turn-by-Turn Route Metrics from Mapbox Directions API
-  const [routeMetrics, setRouteMetrics] = useState({
-    miles: null,
-    minutes: null,
-    loading: false
-  });
+  // Multi-route state: supports alternative routes just like Apple Maps
+  const [availableRoutes, setAvailableRoutes] = useState([]);
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
 
   // Note inline editing
   const [isEditingNote, setIsEditingNote] = useState(false);
@@ -261,6 +258,7 @@ export default function UberDriverView({
   const handleSelectJob = async (order) => {
     if (!order) return;
     let target = order;
+    setSelectedRouteIndex(0); // Reset to primary route on stop switch
 
     if (!target.latitude || !target.longitude) {
       const geo = await geocodeAddressWithMapbox(target.address, target.city, target.zip_code);
@@ -345,21 +343,81 @@ export default function UberDriverView({
     }
   }, [orders, targetFocusOrderId]);
 
+  // Apply Apple Maps Dark Styling (matches iPhone screenshot with light gray streets & dark green golf courses)
+  const applyCustomMapStyling = (map) => {
+    if (!map) return;
+    if (mapTheme !== 'apple_dark') return;
+
+    try {
+      if (map.getLayer('land')) {
+        map.setPaintProperty('land', 'background-color', '#1b242f');
+      }
+      if (map.getLayer('road-simple')) {
+        map.setPaintProperty('road-simple', 'line-color', '#52667a');
+      }
+      if (map.getLayer('bridge-simple')) {
+        map.setPaintProperty('bridge-simple', 'line-color', '#5e758c');
+      }
+      if (map.getLayer('landuse')) {
+        map.setPaintProperty('landuse', 'fill-color', [
+          'match',
+          ['get', 'class'],
+          ['park', 'pitch', 'cemetery', 'national_park', 'grass'],
+          '#184533',
+          '#202c38'
+        ]);
+        map.setPaintProperty('landuse', 'fill-opacity', 0.92);
+      }
+      if (map.getLayer('national-park')) {
+        map.setPaintProperty('national-park', 'fill-color', '#184533');
+      }
+      if (map.getLayer('water')) {
+        map.setPaintProperty('water', 'fill-color', '#142a3e');
+      }
+      if (map.getLayer('road-label-simple')) {
+        map.setPaintProperty('road-label-simple', 'text-color', '#ffffff');
+        map.setPaintProperty('road-label-simple', 'text-halo-color', '#141d27');
+        map.setPaintProperty('road-label-simple', 'text-halo-width', 2);
+      }
+    } catch (err) {
+      // Style layers may vary slightly
+    }
+  };
+
   // Helper to attach route layers cleanly whenever a style is loaded
   const setupRouteLayers = (map) => {
     if (!map) return;
-    
-    // Route layer
+
+    // 1. Alternative Route Source & Layer (Rendered below the active route)
+    if (!map.getSource('route-alt-nav')) {
+      map.addSource('route-alt-nav', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+    }
+
+    if (!map.getLayer('route-alt-core-layer')) {
+      map.addLayer({
+        id: 'route-alt-core-layer',
+        type: 'line',
+        source: 'route-alt-nav',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': '#5a6e84',
+          'line-width': 5.5,
+          'line-opacity': 0.8
+        }
+      });
+    }
+
+    // 2. Active Primary Route Source & Layers (Apple Electric Blue)
     if (!map.getSource('route-nav')) {
       map.addSource('route-nav', {
         type: 'geojson',
         data: {
           type: 'Feature',
           properties: {},
-          geometry: { 
-            type: 'LineString', 
-            coordinates: currentRouteCoordsRef.current || [] 
-          }
+          geometry: { type: 'LineString', coordinates: [] }
         }
       });
     }
@@ -372,7 +430,7 @@ export default function UberDriverView({
         layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: {
           'line-color': '#007AFF',
-          'line-width': 12,
+          'line-width': 13,
           'line-opacity': 0.35,
           'line-blur': 2
         }
@@ -387,7 +445,7 @@ export default function UberDriverView({
         layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: {
           'line-color': '#007AFF',
-          'line-width': 6,
+          'line-width': 6.5,
           'line-opacity': 0.98
         }
       });
@@ -415,10 +473,12 @@ export default function UberDriverView({
           'line-color': '#007AFF',
           'line-width': 2.5,
           'line-dasharray': [2, 2],
-          'line-opacity': 0.5
+          'line-opacity': 0.45
         }
       });
     }
+
+    applyCustomMapStyling(map);
   };
 
   // 4. INITIALIZE MAPBOX GL 3D VECTOR MAP
@@ -431,14 +491,14 @@ export default function UberDriverView({
       ? [targetOrder.longitude, targetOrder.latitude] 
       : DEFAULT_LNG_LAT;
 
-    const initialStyleUrl = MAP_THEMES[mapTheme]?.style || MAP_THEMES.streets.style;
+    const initialStyleUrl = MAP_THEMES[mapTheme]?.style || MAP_THEMES.apple_dark.style;
 
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: initialStyleUrl, // Apple Maps Normal ('streets-v12') by default
+      style: initialStyleUrl,
       center: initialCenter,
       zoom: 14.5,
-      pitch: 45, // 3D Perspective angle
+      pitch: 45,
       bearing: 0,
       attributionControl: false
     });
@@ -473,18 +533,18 @@ export default function UberDriverView({
     }
   };
 
-  // 5. UPDATE MAPBOX MARKERS, VEHICLE PUCK & TURN-BY-TURN ROAD ROUTE
+  // 5. UPDATE MAPBOX MARKERS, VEHICLE PUCK & ALTERNATIVE ROAD ROUTES
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    // Clear previous markers
+    // Clear previous stop markers & route badges
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
-    if (routeBadgeMarkerRef.current) {
-      routeBadgeMarkerRef.current.remove();
-      routeBadgeMarkerRef.current = null;
-    }
+
+    routeBadgeMarkersRef.current.forEach(m => m.remove());
+    routeBadgeMarkersRef.current = [];
+
     if (userMarkerRef.current) {
       userMarkerRef.current.remove();
       userMarkerRef.current = null;
@@ -531,18 +591,18 @@ export default function UberDriverView({
       const markerEl = document.createElement('div');
 
       if (isTarget) {
-        // Destination Marker: House Badge + Street Name Pill
-        markerEl.className = 'apple-dest-badge-mapbox cursor-pointer';
+        // Destination Marker: House Icon + Curbside Needle Tip + Clean Address Label
+        // Fixed: No duplicate transform - the needle tip lands with rooftop accuracy directly on the street address
+        markerEl.className = 'apple-dest-badge cursor-pointer';
         markerEl.innerHTML = `
-          <div class="apple-dest-badge">
-            <div class="apple-dest-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-              </svg>
-            </div>
-            <div class="apple-dest-label">
-              ${order.address || 'Destino'}
-            </div>
+          <div class="apple-dest-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+            </svg>
+          </div>
+          <div class="apple-dest-pointer"></div>
+          <div class="apple-dest-label">
+            ${order.address || 'Destino'}
           </div>
         `;
         markerEl.onclick = () => handleSelectJob(order);
@@ -587,62 +647,105 @@ export default function UberDriverView({
       });
     }
 
-    // 6. FETCH REAL TURN-BY-TURN ROAD ROUTE FROM MAPBOX DIRECTIONS API
+    // 6. FETCH MULTIPLE ALTERNATIVE ROAD ROUTES FROM MAPBOX DIRECTIONS API
     if (activeTarget && activeTarget.latitude && activeTarget.longitude && startCoords) {
       const destCoords = [activeTarget.longitude, activeTarget.latitude];
 
       const fetchDirections = async () => {
         try {
-          setRouteMetrics(prev => ({ ...prev, loading: true }));
-          const dirUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords[0]},${startCoords[1]};${destCoords[0]},${destCoords[1]}?geometries=geojson&overview=full&access_token=${MAPBOX_ACCESS_TOKEN}`;
+          // Request alternatives=true to get multiple route paths just like Apple Maps
+          const dirUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords[0]},${startCoords[1]};${destCoords[0]},${destCoords[1]}?alternatives=true&geometries=geojson&overview=full&access_token=${MAPBOX_ACCESS_TOKEN}`;
           
           const res = await fetch(dirUrl);
           if (res.ok) {
             const data = await res.json();
             if (data.routes && data.routes.length > 0) {
-              const route = data.routes[0];
-              const roadCoordinates = route.geometry.coordinates;
-              currentRouteCoordsRef.current = roadCoordinates;
-              const distMiles = route.distance / 1609.34;
-              const durMins = Math.max(1, Math.round(route.duration / 60));
+              const parsedRoutes = data.routes.map((r, idx) => ({
+                index: idx,
+                coordinates: r.geometry.coordinates,
+                miles: r.distance / 1609.34,
+                minutes: Math.max(1, Math.round(r.duration / 60)),
+                summary: r.legs?.[0]?.summary || `Vía opción ${idx + 1}`
+              }));
 
-              setRouteMetrics({
-                miles: distMiles,
-                minutes: durMins,
-                loading: false
-              });
+              setAvailableRoutes(parsedRoutes);
 
-              // Draw road-following vector line
+              // Select active route (either user's chosen index or fastest route 0)
+              const safeIndex = selectedRouteIndex < parsedRoutes.length ? selectedRouteIndex : 0;
+              const activeRoute = parsedRoutes[safeIndex];
+              const alternativeRoutes = parsedRoutes.filter((_, i) => i !== safeIndex);
+
+              // Update active route line (Apple Electric Blue)
               if (map.getSource('route-nav')) {
                 map.getSource('route-nav').setData({
                   type: 'Feature',
                   properties: {},
                   geometry: {
                     type: 'LineString',
-                    coordinates: roadCoordinates
+                    coordinates: activeRoute.coordinates
                   }
                 });
               }
 
-              // Place route badge ("X min • Más rápida") at road midpoint
-              if (roadCoordinates.length > 2) {
-                const midIdx = Math.floor(roadCoordinates.length / 2);
-                const midPoint = roadCoordinates[midIdx];
+              // Update alternative route line(s) (Slate Gray)
+              if (map.getSource('route-alt-nav')) {
+                map.getSource('route-alt-nav').setData({
+                  type: 'FeatureCollection',
+                  features: alternativeRoutes.map(alt => ({
+                    type: 'Feature',
+                    properties: { index: alt.index },
+                    geometry: {
+                      type: 'LineString',
+                      coordinates: alt.coordinates
+                    }
+                  }))
+                });
+              }
 
-                const badgeEl = document.createElement('div');
-                badgeEl.className = 'apple-route-badge-container';
-                badgeEl.innerHTML = `
-                  <div class="apple-route-badge">
-                    <div class="eta-main">${durMins} min</div>
-                    <div class="eta-sub">Más rápida</div>
-                  </div>
+              // Place Interactive Floating Badge for Active Route
+              if (activeRoute.coordinates.length > 2) {
+                const midIdx = Math.floor(activeRoute.coordinates.length / 2);
+                const midPoint = activeRoute.coordinates[midIdx];
+
+                const activeBadgeEl = document.createElement('div');
+                activeBadgeEl.className = 'apple-active-route-badge';
+                activeBadgeEl.innerHTML = `
+                  <div class="eta-main">${activeRoute.minutes} min</div>
+                  <div class="eta-sub">${safeIndex === 0 ? 'Más rápida' : activeRoute.summary}</div>
                 `;
 
-                if (routeBadgeMarkerRef.current) routeBadgeMarkerRef.current.remove();
-                routeBadgeMarkerRef.current = new mapboxgl.Marker({ element: badgeEl, anchor: 'center' })
+                const activeMarker = new mapboxgl.Marker({ element: activeBadgeEl, anchor: 'center' })
                   .setLngLat(midPoint)
                   .addTo(map);
+
+                routeBadgeMarkersRef.current.push(activeMarker);
               }
+
+              // Place Interactive Floating Badges for Alternative Routes
+              // Tapping the gray bubble immediately switches that route to active!
+              alternativeRoutes.forEach(alt => {
+                if (alt.coordinates.length > 2) {
+                  const altMidIdx = Math.floor(alt.coordinates.length / 2);
+                  const altMidPoint = alt.coordinates[altMidIdx];
+
+                  const altBadgeEl = document.createElement('div');
+                  altBadgeEl.className = 'apple-alt-route-badge';
+                  altBadgeEl.innerHTML = `
+                    <span>${alt.minutes} min</span>
+                  `;
+                  altBadgeEl.onclick = (e) => {
+                    e.stopPropagation();
+                    setSelectedRouteIndex(alt.index);
+                  };
+
+                  const altMarker = new mapboxgl.Marker({ element: altBadgeEl, anchor: 'center' })
+                    .setLngLat(altMidPoint)
+                    .addTo(map);
+
+                  routeBadgeMarkersRef.current.push(altMarker);
+                }
+              });
+
               return;
             }
           }
@@ -661,11 +764,13 @@ export default function UberDriverView({
             }
           });
         }
-        setRouteMetrics({
+        setAvailableRoutes([{
+          index: 0,
+          coordinates: [startCoords, destCoords],
           miles: getEstimatedDrivingMiles(startCoords[1], startCoords[0], destCoords[1], destCoords[0]) || 0.8,
           minutes: 4,
-          loading: false
-        });
+          summary: 'Ruta directa'
+        }]);
       };
 
       if (map.isStyleLoaded()) {
@@ -688,7 +793,7 @@ export default function UberDriverView({
         duration: 1000
       });
     }
-  }, [orders, selectedOrder?.id, selectedOrder?.latitude, selectedOrder?.longitude, userLocation, is3DMode, mapTheme]);
+  }, [orders, selectedOrder?.id, selectedOrder?.latitude, selectedOrder?.longitude, userLocation, is3DMode, mapTheme, selectedRouteIndex]);
 
   // Center on current technician location
   const handleCenterOnMe = () => {
@@ -823,9 +928,10 @@ export default function UberDriverView({
 
   const selectedIndex = selectedOrder ? orders.findIndex(o => o.id === selectedOrder.id) : 0;
   const currentTimer = selectedOrder ? jobTimers[selectedOrder.id] : null;
+  const activeRoute = availableRoutes[selectedRouteIndex] || availableRoutes[0] || null;
 
   return (
-    <div className="relative w-full max-w-md mx-auto h-[calc(100vh-8.5rem)] rounded-3xl overflow-hidden border border-[#2b3543] bg-[#f0eee9] shadow-2xl flex flex-col select-none">
+    <div className="relative w-full max-w-md mx-auto h-[calc(100vh-8.5rem)] rounded-3xl overflow-hidden border border-[#2b3543] bg-[#1a242f] shadow-2xl flex flex-col select-none">
       
       {/* 1. MAPBOX GL 3D VECTOR CANVAS */}
       <div 
@@ -938,20 +1044,20 @@ export default function UberDriverView({
 
       {/* 4. RIGHT FLOATING CONTROLS: ESTILO DE MAPA + 3D/2D + CENTRAR + OPTIMIZAR */}
       <div className="absolute right-3 top-28 z-20 flex flex-col gap-2 pointer-events-auto">
-        {/* Toggle Theme / Estética Popover (Apple Normal, Noche, Satélite) */}
+        {/* Toggle Theme Popover */}
         <div className="relative">
           <button
             onClick={() => setShowThemePicker(prev => !prev)}
             className={`w-10 h-10 rounded-full backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition ${
-              mapTheme === 'streets' ? 'bg-[#007AFF] text-white' : 'bg-[#16202c]/90 text-slate-300'
+              mapTheme === 'apple_dark' ? 'bg-[#007AFF] text-white' : 'bg-[#16202c]/90 text-slate-300'
             }`}
-            title="Cambiar estética del mapa"
+            title="Cambiar estilo de mapa"
           >
             <Layers className="h-4 w-4" />
           </button>
 
           {showThemePicker && (
-            <div className="absolute right-12 top-0 bg-[#16202c]/98 backdrop-blur-2xl border border-white/15 rounded-2xl p-2 shadow-2xl flex flex-col gap-1 w-44 z-50 animate-fade-in">
+            <div className="absolute right-12 top-0 bg-[#16202c]/98 backdrop-blur-2xl border border-white/15 rounded-2xl p-2 shadow-2xl flex flex-col gap-1 w-48 z-50 animate-fade-in">
               <span className="text-[10px] font-black uppercase text-slate-400 px-2 py-0.5">
                 Estilo de Mapa
               </span>
@@ -1078,8 +1184,8 @@ export default function UberDriverView({
                   {selectedOrder.address || 'Dirección no asignada'}
                 </h2>
                 <p className="text-[11px] text-slate-400 font-medium truncate">
-                  {routeMetrics.miles !== null 
-                    ? `A ${routeMetrics.miles.toFixed(1)} mi por carretera • ~${routeMetrics.minutes} min de manejo`
+                  {activeRoute 
+                    ? `A ${activeRoute.miles.toFixed(1)} mi • ~${activeRoute.minutes} min (${activeRoute.summary})`
                     : `${selectedOrder.city || 'Skokie'} • Job #${selectedOrder.job_id}`}
                 </p>
               </div>
@@ -1093,6 +1199,34 @@ export default function UberDriverView({
                 {drawerState === 'peek' ? <ChevronUp className="h-4 w-4" /> : <X className="h-4 w-4" />}
               </button>
             </div>
+
+            {/* Alternative Route Selector (Interactive pills if more than 1 route found) */}
+            {availableRoutes.length > 1 && (
+              <div className="flex items-center gap-1.5 py-0.5 overflow-x-auto apple-drawer-scroll">
+                <span className="text-[9px] font-black uppercase text-slate-400 shrink-0 flex items-center gap-0.5">
+                  <Route className="h-3 w-3 text-[#007AFF]" />
+                  Rutas:
+                </span>
+                {availableRoutes.map((rt, idx) => {
+                  const isChosen = (selectedRouteIndex === idx);
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedRouteIndex(idx)}
+                      className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition flex items-center gap-1 shrink-0 ${
+                        isChosen
+                          ? 'bg-[#007AFF] text-white shadow-md font-black ring-1 ring-white/50'
+                          : 'bg-[#243140] text-slate-300 hover:bg-[#324052]'
+                      }`}
+                    >
+                      <span>{rt.minutes} min</span>
+                      <span className="text-[9px] opacity-75">({rt.miles.toFixed(1)} mi)</span>
+                      {idx === 0 && <span className="text-[8px] bg-white/20 px-1 rounded">Rápida</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* 3 Horizontal Action Pills */}
             <div className="grid grid-cols-3 gap-2 py-1">

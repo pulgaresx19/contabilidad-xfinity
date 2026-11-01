@@ -401,48 +401,106 @@ div[data-netlify-drawer],
   border: none !important;
 }
 
+/* Apple Destination Badge - Perfectly anchored to doorstep without offset */
 .apple-dest-badge {
   display: flex;
   flex-direction: column;
   align-items: center;
   pointer-events: auto;
   cursor: pointer;
-  transform: translate(-50%, -100%);
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.apple-dest-badge:hover {
-  transform: translate(-50%, -105%) scale(1.06);
+  position: relative;
+  user-select: none;
 }
 
 .apple-dest-icon {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background-color: #007AFF;
+  background: linear-gradient(135deg, #00c7e2 0%, #007aff 100%);
   border: 2.5px solid #ffffff;
-  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 199, 226, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
+  z-index: 2;
+}
+
+.apple-dest-pointer {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 7px solid #007aff;
+  margin-top: -1px;
+  z-index: 1;
 }
 
 .apple-dest-label {
   margin-top: 3px;
-  background-color: rgba(22, 28, 36, 0.95);
+  background-color: rgba(18, 25, 34, 0.95);
   color: #ffffff;
-  padding: 2.5px 7px;
-  border-radius: 8px;
-  font-size: 10px;
-  font-weight: 700;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  padding: 3px 8px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 800;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
   white-space: nowrap;
-  max-width: 140px;
+  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: -0.2px;
+}
+
+/* Apple Route Badges (Active & Alternative) */
+.apple-active-route-badge {
+  background: #007AFF;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  border-radius: 14px;
+  padding: 4px 10px;
+  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.55);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+  pointer-events: auto;
+  transition: transform 0.15s ease;
+}
+.apple-active-route-badge:hover {
+  transform: scale(1.08);
+}
+.apple-active-route-badge .eta-main {
+  font-size: 12px;
+  font-weight: 900;
+}
+.apple-active-route-badge .eta-sub {
+  font-size: 9px;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.apple-alt-route-badge {
+  background: rgba(30, 41, 54, 0.95);
+  color: #94a3b8;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+.apple-alt-route-badge:hover {
+  transform: scale(1.1);
+  background: rgba(45, 58, 75, 0.98);
+  color: #ffffff;
+  border-color: #007AFF;
 }
 
 /* User Location Puck (iOS White Ring + Blue Dot + Radial Glow) */
