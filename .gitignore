@@ -13,3 +13,7 @@ Thumbs.db
 
 cloudflared.exe
 .vercel
+
+.env
+.env.local
+.env.*

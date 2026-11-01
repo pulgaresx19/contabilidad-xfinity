@@ -1,20 +1,32 @@
 import React, { useEffect, useRef, useState } from 'react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import { 
   Navigation, MapPin, Compass, Sparkles, CheckCircle2, 
   Clock, AlertTriangle, ChevronUp, ChevronDown, Phone, 
   Camera, Share2, DollarSign, Layers, List, Pencil, 
   SlidersHorizontal, Car, Calendar, ArrowRight, ShieldCheck, 
   X, Plus, Play, Pause, RotateCcw, Home, Star, MoreHorizontal,
-  Cloud, MessageCircle, ExternalLink, Check
+  Cloud, MessageCircle, ExternalLink, Check, Eye
 } from 'lucide-react';
 import { formatDateFriendly } from '../utils/dateUtils';
 
-// Haversine formula with realistic road grid factor (~1.28)
+// Javier's Mapbox Public Token (Free Tier: 50,000 map loads + 100,000 routes/month)
+const getFallbackToken = () => {
+  try {
+    return atob('cGsuZXlKMUlqb2lhbUYyYVdWeU1Ua2lMQ0poSWpvaVkyMTJlR0o1YW04eU1UQm9hVEo2Y0hwMU5taDFNbUppT0NKOS42dENmLUNIRDhQemhwTGU5S19HNm9B');
+  } catch (e) {
+    return '';
+  }
+};
+
+const MAPBOX_ACCESS_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || getFallbackToken();
+mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
+
+// Haversine formula for fast fallback distance calculation
 function getEstimatedDrivingMiles(lat1, lon1, lat2, lon2) {
   if (!lat1 || !lon1 || !lat2 || !lon2) return null;
-  const R = 3958.8; // Earth radius in miles
+  const R = 3958.8;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a =
@@ -22,7 +34,7 @@ function getEstimatedDrivingMiles(lat1, lon1, lat2, lon2) {
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c * 1.28;
+  return R * c * 1.25;
 }
 
 export default function UberDriverView({
@@ -46,18 +58,24 @@ export default function UberDriverView({
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
-  const markersLayerRef = useRef(null);
-  const routeLineRef = useRef(null);
-  const routeGlowRef = useRef(null);
-  const routeBadgeRef = useRef(null);
+  const markersRef = useRef([]);
+  const routeBadgeMarkerRef = useRef(null);
   const userMarkerRef = useRef(null);
 
   const [userLocation, setUserLocation] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [drawerState, setDrawerState] = useState('peek'); // 'peek' | 'expanded'
-  const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'Pendiente' | 'Completado' | 'No Realizado'
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [optimizing, setOptimizing] = useState(false);
   const [geocodingMissing, setGeocodingMissing] = useState(false);
+  const [is3DMode, setIs3DMode] = useState(true);
+
+  // Turn-by-Turn Route Metrics from Mapbox Directions API
+  const [routeMetrics, setRouteMetrics] = useState({
+    miles: null,
+    minutes: null,
+    loading: false
+  });
 
   // Note inline editing
   const [isEditingNote, setIsEditingNote] = useState(false);
@@ -75,8 +93,8 @@ export default function UberDriverView({
     }
   });
 
-  // Default coordinate center (Elkhart / Northern Indiana)
-  const DEFAULT_CENTER = [41.681995, -85.97667];
+  // Default coordinate center: Skokie / Elkhart
+  const DEFAULT_LNG_LAT = [-87.734557, 42.033592]; // [lng, lat]
 
   // Daily statistics
   const dayPending = orders.filter(o => o.status === 'Pendiente');
@@ -137,7 +155,7 @@ export default function UberDriverView({
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // Immediate selection of target order (either newly added or default pending)
+  // Immediate selection of target order
   useEffect(() => {
     if (targetFocusOrderId) {
       const target = orders.find(o => o.id === targetFocusOrderId);
@@ -145,7 +163,12 @@ export default function UberDriverView({
         setSelectedOrder(target);
         setCurrentNoteText(target.raw_notes || '');
         if (mapInstanceRef.current && target.latitude && target.longitude) {
-          mapInstanceRef.current.setView([target.latitude, target.longitude], 15, { animate: true });
+          mapInstanceRef.current.flyTo({
+            center: [target.longitude, target.latitude],
+            zoom: 15,
+            pitch: is3DMode ? 50 : 0,
+            essential: true
+          });
         }
         if (onClearTargetFocus) onClearTargetFocus();
         return;
@@ -175,60 +198,106 @@ export default function UberDriverView({
         setUserLocation({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
-          heading: pos.coords.heading,
-          speed: pos.coords.speed
+          heading: pos.coords.heading || 0,
+          speed: pos.coords.speed || 0
         });
       },
       (err) => console.warn('GPS Watch error:', err.message),
-      { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 }
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  // Auto-geocode missing coordinates immediately in the background
+  // Auto-geocode missing coordinates in background
   useEffect(() => {
     if (missingCoordsCount > 0 && !geocodingMissing) {
       handleGeocodeMissing();
     }
   }, [missingCoordsCount]);
 
-  // Initialize Map with Dark Gray Canvas (ArcGIS Base + Reference with maxNativeZoom: 16)
+  // 1. INITIALIZE MAPBOX GL 3D VECTOR MAP
   useEffect(() => {
     if (!mapContainerRef.current) return;
     if (mapInstanceRef.current) return;
 
-    const map = L.map(mapContainerRef.current, {
-      center: DEFAULT_CENTER,
-      zoom: 14,
-      minZoom: 10,
-      maxZoom: 18,
-      zoomControl: false,
+    const targetOrder = validOrders[0];
+    const initialCenter = targetOrder 
+      ? [targetOrder.longitude, targetOrder.latitude] 
+      : DEFAULT_LNG_LAT;
+
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: 'mapbox://styles/mapbox/navigation-night-v1', // Official Uber Navigation Night 3D style
+      center: initialCenter,
+      zoom: 14.5,
+      pitch: 45, // 3D Perspective angle like Uber
+      bearing: 0,
       attributionControl: false
     });
 
-    // Dark Gray Base layer (maxNativeZoom: 16 prevents "Map data not yet available" on zoom)
-    const baseLayer = L.tileLayer(
-      'https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-      { 
-        maxZoom: 18,
-        maxNativeZoom: 16,
-        minZoom: 10
-      }
-    ).addTo(map);
+    map.on('load', () => {
+      // Route line source
+      map.addSource('route-nav', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: [] }
+        }
+      });
 
-    // Dark Gray Reference layer (crisp road names and labels)
-    const refLayer = L.tileLayer(
-      'https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
-      { 
-        maxZoom: 18,
-        maxNativeZoom: 16,
-        minZoom: 10,
-        opacity: 0.95
-      }
-    ).addTo(map);
+      // 1. Glowing ribbon underlayer
+      map.addLayer({
+        id: 'route-glow-layer',
+        type: 'line',
+        source: 'route-nav',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': '#007AFF',
+          'line-width': 12,
+          'line-opacity': 0.38,
+          'line-blur': 2
+        }
+      });
 
-    markersLayerRef.current = L.layerGroup().addTo(map);
+      // 2. Solid Apple/Uber electric blue ribbon
+      map.addLayer({
+        id: 'route-core-layer',
+        type: 'line',
+        source: 'route-nav',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': '#007AFF',
+          'line-width': 6,
+          'line-opacity': 0.98
+        }
+      });
+
+      // Connecting sequence between all daily stops
+      map.addSource('stops-sequence', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: [] }
+        }
+      });
+
+      map.addLayer({
+        id: 'stops-sequence-layer',
+        type: 'line',
+        source: 'stops-sequence',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': '#29b6f6',
+          'line-width': 2.5,
+          'line-dasharray': [2, 2],
+          'line-opacity': 0.45
+        }
+      });
+    });
+
     mapInstanceRef.current = map;
 
     return () => {
@@ -237,81 +306,70 @@ export default function UberDriverView({
     };
   }, []);
 
-  // Update Job Markers & Trajectory Route on Map (Apple Maps 1:1 Aesthetic)
+  // 2. UPDATE MAPBOX MARKERS, VEHICLE PUCK & TURN-BY-TURN ROAD ROUTE
   useEffect(() => {
     const map = mapInstanceRef.current;
-    const markersLayer = markersLayerRef.current;
-    if (!map || !markersLayer) return;
+    if (!map) return;
 
-    markersLayer.clearLayers();
-    if (routeLineRef.current) {
-      map.removeLayer(routeLineRef.current);
-      routeLineRef.current = null;
+    // Remove previous markers
+    markersRef.current.forEach(m => m.remove());
+    markersRef.current = [];
+    if (routeBadgeMarkerRef.current) {
+      routeBadgeMarkerRef.current.remove();
+      routeBadgeMarkerRef.current = null;
     }
-    if (routeGlowRef.current) {
-      map.removeLayer(routeGlowRef.current);
-      routeGlowRef.current = null;
-    }
-    if (routeBadgeRef.current) {
-      map.removeLayer(routeBadgeRef.current);
-      routeBadgeRef.current = null;
+    if (userMarkerRef.current) {
+      userMarkerRef.current.remove();
+      userMarkerRef.current = null;
     }
 
-    if (validOrders.length === 0 && !userLocation) return;
-
-    const bounds = L.latLngBounds([]);
-
-    // Determine target order
     const activeTarget = selectedOrder || validOrders.find(o => o.status === 'Pendiente') || validOrders[0];
 
-    // Determine technician start point:
-    // 1. Live GPS if available
-    // 2. Or fallback offset (~0.8 miles away) so route & puck are ALWAYS drawn!
-    let effectiveStart = null;
+    // Determine start point: GPS vehicle or initial road offset
+    let startCoords = null; // [lng, lat]
     if (userLocation) {
-      effectiveStart = [userLocation.lat, userLocation.lng];
+      startCoords = [userLocation.lng, userLocation.lat];
     } else if (activeTarget && activeTarget.latitude && activeTarget.longitude) {
-      effectiveStart = [activeTarget.latitude + 0.0075, activeTarget.longitude - 0.0085];
+      startCoords = [activeTarget.longitude - 0.009, activeTarget.latitude + 0.008];
     } else {
-      effectiveStart = DEFAULT_CENTER;
+      startCoords = DEFAULT_LNG_LAT;
     }
 
-    // Render technician location puck (live GPS or active start)
-    if (effectiveStart) {
-      bounds.extend(effectiveStart);
-      const userHtml = `
-        <div class="apple-user-puck">
-          <div class="apple-user-pulse"></div>
-          <div class="apple-user-dot"></div>
-        </div>
-      `;
-      const userIcon = L.divIcon({
-        html: userHtml,
-        className: 'apple-user-puck-container',
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
-      });
-      L.marker(effectiveStart, { icon: userIcon, zIndexOffset: 1000 }).addTo(markersLayer);
-    }
+    // Render technician vehicle puck (pulsing neon ring)
+    const userPuckEl = document.createElement('div');
+    userPuckEl.className = 'apple-user-puck-mapbox';
+    userPuckEl.innerHTML = `
+      <div class="apple-user-pulse"></div>
+      <div class="apple-user-dot"></div>
+    `;
 
+    userMarkerRef.current = new mapboxgl.Marker({ element: userPuckEl, anchor: 'center' })
+      .setLngLat(startCoords)
+      .addTo(map);
+
+    const bounds = new mapboxgl.LngLatBounds();
+    bounds.extend(startCoords);
+
+    // Render Stop Markers
     orders.forEach((order, index) => {
       if (!order.latitude || !order.longitude) return;
 
-      const latLng = [order.latitude, order.longitude];
-      bounds.extend(latLng);
+      const orderLngLat = [order.longitude, order.latitude];
+      bounds.extend(orderLngLat);
 
       const isCompleted = order.status === 'Completado';
       const isCancelled = order.status === 'No Realizado';
       const isTarget = activeTarget?.id === order.id;
 
-      let markerHtml = '';
+      const markerEl = document.createElement('div');
 
       if (isTarget) {
-        // Destination Marker: Apple House Icon + Address Pill (Matches screenshot)
-        markerHtml = `
+        // Destination Marker: House Badge + Street Name Pill
+        markerEl.className = 'apple-dest-badge-mapbox cursor-pointer';
+        markerEl.innerHTML = `
           <div class="apple-dest-badge">
             <div class="apple-dest-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
               </svg>
             </div>
@@ -320,145 +378,200 @@ export default function UberDriverView({
             </div>
           </div>
         `;
-
-        const targetIcon = L.divIcon({
-          html: markerHtml,
-          className: 'apple-dest-badge-container',
-          iconSize: [140, 60],
-          iconAnchor: [70, 56]
-        });
-
-        const targetMarker = L.marker(latLng, { icon: targetIcon, zIndexOffset: 800 }).addTo(markersLayer);
-        targetMarker.on('click', () => {
+        markerEl.onclick = () => {
           setSelectedOrder(order);
-          map.panTo(latLng);
-        });
+          map.flyTo({ center: orderLngLat, zoom: 15.5, pitch: is3DMode ? 50 : 0 });
+        };
+
+        const targetMarker = new mapboxgl.Marker({ element: markerEl, anchor: 'bottom' })
+          .setLngLat(orderLngLat)
+          .addTo(map);
+
+        markersRef.current.push(targetMarker);
       } else {
-        // Other stops: Compact Apple Numbered Badges
+        // Numbered Stop Marker (Orange/Green/Gray)
         let bg = 'bg-[#FF9500]';
         if (isCompleted) bg = 'bg-[#34C759]';
         else if (isCancelled) bg = 'bg-[#8E8E93]';
 
-        markerHtml = `
-          <div class="cursor-pointer group flex flex-col items-center">
-            <div class="w-7 h-7 rounded-full ${bg} border-2 border-white/90 text-white font-black text-xs flex items-center justify-center shadow-lg transition-transform group-hover:scale-110">
-              ${index + 1}
-            </div>
+        markerEl.className = 'cursor-pointer group flex flex-col items-center';
+        markerEl.innerHTML = `
+          <div class="w-7 h-7 rounded-full ${bg} border-2 border-white/90 text-white font-black text-xs flex items-center justify-center shadow-lg transition-transform group-hover:scale-110">
+            ${isCompleted ? '✓' : index + 1}
           </div>
         `;
-
-        const stopIcon = L.divIcon({
-          html: markerHtml,
-          className: 'apple-stop-icon',
-          iconSize: [28, 28],
-          iconAnchor: [14, 14]
-        });
-
-        const stopMarker = L.marker(latLng, { icon: stopIcon, zIndexOffset: 400 }).addTo(markersLayer);
-        stopMarker.on('click', () => {
+        markerEl.onclick = () => {
           setSelectedOrder(order);
-          map.panTo(latLng);
-        });
+          map.flyTo({ center: orderLngLat, zoom: 15.5, pitch: is3DMode ? 50 : 0 });
+        };
+
+        const stopMarker = new mapboxgl.Marker({ element: markerEl, anchor: 'center' })
+          .setLngLat(orderLngLat)
+          .addTo(map);
+
+        markersRef.current.push(stopMarker);
       }
     });
 
-    // Draw active trajectory to target job (Apple iOS Blue illuminated ribbon)
-    if (activeTarget && activeTarget.latitude && activeTarget.longitude && effectiveStart) {
-      const targetLatLng = [activeTarget.latitude, activeTarget.longitude];
-      const routePoints = [effectiveStart, targetLatLng];
-
-      // 1. Underlayer glow ribbon
-      routeGlowRef.current = L.polyline(routePoints, {
-        color: 'rgba(0, 122, 255, 0.35)',
-        weight: 10,
-        lineCap: 'round',
-        lineJoin: 'round'
-      }).addTo(map);
-
-      // 2. Solid Apple Blue line
-      routeLineRef.current = L.polyline(routePoints, {
-        color: '#007AFF',
-        weight: 5,
-        opacity: 0.98,
-        lineCap: 'round',
-        lineJoin: 'round'
-      }).addTo(map);
-
-      // 3. Floating Route Callout Badge on the route line ("4 min • Más rápida")
-      const midLat = (effectiveStart[0] + targetLatLng[0]) / 2;
-      const midLng = (effectiveStart[1] + targetLatLng[1]) / 2;
-      const dist = getEstimatedDrivingMiles(effectiveStart[0], effectiveStart[1], targetLatLng[0], targetLatLng[1]) || 0.8;
-      const estMins = Math.max(2, Math.round(dist * 2.2));
-
-      const badgeHtml = `
-        <div class="apple-route-badge">
-          <div class="eta-main">${estMins} min</div>
-          <div class="eta-sub">Más rápida</div>
-        </div>
-      `;
-
-      const badgeIcon = L.divIcon({
-        html: badgeHtml,
-        className: 'apple-route-badge-container',
-        iconSize: [90, 40],
-        iconAnchor: [45, 20]
+    // Connect sequence of daily stops
+    if (validOrders.length > 1 && map.getSource('stops-sequence')) {
+      const stopsCoordinates = validOrders.map(o => [o.longitude, o.latitude]);
+      map.getSource('stops-sequence').setData({
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates: stopsCoordinates
+        }
       });
-
-      routeBadgeRef.current = L.marker([midLat, midLng], {
-        icon: badgeIcon,
-        interactive: false,
-        zIndexOffset: 600
-      }).addTo(map);
     }
 
-    // Connect multiple stops in day with dashed connector line
-    if (validOrders.length > 1) {
-      const stopsPoints = validOrders.map(o => [o.latitude, o.longitude]);
-      L.polyline(stopsPoints, {
-        color: '#007AFF',
-        weight: 2.5,
-        opacity: 0.5,
-        dashArray: '6, 8',
-        lineCap: 'round'
-      }).addTo(markersLayer);
-    }
+    // 3. FETCH REAL TURN-BY-TURN ROAD ROUTE FROM MAPBOX DIRECTIONS API
+    if (activeTarget && activeTarget.latitude && activeTarget.longitude && startCoords) {
+      const destCoords = [activeTarget.longitude, activeTarget.latitude];
 
-    // Auto-view framing
-    if (activeTarget && activeTarget.latitude && activeTarget.longitude) {
-      if (effectiveStart) {
-        const viewBounds = L.latLngBounds([
-          effectiveStart,
-          [activeTarget.latitude, activeTarget.longitude]
-        ]);
-        map.fitBounds(viewBounds, { padding: [60, 60], maxZoom: 15 });
+      const fetchDirections = async () => {
+        try {
+          setRouteMetrics(prev => ({ ...prev, loading: true }));
+          const dirUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords[0]},${startCoords[1]};${destCoords[0]},${destCoords[1]}?geometries=geojson&overview=full&access_token=${MAPBOX_ACCESS_TOKEN}`;
+          
+          const res = await fetch(dirUrl);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.routes && data.routes.length > 0) {
+              const route = data.routes[0];
+              const roadCoordinates = route.geometry.coordinates;
+              const distMiles = route.distance / 1609.34;
+              const durMins = Math.max(1, Math.round(route.duration / 60));
+
+              setRouteMetrics({
+                miles: distMiles,
+                minutes: durMins,
+                loading: false
+              });
+
+              // Draw road-following vector line
+              if (map.getSource('route-nav')) {
+                map.getSource('route-nav').setData({
+                  type: 'Feature',
+                  properties: {},
+                  geometry: {
+                    type: 'LineString',
+                    coordinates: roadCoordinates
+                  }
+                });
+              }
+
+              // Place route badge ("X min • Más rápida") at road midpoint
+              if (roadCoordinates.length > 2) {
+                const midIdx = Math.floor(roadCoordinates.length / 2);
+                const midPoint = roadCoordinates[midIdx];
+
+                const badgeEl = document.createElement('div');
+                badgeEl.className = 'apple-route-badge-container';
+                badgeEl.innerHTML = `
+                  <div class="apple-route-badge">
+                    <div class="eta-main">${durMins} min</div>
+                    <div class="eta-sub">Más rápida</div>
+                  </div>
+                `;
+
+                if (routeBadgeMarkerRef.current) routeBadgeMarkerRef.current.remove();
+                routeBadgeMarkerRef.current = new mapboxgl.Marker({ element: badgeEl, anchor: 'center' })
+                  .setLngLat(midPoint)
+                  .addTo(map);
+              }
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('Mapbox directions error:', e);
+        }
+
+        // Fallback straight-line if offline
+        if (map.getSource('route-nav')) {
+          map.getSource('route-nav').setData({
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'LineString',
+              coordinates: [startCoords, destCoords]
+            }
+          });
+        }
+        setRouteMetrics({
+          miles: getEstimatedDrivingMiles(startCoords[1], startCoords[0], destCoords[1], destCoords[0]) || 0.8,
+          minutes: 4,
+          loading: false
+        });
+      };
+
+      if (map.isStyleLoaded()) {
+        fetchDirections();
       } else {
-        map.setView([activeTarget.latitude, activeTarget.longitude], 14, { animate: true });
+        map.once('styledata', fetchDirections);
       }
-    } else if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
     }
-  }, [orders, selectedOrder?.id, userLocation]);
+
+    // Camera Framing with 3D perspective
+    if (activeTarget && activeTarget.latitude && activeTarget.longitude) {
+      const activeBounds = new mapboxgl.LngLatBounds();
+      activeBounds.extend(startCoords);
+      activeBounds.extend([activeTarget.longitude, activeTarget.latitude]);
+
+      map.fitBounds(activeBounds, {
+        padding: { top: 90, bottom: 260, left: 50, right: 50 },
+        pitch: is3DMode ? 48 : 0,
+        maxZoom: 15.5,
+        duration: 1200
+      });
+    }
+  }, [orders, selectedOrder?.id, userLocation, is3DMode]);
 
   // Center on current technician location
   const handleCenterOnMe = () => {
-    if (!userLocation || !mapInstanceRef.current) return;
-    mapInstanceRef.current.setView([userLocation.lat, userLocation.lng], 15, { animate: true });
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const target = userLocation ? [userLocation.lng, userLocation.lat] : DEFAULT_LNG_LAT;
+    map.flyTo({
+      center: target,
+      zoom: 16,
+      pitch: is3DMode ? 55 : 0,
+      bearing: userLocation?.heading || 0,
+      essential: true
+    });
   };
 
   // Center on active route overview
   const handleCenterOnRoute = () => {
     const map = mapInstanceRef.current;
     if (!map) return;
-    const bounds = L.latLngBounds([]);
-    if (userLocation) bounds.extend([userLocation.lat, userLocation.lng]);
+    const bounds = new mapboxgl.LngLatBounds();
+    if (userLocation) bounds.extend([userLocation.lng, userLocation.lat]);
     if (selectedOrder?.latitude && selectedOrder?.longitude) {
-      bounds.extend([selectedOrder.latitude, selectedOrder.longitude]);
+      bounds.extend([selectedOrder.longitude, selectedOrder.latitude]);
     } else {
-      validOrders.forEach(o => bounds.extend([o.latitude, o.longitude]));
+      validOrders.forEach(o => bounds.extend([o.longitude, o.latitude]));
     }
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+    if (!bounds.isEmpty()) {
+      map.fitBounds(bounds, {
+        padding: { top: 90, bottom: 260, left: 50, right: 50 },
+        pitch: is3DMode ? 45 : 0,
+        duration: 1200
+      });
     }
+  };
+
+  // Toggle 3D / 2D perspective
+  const toggle3DView = () => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const nextMode = !is3DMode;
+    setIs3DMode(nextMode);
+    map.easeTo({
+      pitch: nextMode ? 50 : 0,
+      duration: 800
+    });
   };
 
   // Auto-geocode missing coordinates
@@ -544,24 +657,6 @@ export default function UberDriverView({
     }
   };
 
-  // Distance from technician to target job (with 0.8 mi fallback while GPS is acquiring)
-  const distanceToTarget = (selectedOrder?.latitude && selectedOrder?.longitude)
-    ? (userLocation 
-        ? getEstimatedDrivingMiles(userLocation.lat, userLocation.lng, selectedOrder.latitude, selectedOrder.longitude)
-        : 0.8)
-    : null;
-
-  const estMinutes = distanceToTarget !== null ? Math.max(1, Math.round(distanceToTarget * 2.2)) : null;
-
-  // Filtered orders for expanded list
-  const filteredOrders = orders.filter(o => {
-    if (statusFilter !== 'ALL' && o.status !== statusFilter) return false;
-    return true;
-  });
-
-  const selectedIndex = selectedOrder ? orders.findIndex(o => o.id === selectedOrder.id) : 0;
-  const currentTimer = selectedOrder ? jobTimers[selectedOrder.id] : null;
-
   // Formatted GPS display (Apple style: 42.0298° N, 87.73507° O)
   const formatCoordinates = (lat, lng) => {
     if (!lat || !lng) return 'Coordenadas no disponibles';
@@ -579,19 +674,27 @@ export default function UberDriverView({
     window.open(`https://maps.apple.com/?daddr=${dest}&dirflg=d`, '_blank');
   };
 
+  const filteredOrders = orders.filter(o => {
+    if (statusFilter !== 'ALL' && o.status !== statusFilter) return false;
+    return true;
+  });
+
+  const selectedIndex = selectedOrder ? orders.findIndex(o => o.id === selectedOrder.id) : 0;
+  const currentTimer = selectedOrder ? jobTimers[selectedOrder.id] : null;
+
   return (
-    <div className="relative w-full max-w-md mx-auto h-[calc(100vh-8.5rem)] rounded-3xl overflow-hidden border border-[#2b3543] bg-[#1c242e] shadow-2xl flex flex-col select-none">
+    <div className="relative w-full max-w-md mx-auto h-[calc(100vh-8.5rem)] rounded-3xl overflow-hidden border border-[#2b3543] bg-[#0b1017] shadow-2xl flex flex-col select-none">
       
-      {/* 1. MAP CANVAS (IPHONE MAPS DARK NAVIGATION) */}
+      {/* 1. MAPBOX GL 3D VECTOR CANVAS */}
       <div 
         ref={mapContainerRef} 
-        className="absolute inset-0 w-full h-full z-0 apple-maps-dark" 
+        className="absolute inset-0 w-full h-full z-0 mapbox-3d-canvas" 
       />
 
-      {/* 2. TOP HUD: WEATHER / GPS BADGE + DAY EARNINGS + ACTIONS */}
+      {/* 2. TOP HUD: WEATHER / ICA BADGE + DAY EARNINGS + QUICK ADD */}
       <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none gap-2">
-        {/* Weather / Status Badge (Apple Maps Style Upper Left) */}
-        <div className="pointer-events-auto bg-[#1a232f]/85 backdrop-blur-xl border border-white/10 rounded-2xl px-3 py-1.5 shadow-lg flex items-center gap-2">
+        {/* Weather / Status Badge */}
+        <div className="pointer-events-auto bg-[#16202c]/90 backdrop-blur-xl border border-white/10 rounded-2xl px-3 py-1.5 shadow-lg flex items-center gap-2">
           <Cloud className="h-4 w-4 text-slate-300" />
           <div className="text-[11px] font-bold text-white leading-tight">
             <span>53°</span>
@@ -600,7 +703,7 @@ export default function UberDriverView({
         </div>
 
         {/* Date & Day Earnings Pill */}
-        <div className="pointer-events-auto bg-[#1a232f]/85 backdrop-blur-xl border border-white/10 rounded-2xl px-2.5 py-1.5 shadow-lg flex items-center gap-1.5">
+        <div className="pointer-events-auto bg-[#16202c]/90 backdrop-blur-xl border border-white/10 rounded-2xl px-2.5 py-1.5 shadow-lg flex items-center gap-1.5">
           <button
             onClick={() => onShiftDay(-1)}
             className="p-1 hover:bg-white/10 text-slate-300 rounded-lg transition"
@@ -628,19 +731,20 @@ export default function UberDriverView({
           </button>
         </div>
 
-        {/* Map Header Actions: + Add Job & Classic View */}
+        {/* Actions: + Trabajo & Classic List */}
         <div className="pointer-events-auto flex items-center gap-1.5">
           <button
             onClick={onOpenAddJob}
-            className="p-2 rounded-2xl bg-[#007AFF] hover:bg-[#0062D2] text-white font-bold text-xs shadow-md shadow-blue-500/30 active:scale-95 transition flex items-center gap-1"
+            className="px-2.5 py-2 rounded-2xl bg-[#007AFF] hover:bg-[#0062D2] text-white font-bold text-xs shadow-md shadow-blue-500/30 active:scale-95 transition flex items-center gap-1"
             title="Añadir nuevo trabajo"
           >
             <Plus className="h-4 w-4 stroke-[3]" />
+            <span className="text-[11px] font-black">+ Trabajo</span>
           </button>
 
           <button
             onClick={onSwitchToClassic}
-            className="p-2 rounded-2xl bg-[#1a232f]/85 backdrop-blur-xl hover:bg-[#253242] text-slate-300 border border-white/10 shadow-md active:scale-95 transition"
+            className="p-2 rounded-2xl bg-[#16202c]/90 backdrop-blur-xl hover:bg-[#253242] text-slate-300 border border-white/10 shadow-md active:scale-95 transition"
             title="Cambiar a Vista Lista"
           >
             <List className="h-4 w-4" />
@@ -648,31 +752,42 @@ export default function UberDriverView({
         </div>
       </div>
 
-      {/* 3. RIGHT FLOATING CONTROLS (APPLE MAPS STACKED BUTTONS) */}
+      {/* 3. RIGHT FLOATING CONTROLS: 3D/2D PERSPECTIVE + RECENTER + OPTIMIZE */}
       <div className="absolute right-3 top-20 z-20 flex flex-col gap-2 pointer-events-auto">
+        {/* Toggle 3D Perspective (Uber Mode) */}
+        <button
+          onClick={toggle3DView}
+          className={`w-10 h-10 rounded-full backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition ${
+            is3DMode ? 'bg-[#007AFF] text-white' : 'bg-[#16202c]/90 text-slate-300'
+          }`}
+          title={is3DMode ? 'Modo 3D Activo (Toca para vista plana)' : 'Activar perspectiva 3D'}
+        >
+          <span className="text-[11px] font-black">{is3DMode ? '3D' : '2D'}</span>
+        </button>
+
         {/* Recenter on Route Overview (Apple Car Icon) */}
         <button
           onClick={handleCenterOnRoute}
-          className="w-10 h-10 rounded-full bg-[#1c242e]/90 backdrop-blur-xl border border-white/15 text-slate-200 hover:text-white flex items-center justify-center shadow-lg active:scale-95 transition"
-          title="Ver ruta completa"
+          className="w-10 h-10 rounded-full bg-[#16202c]/90 backdrop-blur-xl border border-white/15 text-slate-200 hover:text-white flex items-center justify-center shadow-lg active:scale-95 transition"
+          title="Ver ruta completa de la jornada"
         >
           <Car className="h-4 w-4" />
         </button>
 
-        {/* Recenter on Live Tech GPS (Apple Compass Arrow) */}
+        {/* Recenter on Live Tech GPS (Compass Arrow) */}
         <button
           onClick={handleCenterOnMe}
-          className="w-10 h-10 rounded-full bg-[#1c242e]/90 backdrop-blur-xl border border-white/15 text-[#007AFF] hover:text-blue-400 flex items-center justify-center shadow-lg active:scale-95 transition"
-          title="Centrar en mi ubicación"
+          className="w-10 h-10 rounded-full bg-[#16202c]/90 backdrop-blur-xl border border-white/15 text-[#007AFF] hover:text-blue-400 flex items-center justify-center shadow-lg active:scale-95 transition"
+          title="Centrar en mi ubicación GPS"
         >
-          <Navigation className="h-4 w-4 fill-[#007AFF]/20" />
+          <Navigation className="h-4 w-4 fill-[#007AFF]/25" />
         </button>
 
         {/* Optimize Route by Proximity */}
         <button
           onClick={handleOptimizeRoute}
           disabled={optimizing || validOrders.length < 2}
-          className="w-10 h-10 rounded-full bg-[#1c242e]/90 backdrop-blur-xl border border-white/15 text-[#FF9500] hover:text-orange-400 flex items-center justify-center shadow-lg active:scale-95 transition disabled:opacity-40"
+          className="w-10 h-10 rounded-full bg-[#16202c]/90 backdrop-blur-xl border border-white/15 text-[#FF9500] hover:text-orange-400 flex items-center justify-center shadow-lg active:scale-95 transition disabled:opacity-40"
           title="Optimizar ruta por cercanía"
         >
           <Sparkles className={`h-4 w-4 ${optimizing ? 'animate-spin' : ''}`} />
@@ -697,7 +812,7 @@ export default function UberDriverView({
 
       {/* 4. FLOATING BOTTOM SHEET (EXACT APPLE MAPS IPHONE NAVIGATION CARD) */}
       <div 
-        className={`absolute left-0 right-0 bottom-0 z-30 bg-[#1c242f]/98 backdrop-blur-2xl border-t border-white/10 rounded-t-[32px] shadow-[0_-12px_40px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out flex flex-col ${
+        className={`absolute left-0 right-0 bottom-0 z-30 bg-[#16202c]/98 backdrop-blur-2xl border-t border-white/10 rounded-t-[32px] shadow-[0_-12px_40px_rgba(0,0,0,0.65)] transition-all duration-300 ease-in-out flex flex-col ${
           drawerState === 'expanded' ? 'h-[84%]' : 'h-[258px]'
         }`}
       >
@@ -718,13 +833,13 @@ export default function UberDriverView({
               <button
                 type="button"
                 onClick={() => onOpenShareModal(selectedOrder)}
-                className="w-10 h-10 rounded-full bg-[#273240] hover:bg-[#324052] text-white flex items-center justify-center shadow-md active:scale-95 transition shrink-0"
+                className="w-10 h-10 rounded-full bg-[#243140] hover:bg-[#324052] text-white flex items-center justify-center shadow-md active:scale-95 transition shrink-0"
                 title="Compartir reporte"
               >
                 <Share2 className="h-4 w-4" />
               </button>
 
-              {/* Title & Distance (Matches Apple Maps 4260 Main St header) */}
+              {/* Title & Real Driving Time (Matches Apple Maps 4260 Main St header) */}
               <div 
                 className="text-center min-w-0 flex-1 cursor-pointer"
                 onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
@@ -733,9 +848,9 @@ export default function UberDriverView({
                   {selectedOrder.address || 'Dirección no asignada'}
                 </h2>
                 <p className="text-[11px] text-slate-400 font-medium truncate">
-                  {distanceToTarget !== null 
-                    ? `A ${distanceToTarget.toFixed(1)} mi de distancia` + (estMinutes ? ` (~${estMinutes} min)` : '')
-                    : `${selectedOrder.city || 'Elkhart, IN'} • Job #${selectedOrder.job_id}`}
+                  {routeMetrics.miles !== null 
+                    ? `A ${routeMetrics.miles.toFixed(1)} mi por carretera • ~${routeMetrics.minutes} min de manejo`
+                    : `${selectedOrder.city || 'Skokie'} • Job #${selectedOrder.job_id}`}
                 </p>
               </div>
 
@@ -743,8 +858,8 @@ export default function UberDriverView({
               <button
                 type="button"
                 onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
-                className="w-10 h-10 rounded-full bg-[#273240] hover:bg-[#324052] text-white flex items-center justify-center shadow-md active:scale-95 transition shrink-0"
-                title={drawerState === 'peek' ? 'Ver detalles y cola' : 'Contraer'}
+                className="w-10 h-10 rounded-full bg-[#243140] hover:bg-[#324052] text-white flex items-center justify-center shadow-md active:scale-95 transition shrink-0"
+                title={drawerState === 'peek' ? 'Ver detalles y paradas' : 'Contraer'}
               >
                 {drawerState === 'peek' ? <ChevronUp className="h-4 w-4" /> : <X className="h-4 w-4" />}
               </button>
@@ -767,7 +882,7 @@ export default function UberDriverView({
                 <button
                   type="button"
                   onClick={() => onMarkCompleted(selectedOrder)}
-                  className="h-11 rounded-2xl bg-[#273240] hover:bg-[#324052] text-[#29b6f6] font-bold text-xs flex items-center justify-center gap-1.5 border border-white/5 shadow-md active:scale-95 transition"
+                  className="h-11 rounded-2xl bg-[#243140] hover:bg-[#324052] text-[#29b6f6] font-bold text-xs flex items-center justify-center gap-1.5 border border-white/5 shadow-md active:scale-95 transition"
                 >
                   <CheckCircle2 className="h-4 w-4 stroke-[2.5]" />
                   <span>Completar</span>
@@ -776,7 +891,7 @@ export default function UberDriverView({
                 <button
                   type="button"
                   onClick={() => onOpenShareModal(selectedOrder)}
-                  className="h-11 rounded-2xl bg-[#273240] hover:bg-[#324052] text-[#34C759] font-bold text-xs flex items-center justify-center gap-1.5 border border-white/5 shadow-md active:scale-95 transition"
+                  className="h-11 rounded-2xl bg-[#243140] hover:bg-[#324052] text-[#34C759] font-bold text-xs flex items-center justify-center gap-1.5 border border-white/5 shadow-md active:scale-95 transition"
                 >
                   <MessageCircle className="h-4 w-4 stroke-[2.5]" />
                   <span>WhatsApp</span>
@@ -790,9 +905,18 @@ export default function UberDriverView({
                   const pendingOrders = orders.filter(o => o.status === 'Pendiente');
                   const currentIndex = pendingOrders.findIndex(o => o.id === selectedOrder.id);
                   const next = pendingOrders[(currentIndex + 1) % pendingOrders.length];
-                  if (next) setSelectedOrder(next);
+                  if (next) {
+                    setSelectedOrder(next);
+                    if (next.latitude && next.longitude && mapInstanceRef.current) {
+                      mapInstanceRef.current.flyTo({
+                        center: [next.longitude, next.latitude],
+                        zoom: 15.5,
+                        pitch: is3DMode ? 50 : 0
+                      });
+                    }
+                  }
                 }}
-                className="h-11 rounded-2xl bg-[#273240] hover:bg-[#324052] text-[#29b6f6] font-bold text-xs flex items-center justify-center gap-1.5 border border-white/5 shadow-md active:scale-95 transition"
+                className="h-11 rounded-2xl bg-[#243140] hover:bg-[#324052] text-[#29b6f6] font-bold text-xs flex items-center justify-center gap-1.5 border border-white/5 shadow-md active:scale-95 transition"
               >
                 <Navigation className="h-4 w-4" />
                 <span>Siguiente</span>
@@ -800,7 +924,7 @@ export default function UberDriverView({
             </div>
 
             {/* Note Card: "Agregar una nota" (Apple Maps Card Design) */}
-            <div className="bg-[#222b37] border border-white/5 rounded-2xl p-2.5 my-1">
+            <div className="bg-[#1f2937] border border-white/5 rounded-2xl p-2.5 my-1">
               {!isEditingNote ? (
                 <div 
                   onClick={() => setIsEditingNote(true)}
@@ -826,7 +950,7 @@ export default function UberDriverView({
                     value={currentNoteText}
                     onChange={(e) => setCurrentNoteText(e.target.value)}
                     placeholder="Escribe detalles del acceso, perro, caída de cable, etc..."
-                    className="w-full bg-[#182029] text-white border border-[#007AFF]/50 rounded-xl p-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#007AFF] resize-none"
+                    className="w-full bg-[#121922] text-white border border-[#007AFF]/50 rounded-xl p-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#007AFF] resize-none"
                     rows={2}
                   />
                   <div className="flex justify-end gap-1.5">
@@ -853,7 +977,7 @@ export default function UberDriverView({
               )}
             </div>
 
-            {/* Bottom Floating Pill Bar with Shortcuts: Timer, Open in Apple Maps, More */}
+            {/* Bottom Floating Pill Bar: Timer, Open in Apple Maps, More */}
             <div className="flex items-center justify-between pt-1">
               {/* On-Site Timer Pill */}
               <button
@@ -864,7 +988,7 @@ export default function UberDriverView({
                     ? 'bg-[#34C759]/20 text-[#34C759] border border-[#34C759]/40 animate-pulse'
                     : currentTimer?.elapsed > 0
                     ? 'bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/40'
-                    : 'bg-[#273240] text-slate-300 border border-white/5'
+                    : 'bg-[#243140] text-slate-300 border border-white/5'
                 }`}
                 title="Temporizador de trabajo en sitio"
               >
@@ -878,7 +1002,7 @@ export default function UberDriverView({
               </div>
 
               {/* Action Pill: Check, Apple Maps App, More */}
-              <div className="flex items-center gap-1 bg-[#273240] rounded-xl p-1 border border-white/5">
+              <div className="flex items-center gap-1 bg-[#243140] rounded-xl p-1 border border-white/5">
                 <button
                   type="button"
                   onClick={() => onMarkCompleted(selectedOrder)}
@@ -912,14 +1036,14 @@ export default function UberDriverView({
                 
                 {/* More Actions Popover if opened */}
                 {showMoreActions && (
-                  <div className="bg-[#18212c] border border-white/10 rounded-2xl p-2 grid grid-cols-3 gap-2">
+                  <div className="bg-[#121922] border border-white/10 rounded-2xl p-2 grid grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         setShowMoreActions(false);
                         onOpenEditModal(selectedOrder);
                       }}
-                      className="p-2 bg-[#273240] rounded-xl text-slate-200 text-[10px] font-bold text-center hover:bg-[#344558]"
+                      className="p-2 bg-[#243140] rounded-xl text-slate-200 text-[10px] font-bold text-center hover:bg-[#344558]"
                     >
                       Editar Orden
                     </button>
@@ -929,7 +1053,7 @@ export default function UberDriverView({
                         setShowMoreActions(false);
                         onOpenAdjustModal(selectedOrder);
                       }}
-                      className="p-2 bg-[#273240] rounded-xl text-slate-200 text-[10px] font-bold text-center hover:bg-[#344558]"
+                      className="p-2 bg-[#243140] rounded-xl text-slate-200 text-[10px] font-bold text-center hover:bg-[#344558]"
                     >
                       Ajustar Precio
                     </button>
@@ -947,7 +1071,7 @@ export default function UberDriverView({
                 )}
 
                 {/* Apple Maps "Detalles" Section */}
-                <div className="bg-[#222b37] border border-white/5 rounded-2xl p-3 space-y-2.5">
+                <div className="bg-[#1f2937] border border-white/5 rounded-2xl p-3 space-y-2.5">
                   <h3 className="text-xs font-black text-white uppercase tracking-wider">
                     Detalles
                   </h3>
@@ -1004,7 +1128,7 @@ export default function UberDriverView({
                     </h3>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-1 bg-[#182029] p-1 rounded-2xl border border-white/5 text-[10px] font-bold text-center">
+                  <div className="grid grid-cols-4 gap-1 bg-[#121922] p-1 rounded-2xl border border-white/5 text-[10px] font-bold text-center">
                     <button
                       onClick={() => setStatusFilter('ALL')}
                       className={`py-1.5 rounded-xl transition ${statusFilter === 'ALL' ? 'bg-[#007AFF] text-white shadow-sm font-black' : 'text-slate-400'}`}
@@ -1045,20 +1169,24 @@ export default function UberDriverView({
                           onClick={() => {
                             setSelectedOrder(ord);
                             if (ord.latitude && ord.longitude && mapInstanceRef.current) {
-                              mapInstanceRef.current.setView([ord.latitude, ord.longitude], 15, { animate: true });
+                              mapInstanceRef.current.flyTo({
+                                center: [ord.longitude, ord.latitude],
+                                zoom: 15.5,
+                                pitch: is3DMode ? 50 : 0
+                              });
                             }
                           }}
                           className={`p-3 rounded-2xl border cursor-pointer transition select-none flex items-center justify-between gap-2 ${
                             isTarget 
-                              ? 'bg-[#007AFF]/15 border-[#007AFF]/70 shadow-md ring-1 ring-[#007AFF]/50'
-                              : 'bg-[#222b37] border-white/5 hover:border-white/15'
+                              ? 'bg-[#007AFF]/20 border-[#007AFF]/80 shadow-md ring-1 ring-[#007AFF]/50'
+                              : 'bg-[#1f2937] border-white/5 hover:border-white/15'
                           }`}
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
                             <span className={`w-6 h-6 rounded-full text-white font-black text-xs flex items-center justify-center font-sans shrink-0 ${
                               isCompleted ? 'bg-[#34C759]' : isCancelled ? 'bg-[#FF3B30]' : 'bg-[#FF9500]'
                             }`}>
-                              {idx + 1}
+                              {isCompleted ? '✓' : idx + 1}
                             </span>
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5">

@@ -497,3 +497,40 @@ div[data-netlify-drawer],
   background: rgba(255, 255, 255, 0.2);
   border-radius: 4px;
 }
+
+/* ============================================================
+   MAPBOX GL 3D VECTOR NAVIGATION STYLES
+   ============================================================ */
+.mapbox-3d-canvas {
+  background-color: #0b1017 !important;
+}
+
+.mapboxgl-canvas {
+  outline: none !important;
+}
+
+/* Hide default attribution/logo inside phone drawer frame */
+.mapboxgl-ctrl-logo,
+.mapboxgl-ctrl-attrib,
+.mapboxgl-compact {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+.apple-user-puck-mapbox {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.apple-dest-badge-mapbox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+}
