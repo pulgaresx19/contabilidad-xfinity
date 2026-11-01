@@ -3,13 +3,13 @@ import { Plus, X, Check, AlertCircle, Phone, MapPin, Ruler, DollarSign, Calendar
 import { getLocalDateStr } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox } from '../utils/mapboxGeocode';
 
-export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech }) {
+export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, initialDate }) {
   const [formData, setFormData] = useState({
-    work_date: getLocalDateStr(),
+    work_date: initialDate || getLocalDateStr(),
     tech_id: defaultTech || 'Javier (P0G1)',
     job_id: '',
     address: '',
-    city: '',
+    city: 'ELKHART',
     zip_code: '',
     phone: '',
     call_first: false,
@@ -24,12 +24,32 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  // Sync with initialDate and reset form when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setFormData({
+        work_date: initialDate || getLocalDateStr(),
+        tech_id: defaultTech || 'Javier (P0G1)',
+        job_id: '',
+        address: '',
+        city: 'ELKHART',
+        zip_code: '',
+        phone: '',
+        call_first: false,
+        drop_footage: '',
+        cable_type: 'RG-6',
+        bore_type: 'N',
+        raw_notes: '',
+        status: 'Pendiente',
+        payment_status: 'Pendiente'
+      });
+      setError(null);
+      setSaving(false);
+    }
+  }, [isOpen, initialDate, defaultTech]);
+
   if (!isOpen) return null;
 
-  // Cálculo Dinámico de Tarifa Xfinity:
-  // - Tarifa Base: $100
-  // - Driveway Bore (DW): +$30
-  // - Bono Metraje Largo (>300 ft): +$25 por cada 100 ft adicionales completos sobre 300
   const numFootage = parseFloat(formData.drop_footage) || 0;
   const isDW = formData.bore_type && formData.bore_type.includes('DW');
   const boreBonus = isDW ? 30 : 0;
@@ -39,8 +59,11 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.job_id.trim() || !formData.address.trim()) {
-      setError('Por favor ingresa el número de trabajo y la dirección.');
+    const cleanJobId = (formData.job_id || '').trim();
+    const cleanAddress = (formData.address || '').trim();
+
+    if (!cleanJobId || !cleanAddress) {
+      setError('Por favor ingresa el número de trabajo (Job ID) y la dirección.');
       return;
     }
 
@@ -48,56 +71,47 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech }
     setError(null);
 
     try {
-      // Real-time Mapbox geocoding for immediate pin & road route
-      const geo = await geocodeAddressWithMapbox(formData.address, formData.city, formData.zip_code);
-      const lat = geo?.latitude || null;
-      const lng = geo?.longitude || null;
-
+      let lat = null;
+      let lng = null;
       try {
-        const res = await fetch('/api/orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...formData,
-            city: (formData.city || '').trim().toUpperCase(),
-            drop_footage: numFootage,
-            rate_calculated: currentTotal,
-            latitude: lat,
-            longitude: lng
-          })
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (onJobAdded) onJobAdded(data);
-          onClose();
-          return;
+        const geo = await geocodeAddressWithMapbox(cleanAddress, formData.city, formData.zip_code);
+        if (geo && geo.latitude && geo.longitude) {
+          lat = geo.latitude;
+          lng = geo.longitude;
         }
-      } catch (networkErr) {
-        console.warn('Network error reaching backend, saving offline:', networkErr.message);
+      } catch (geoErr) {
+        console.warn('Geocoding notice:', geoErr.message);
       }
 
-      // Local-first / Vercel offline fallback
-      const isSkokie = (formData.city || '').toLowerCase().includes('skokie') || (formData.address || '').toLowerCase().includes('skokie');
-      const offlineOrder = {
-        id: Date.now(),
+      const payload = {
         ...formData,
-        city: (formData.city || (isSkokie ? 'SKOKIE' : 'ELKHART')).trim().toUpperCase(),
+        job_id: cleanJobId,
+        address: cleanAddress,
+        city: (formData.city || 'ELKHART').trim().toUpperCase(),
         drop_footage: numFootage,
         rate_calculated: currentTotal,
-        latitude: lat || (isSkokie ? 42.033592 : 41.681995),
-        longitude: lng || (isSkokie ? -87.7345574 : -85.97667),
-        created_at: new Date().toISOString()
+        latitude: lat,
+        longitude: lng
       };
-      try {
-        const cached = JSON.parse(localStorage.getItem('xfinity_cached_orders') || '[]');
-        const updated = [offlineOrder, ...cached];
-        localStorage.setItem('xfinity_cached_orders', JSON.stringify(updated));
-      } catch (e) {}
-      if (onJobAdded) onJobAdded(offlineOrder);
-      onClose();
+
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (onJobAdded) await onJobAdded(data);
+        onClose();
+        return;
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Error del servidor (${res.status}) al guardar la orden.`);
+      }
     } catch (err) {
-      setError(err.message);
+      console.error('Error saving job:', err);
+      setError(err.message || 'Error al guardar el trabajo. Verifica los datos.');
     } finally {
       setSaving(false);
     }

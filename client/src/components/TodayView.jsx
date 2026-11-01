@@ -562,9 +562,11 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           onOpenPhotos={onOpenPhotos}
           onMarkCompleted={handleMarkCompleted}
           onOpenCancelModal={openCancelModal}
+          onOpenCancelDetail={openCancelDetail}
           onOpenEditModal={(ord) => setEditingOrder(ord)}
           onOpenAdjustModal={openAdjustModal}
           onOpenShareModal={openShareModal}
+          localSharedMap={localSharedMap}
           onOrderUpdated={onOrderUpdated}
           onSwitchToClassic={() => setViewMode('classic')}
         />
@@ -1687,9 +1689,15 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
       <AddJobModal
         isOpen={isAddJobOpen}
         onClose={() => setIsAddJobOpen(false)}
+        initialDate={activeDate}
         onJobAdded={async (createdOrder) => {
-          if (createdOrder && createdOrder.id) {
-            setTargetFocusOrderId(createdOrder.id);
+          if (createdOrder) {
+            if (createdOrder.work_date) {
+              setActiveDate(normalizeDateStr(createdOrder.work_date));
+            }
+            if (createdOrder.id) {
+              setTargetFocusOrderId(createdOrder.id);
+            }
           }
           if (onOrderUpdated) {
             await onOrderUpdated();

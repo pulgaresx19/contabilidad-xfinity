@@ -493,6 +493,10 @@ app.get('/api/orders', (req, res) => {
     query += ` ORDER BY o.work_date DESC, (CASE WHEN o.route_order > 0 THEN o.route_order ELSE 999 END) ASC, o.id ASC`;
 
     const orders = db.prepare(query).all(...params);
+    const photosStmt = db.prepare('SELECT id, work_order_id, filename, original_name, category, created_at FROM job_photos WHERE work_order_id = ? ORDER BY id DESC');
+    for (const ord of orders) {
+      ord.photos = photosStmt.all(ord.id);
+    }
     res.json(orders);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -507,6 +511,16 @@ app.get('/api/orders/:id', (req, res) => {
 
     const photos = db.prepare('SELECT * FROM job_photos WHERE work_order_id = ? ORDER BY id DESC').all(req.params.id);
     res.json({ ...order, photos });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 2b. Get just photos for an order (lightweight)
+app.get('/api/orders/:id/photos', (req, res) => {
+  try {
+    const photos = db.prepare('SELECT * FROM job_photos WHERE work_order_id = ? ORDER BY id DESC').all(req.params.id);
+    res.json({ photos });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -527,28 +541,20 @@ app.post('/api/orders', async (req, res) => {
       }
     }
 
-    const stmt = db.prepare(`
-      INSERT INTO work_orders (
-        work_date, tech_id, job_id, address, city, zip_code, phone,
-        call_first, drop_footage, cable_type, bore_type, is_temp,
-        obstacles, premise_access, neighbor_notice, raw_notes, rate_calculated,
-        manual_adjustment, adjustment_reason,
-        status, payment_status, latitude, longitude, route_order
-      ) VALUES (
-        @work_date, @tech_id, @job_id, @address, @city, @zip_code, @phone,
-        @call_first, @drop_footage, @cable_type, @bore_type, @is_temp,
-        @obstacles, @premise_access, @neighbor_notice, @raw_notes, @rate_calculated,
-        @manual_adjustment, @adjustment_reason,
-        @status, @payment_status, @latitude, @longitude, @route_order
-      )
-    `);
+    const cleanJobId = String(data.job_id || '').trim();
+    if (!cleanJobId) {
+      return res.status(400).json({ error: 'El número de trabajo (Job ID) es obligatorio.' });
+    }
+    if (!data.address || !data.address.trim()) {
+      return res.status(400).json({ error: 'La dirección es obligatoria.' });
+    }
 
-    const result = stmt.run({
+    const orderPayload = {
       work_date: data.work_date || new Date().toISOString().split('T')[0],
       tech_id: data.tech_id || 'Javier (P0G1)',
-      job_id: data.job_id,
-      address: data.address,
-      city: data.city || '',
+      job_id: cleanJobId,
+      address: data.address.trim(),
+      city: data.city ? data.city.trim().toUpperCase() : 'ELKHART',
       zip_code: data.zip_code || '',
       phone: data.phone || '',
       call_first: data.call_first ? 1 : 0,
@@ -568,8 +574,61 @@ app.post('/api/orders', async (req, res) => {
       latitude: lat,
       longitude: lng,
       route_order: parseInt(data.route_order, 10) || 0
-    });
+    };
 
+    // If job_id already exists in database, update it instead of throwing UNIQUE constraint crash
+    const existing = db.prepare('SELECT id FROM work_orders WHERE job_id = ?').get(cleanJobId);
+    if (existing) {
+      const updateStmt = db.prepare(`
+        UPDATE work_orders SET
+          work_date = @work_date,
+          tech_id = @tech_id,
+          address = @address,
+          city = @city,
+          zip_code = @zip_code,
+          phone = @phone,
+          call_first = @call_first,
+          drop_footage = @drop_footage,
+          cable_type = @cable_type,
+          bore_type = @bore_type,
+          is_temp = @is_temp,
+          obstacles = @obstacles,
+          premise_access = @premise_access,
+          neighbor_notice = @neighbor_notice,
+          raw_notes = @raw_notes,
+          rate_calculated = @rate_calculated,
+          manual_adjustment = @manual_adjustment,
+          adjustment_reason = @adjustment_reason,
+          status = @status,
+          payment_status = @payment_status,
+          latitude = @latitude,
+          longitude = @longitude,
+          route_order = @route_order,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = @id
+      `);
+      updateStmt.run({ ...orderPayload, id: existing.id });
+      const updatedOrder = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(existing.id);
+      return res.status(200).json(updatedOrder);
+    }
+
+    const stmt = db.prepare(`
+      INSERT INTO work_orders (
+        work_date, tech_id, job_id, address, city, zip_code, phone,
+        call_first, drop_footage, cable_type, bore_type, is_temp,
+        obstacles, premise_access, neighbor_notice, raw_notes, rate_calculated,
+        manual_adjustment, adjustment_reason,
+        status, payment_status, latitude, longitude, route_order
+      ) VALUES (
+        @work_date, @tech_id, @job_id, @address, @city, @zip_code, @phone,
+        @call_first, @drop_footage, @cable_type, @bore_type, @is_temp,
+        @obstacles, @premise_access, @neighbor_notice, @raw_notes, @rate_calculated,
+        @manual_adjustment, @adjustment_reason,
+        @status, @payment_status, @latitude, @longitude, @route_order
+      )
+    `);
+
+    const result = stmt.run(orderPayload);
     const newOrder = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(newOrder);
   } catch (error) {
