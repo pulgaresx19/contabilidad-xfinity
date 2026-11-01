@@ -7,13 +7,35 @@ import {
   Camera, Share2, DollarSign, Layers, List, Pencil, 
   SlidersHorizontal, Car, Calendar, ArrowRight, ArrowLeft, ShieldCheck, 
   X, Plus, Play, Pause, RotateCcw, Home, Star, MoreHorizontal,
-  Cloud, MessageCircle, ExternalLink, Check, Eye
+  Cloud, MessageCircle, ExternalLink, Check, Eye, Sun, Moon, Globe
 } from 'lucide-react';
 import { formatDateFriendly } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
 
 const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
 mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
+
+// Map Theme Definitions (Default is 'streets' - Apple Maps Normal with light gray & white streets)
+const MAP_THEMES = {
+  streets: {
+    name: 'Normal iPhone',
+    style: 'mapbox://styles/mapbox/streets-v12',
+    icon: Sun,
+    description: 'Calles en gris claro y blanco'
+  },
+  night: {
+    name: 'Modo Noche',
+    style: 'mapbox://styles/mapbox/navigation-night-v1',
+    icon: Moon,
+    description: 'Estilo Uber / Apple oscuro'
+  },
+  satellite: {
+    name: 'Satélite Real',
+    style: 'mapbox://styles/mapbox/satellite-streets-v12',
+    icon: Globe,
+    description: 'Foto aérea con calles'
+  }
+};
 
 // Haversine formula for fast fallback distance calculation
 function getEstimatedDrivingMiles(lat1, lon1, lat2, lon2) {
@@ -53,6 +75,7 @@ export default function UberDriverView({
   const markersRef = useRef([]);
   const routeBadgeMarkerRef = useRef(null);
   const userMarkerRef = useRef(null);
+  const currentRouteCoordsRef = useRef([]);
 
   const [userLocation, setUserLocation] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -60,6 +83,12 @@ export default function UberDriverView({
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [optimizing, setOptimizing] = useState(false);
   const [is3DMode, setIs3DMode] = useState(true);
+
+  // Map Theme state: Default is 'streets' (Apple Maps Normal)
+  const [mapTheme, setMapTheme] = useState(() => {
+    return localStorage.getItem('xfinity_map_theme') || 'streets';
+  });
+  const [showThemePicker, setShowThemePicker] = useState(false);
 
   // Turn-by-Turn Route Metrics from Mapbox Directions API
   const [routeMetrics, setRouteMetrics] = useState({
@@ -85,7 +114,7 @@ export default function UberDriverView({
   });
 
   // Default coordinate center: Skokie / Elkhart
-  const DEFAULT_LNG_LAT = [-87.734557, 42.033592]; // [lng, lat]
+  const DEFAULT_LNG_LAT = [-87.734557, 42.033592];
 
   // Daily statistics
   const dayPending = orders.filter(o => o.status === 'Pendiente');
@@ -145,11 +174,10 @@ export default function UberDriverView({
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // 1. FAST LIVE GPS GEOLOCATION (Single fix + Continuous Watch)
+  // 1. FAST LIVE GPS GEOLOCATION
   useEffect(() => {
     if (!navigator.geolocation) return;
 
-    // Fast initial fix
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setUserLocation({
@@ -163,7 +191,6 @@ export default function UberDriverView({
       { enableHighAccuracy: true, timeout: 6000, maximumAge: 10000 }
     );
 
-    // Watch position
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         setUserLocation({
@@ -181,7 +208,6 @@ export default function UberDriverView({
   }, []);
 
   // 2. AUTOMATIC MAPBOX GEOCODING OF MISSING ORDERS
-  // Guarantees 100% of jobs appear on the map with pins and turn-by-turn routes immediately
   useEffect(() => {
     const missing = orders.filter(o => !o.latitude || !o.longitude);
     if (missing.length === 0) return;
@@ -197,14 +223,12 @@ export default function UberDriverView({
             ord.latitude = geo.latitude;
             ord.longitude = geo.longitude;
 
-            // Notify backend in background
             fetch(`/api/orders/${ord.id}/coords`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ latitude: geo.latitude, longitude: geo.longitude })
             }).catch(() => {});
 
-            // Update local-first cache
             try {
               const cached = JSON.parse(localStorage.getItem('xfinity_cached_orders') || '[]');
               const idx = cached.findIndex(c => c.id === ord.id);
@@ -215,7 +239,6 @@ export default function UberDriverView({
               }
             } catch (e) {}
 
-            // If this order is the active selected order, update state so route draws instantly
             setSelectedOrder(prev => {
               if (prev && prev.id === ord.id) {
                 return { ...prev, latitude: geo.latitude, longitude: geo.longitude };
@@ -234,12 +257,11 @@ export default function UberDriverView({
     return () => { isCancelled = true; };
   }, [orders]);
 
-  // 3. SELECT A JOB: Locates on map, flies camera in 3D, and computes route from current location
+  // 3. SELECT A JOB: Locates on map, flies camera in 3D, and computes route
   const handleSelectJob = async (order) => {
     if (!order) return;
     let target = order;
 
-    // If coordinates are missing, geocode right away via Mapbox in <150ms
     if (!target.latitude || !target.longitude) {
       const geo = await geocodeAddressWithMapbox(target.address, target.city, target.zip_code);
       if (geo && geo.latitude && geo.longitude) {
@@ -323,38 +345,26 @@ export default function UberDriverView({
     }
   }, [orders, targetFocusOrderId]);
 
-  // 4. INITIALIZE MAPBOX GL 3D VECTOR MAP
-  useEffect(() => {
-    if (!mapContainerRef.current) return;
-    if (mapInstanceRef.current) return;
-
-    const targetOrder = validOrders[0];
-    const initialCenter = targetOrder 
-      ? [targetOrder.longitude, targetOrder.latitude] 
-      : DEFAULT_LNG_LAT;
-
-    const map = new mapboxgl.Map({
-      container: mapContainerRef.current,
-      style: 'mapbox://styles/mapbox/navigation-night-v1', // Official Uber Navigation Night 3D style
-      center: initialCenter,
-      zoom: 14.5,
-      pitch: 45, // 3D Perspective angle like Uber
-      bearing: 0,
-      attributionControl: false
-    });
-
-    map.on('load', () => {
-      // Route line source
+  // Helper to attach route layers cleanly whenever a style is loaded
+  const setupRouteLayers = (map) => {
+    if (!map) return;
+    
+    // Route layer
+    if (!map.getSource('route-nav')) {
       map.addSource('route-nav', {
         type: 'geojson',
         data: {
           type: 'Feature',
           properties: {},
-          geometry: { type: 'LineString', coordinates: [] }
+          geometry: { 
+            type: 'LineString', 
+            coordinates: currentRouteCoordsRef.current || [] 
+          }
         }
       });
+    }
 
-      // 1. Glowing ribbon underlayer
+    if (!map.getLayer('route-glow-layer')) {
       map.addLayer({
         id: 'route-glow-layer',
         type: 'line',
@@ -363,12 +373,13 @@ export default function UberDriverView({
         paint: {
           'line-color': '#007AFF',
           'line-width': 12,
-          'line-opacity': 0.38,
+          'line-opacity': 0.35,
           'line-blur': 2
         }
       });
+    }
 
-      // 2. Solid Apple/Uber electric blue ribbon
+    if (!map.getLayer('route-core-layer')) {
       map.addLayer({
         id: 'route-core-layer',
         type: 'line',
@@ -380,8 +391,10 @@ export default function UberDriverView({
           'line-opacity': 0.98
         }
       });
+    }
 
-      // Connecting sequence between all daily stops
+    // Sequence connecting daily stops
+    if (!map.getSource('stops-sequence')) {
       map.addSource('stops-sequence', {
         type: 'geojson',
         data: {
@@ -390,19 +403,52 @@ export default function UberDriverView({
           geometry: { type: 'LineString', coordinates: [] }
         }
       });
+    }
 
+    if (!map.getLayer('stops-sequence-layer')) {
       map.addLayer({
         id: 'stops-sequence-layer',
         type: 'line',
         source: 'stops-sequence',
         layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: {
-          'line-color': '#29b6f6',
+          'line-color': '#007AFF',
           'line-width': 2.5,
           'line-dasharray': [2, 2],
-          'line-opacity': 0.45
+          'line-opacity': 0.5
         }
       });
+    }
+  };
+
+  // 4. INITIALIZE MAPBOX GL 3D VECTOR MAP
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+    if (mapInstanceRef.current) return;
+
+    const targetOrder = validOrders[0];
+    const initialCenter = targetOrder 
+      ? [targetOrder.longitude, targetOrder.latitude] 
+      : DEFAULT_LNG_LAT;
+
+    const initialStyleUrl = MAP_THEMES[mapTheme]?.style || MAP_THEMES.streets.style;
+
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: initialStyleUrl, // Apple Maps Normal ('streets-v12') by default
+      center: initialCenter,
+      zoom: 14.5,
+      pitch: 45, // 3D Perspective angle
+      bearing: 0,
+      attributionControl: false
+    });
+
+    map.on('load', () => {
+      setupRouteLayers(map);
+    });
+
+    map.on('style.load', () => {
+      setupRouteLayers(map);
     });
 
     mapInstanceRef.current = map;
@@ -412,6 +458,20 @@ export default function UberDriverView({
       mapInstanceRef.current = null;
     };
   }, []);
+
+  // Handle Changing Map Theme / Estética
+  const handleChangeTheme = (themeKey) => {
+    setMapTheme(themeKey);
+    try {
+      localStorage.setItem('xfinity_map_theme', themeKey);
+    } catch (e) {}
+    setShowThemePicker(false);
+
+    const map = mapInstanceRef.current;
+    if (map && MAP_THEMES[themeKey]) {
+      map.setStyle(MAP_THEMES[themeKey].style);
+    }
+  };
 
   // 5. UPDATE MAPBOX MARKERS, VEHICLE PUCK & TURN-BY-TURN ROAD ROUTE
   useEffect(() => {
@@ -432,8 +492,8 @@ export default function UberDriverView({
 
     const activeTarget = selectedOrder || validOrders[0];
 
-    // Determine technician start coordinates (real GPS location or nearby grid offset)
-    let startCoords = null; // [lng, lat]
+    // Determine start point (real GPS location or nearby grid offset)
+    let startCoords = null;
     if (userLocation && userLocation.lng && userLocation.lat) {
       startCoords = [userLocation.lng, userLocation.lat];
     } else if (activeTarget && activeTarget.latitude && activeTarget.longitude) {
@@ -493,7 +553,7 @@ export default function UberDriverView({
 
         markersRef.current.push(targetMarker);
       } else {
-        // Numbered Stop Marker (Orange/Green/Gray)
+        // Numbered Stop Marker
         let bg = 'bg-[#FF9500]';
         if (isCompleted) bg = 'bg-[#34C759]';
         else if (isCancelled) bg = 'bg-[#8E8E93]';
@@ -542,6 +602,7 @@ export default function UberDriverView({
             if (data.routes && data.routes.length > 0) {
               const route = data.routes[0];
               const roadCoordinates = route.geometry.coordinates;
+              currentRouteCoordsRef.current = roadCoordinates;
               const distMiles = route.distance / 1609.34;
               const durMins = Math.max(1, Math.round(route.duration / 60));
 
@@ -589,7 +650,7 @@ export default function UberDriverView({
           console.warn('Mapbox directions error:', e);
         }
 
-        // Fallback straight-line if offline
+        // Fallback straight-line
         if (map.getSource('route-nav')) {
           map.getSource('route-nav').setData({
             type: 'Feature',
@@ -627,7 +688,7 @@ export default function UberDriverView({
         duration: 1000
       });
     }
-  }, [orders, selectedOrder?.id, selectedOrder?.latitude, selectedOrder?.longitude, userLocation, is3DMode]);
+  }, [orders, selectedOrder?.id, selectedOrder?.latitude, selectedOrder?.longitude, userLocation, is3DMode, mapTheme]);
 
   // Center on current technician location
   const handleCenterOnMe = () => {
@@ -743,7 +804,7 @@ export default function UberDriverView({
     }
   };
 
-  // Formatted GPS display (Apple style: 42.0298° N, 87.73507° O)
+  // Formatted GPS display
   const formatCoordinates = (lat, lng) => {
     if (!lat || !lng) return 'Coordenadas en proceso de localización';
     const latDir = lat >= 0 ? 'N' : 'S';
@@ -764,7 +825,7 @@ export default function UberDriverView({
   const currentTimer = selectedOrder ? jobTimers[selectedOrder.id] : null;
 
   return (
-    <div className="relative w-full max-w-md mx-auto h-[calc(100vh-8.5rem)] rounded-3xl overflow-hidden border border-[#2b3543] bg-[#0b1017] shadow-2xl flex flex-col select-none">
+    <div className="relative w-full max-w-md mx-auto h-[calc(100vh-8.5rem)] rounded-3xl overflow-hidden border border-[#2b3543] bg-[#f0eee9] shadow-2xl flex flex-col select-none">
       
       {/* 1. MAPBOX GL 3D VECTOR CANVAS */}
       <div 
@@ -834,7 +895,6 @@ export default function UberDriverView({
       </div>
 
       {/* 3. SELECTOR DE TRABAJOS HORIZONTAL (JOB SELECTOR RIBBON) */}
-      {/* Tapping any job immediately updates destination & draws route from current location */}
       {orders.length > 0 && (
         <div className="absolute top-16 left-3 right-16 z-20 pointer-events-auto">
           <div className="bg-[#121922]/95 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 shadow-xl flex items-center gap-1.5 overflow-x-auto apple-drawer-scroll">
@@ -876,9 +936,51 @@ export default function UberDriverView({
         </div>
       )}
 
-      {/* 4. RIGHT FLOATING CONTROLS: 3D/2D PERSPECTIVE + RECENTER + OPTIMIZE */}
+      {/* 4. RIGHT FLOATING CONTROLS: ESTILO DE MAPA + 3D/2D + CENTRAR + OPTIMIZAR */}
       <div className="absolute right-3 top-28 z-20 flex flex-col gap-2 pointer-events-auto">
-        {/* Toggle 3D Perspective (Uber Mode) */}
+        {/* Toggle Theme / Estética Popover (Apple Normal, Noche, Satélite) */}
+        <div className="relative">
+          <button
+            onClick={() => setShowThemePicker(prev => !prev)}
+            className={`w-10 h-10 rounded-full backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition ${
+              mapTheme === 'streets' ? 'bg-[#007AFF] text-white' : 'bg-[#16202c]/90 text-slate-300'
+            }`}
+            title="Cambiar estética del mapa"
+          >
+            <Layers className="h-4 w-4" />
+          </button>
+
+          {showThemePicker && (
+            <div className="absolute right-12 top-0 bg-[#16202c]/98 backdrop-blur-2xl border border-white/15 rounded-2xl p-2 shadow-2xl flex flex-col gap-1 w-44 z-50 animate-fade-in">
+              <span className="text-[10px] font-black uppercase text-slate-400 px-2 py-0.5">
+                Estilo de Mapa
+              </span>
+              {Object.entries(MAP_THEMES).map(([key, t]) => {
+                const IconComponent = t.icon;
+                const active = mapTheme === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handleChangeTheme(key)}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-left transition ${
+                      active ? 'bg-[#007AFF] text-white font-bold' : 'text-slate-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <IconComponent className="h-3.5 w-3.5 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-bold leading-tight">{t.name}</div>
+                      <div className={`text-[9px] truncate ${active ? 'text-blue-100' : 'text-slate-400'}`}>
+                        {t.description}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Toggle 3D Perspective */}
         <button
           onClick={toggle3DView}
           className={`w-10 h-10 rounded-full backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition ${
@@ -889,7 +991,7 @@ export default function UberDriverView({
           <span className="text-[11px] font-black">{is3DMode ? '3D' : '2D'}</span>
         </button>
 
-        {/* Recenter on Route Overview (Apple Car Icon) */}
+        {/* Recenter on Route Overview */}
         <button
           onClick={handleCenterOnRoute}
           className="w-10 h-10 rounded-full bg-[#16202c]/90 backdrop-blur-xl border border-white/15 text-slate-200 hover:text-white flex items-center justify-center shadow-lg active:scale-95 transition"
@@ -898,7 +1000,7 @@ export default function UberDriverView({
           <Car className="h-4 w-4" />
         </button>
 
-        {/* Recenter on Live Tech GPS (Compass Arrow) */}
+        {/* Recenter on Live Tech GPS */}
         <button
           onClick={handleCenterOnMe}
           className="w-10 h-10 rounded-full bg-[#16202c]/90 backdrop-blur-xl border border-white/15 text-[#007AFF] hover:text-blue-400 flex items-center justify-center shadow-lg active:scale-95 transition"
@@ -937,7 +1039,6 @@ export default function UberDriverView({
             
             {/* Top Bar: Share (Left) | Stepper & Address (Center) | Expand/Close (Right) */}
             <div className="flex items-center justify-between gap-2 pt-0.5 pb-1">
-              {/* Share Button (iOS Style Circle) */}
               <button
                 type="button"
                 onClick={() => onOpenShareModal(selectedOrder)}
@@ -947,12 +1048,10 @@ export default function UberDriverView({
                 <Share2 className="h-4 w-4" />
               </button>
 
-              {/* Title & Real Driving Time (Matches Apple Maps Header) */}
               <div 
                 className="text-center min-w-0 flex-1 cursor-pointer"
                 onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
               >
-                {/* Parada Indicator & Stepper */}
                 <div className="flex items-center justify-center gap-2 mb-0.5">
                   <button
                     type="button"
@@ -985,7 +1084,6 @@ export default function UberDriverView({
                 </p>
               </div>
 
-              {/* Expand/Collapse Toggle */}
               <button
                 type="button"
                 onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
@@ -996,9 +1094,8 @@ export default function UberDriverView({
               </button>
             </div>
 
-            {/* 3 Horizontal Action Pills (Matches Apple Maps UI) */}
+            {/* 3 Horizontal Action Pills */}
             <div className="grid grid-cols-3 gap-2 py-1">
-              {/* Pill 1: Photos with Timestamp & DMS GPS Watermark */}
               <button
                 type="button"
                 onClick={() => onOpenPhotos(selectedOrder)}
@@ -1008,7 +1105,6 @@ export default function UberDriverView({
                 <span className="truncate">Fotos ({selectedOrder.photos_count || 0})</span>
               </button>
 
-              {/* Pill 2: Dark Slate -> Completar / WhatsApp */}
               {selectedOrder.status !== 'Completado' ? (
                 <button
                   type="button"
@@ -1029,7 +1125,6 @@ export default function UberDriverView({
                 </button>
               )}
 
-              {/* Pill 3: Dark Slate -> Siguiente Parada */}
               <button
                 type="button"
                 onClick={handleNextJob}
@@ -1041,7 +1136,7 @@ export default function UberDriverView({
               </button>
             </div>
 
-            {/* Note Card: "Agregar una nota" (Apple Maps Card Design) */}
+            {/* Note Card */}
             <div className="bg-[#1f2937] border border-white/5 rounded-2xl p-2.5 my-1">
               {!isEditingNote ? (
                 <div 
@@ -1092,9 +1187,8 @@ export default function UberDriverView({
               )}
             </div>
 
-            {/* Bottom Bar: On-site Timer + Rate + Apple Maps Link */}
+            {/* Bottom Bar: Timer + Rate + Apple Maps link */}
             <div className="flex items-center justify-between pt-1">
-              {/* On-Site Timer */}
               <button
                 type="button"
                 onClick={() => toggleJobTimer(selectedOrder.id)}
@@ -1120,12 +1214,10 @@ export default function UberDriverView({
                 )}
               </button>
 
-              {/* Rate */}
               <div className="flex items-center gap-1 text-[#34C759] font-mono font-black text-sm">
                 <span>${selectedOrder.rate_calculated || 100}</span>
               </div>
 
-              {/* Action Pill: Check, Apple Maps App, More */}
               <div className="flex items-center gap-1 bg-[#243140] rounded-xl p-1 border border-white/5">
                 <button
                   type="button"
@@ -1154,11 +1246,9 @@ export default function UberDriverView({
               </div>
             </div>
 
-            {/* EXPANDED SECTION: "Detalles" + Full Daily Jobs Queue */}
+            {/* EXPANDED SECTION */}
             {drawerState === 'expanded' && (
               <div className="flex-1 overflow-y-auto mt-2 pt-2 border-t border-white/10 space-y-3 apple-drawer-scroll pr-1">
-                
-                {/* More Actions Popover if opened */}
                 {showMoreActions && (
                   <div className="bg-[#121922] border border-white/10 rounded-2xl p-2 grid grid-cols-3 gap-2">
                     <button
@@ -1194,13 +1284,11 @@ export default function UberDriverView({
                   </div>
                 )}
 
-                {/* Apple Maps "Detalles" Section */}
                 <div className="bg-[#1f2937] border border-white/5 rounded-2xl p-3 space-y-2.5">
                   <h3 className="text-xs font-black text-white uppercase tracking-wider">
                     Detalles
                   </h3>
                   
-                  {/* Dirección */}
                   <div className="flex justify-between items-start text-xs border-b border-white/5 pb-2">
                     <span className="text-[#8e9aa8] font-medium">Dirección</span>
                     <div className="text-right text-slate-100 font-semibold leading-tight">
@@ -1212,7 +1300,6 @@ export default function UberDriverView({
                     </div>
                   </div>
 
-                  {/* Coordenadas */}
                   <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
                     <span className="text-[#8e9aa8] font-medium">Coordenadas</span>
                     <span className="text-slate-200 font-mono text-[11px]">
@@ -1220,7 +1307,6 @@ export default function UberDriverView({
                     </span>
                   </div>
 
-                  {/* Tarifa y Metraje */}
                   <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
                     <span className="text-[#8e9aa8] font-medium">Metraje & Cable</span>
                     <span className="text-slate-200 font-bold text-[11px]">
@@ -1229,7 +1315,6 @@ export default function UberDriverView({
                     </span>
                   </div>
 
-                  {/* Teléfono */}
                   {selectedOrder.phone && (
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-[#8e9aa8] font-medium">Teléfono Cliente</span>
@@ -1244,7 +1329,6 @@ export default function UberDriverView({
                   )}
                 </div>
 
-                {/* Day Job Queue Header & Segmented Filter */}
                 <div className="space-y-2 pt-1">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-black text-white uppercase tracking-wider">
@@ -1279,7 +1363,6 @@ export default function UberDriverView({
                     </button>
                   </div>
 
-                  {/* List of Orders Cards */}
                   <div className="space-y-2">
                     {orders
                       .filter(o => statusFilter === 'ALL' || o.status === statusFilter)

@@ -502,7 +502,7 @@ div[data-netlify-drawer],
    MAPBOX GL 3D VECTOR NAVIGATION STYLES
    ============================================================ */
 .mapbox-3d-canvas {
-  background-color: #0b1017 !important;
+  background-color: #f4f3f0 !important;
 }
 
 .mapboxgl-canvas {
