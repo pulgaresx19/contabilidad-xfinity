@@ -1377,20 +1377,19 @@ export default function UberDriverView({
           </button>
         </div>
 
-        {/* Actions: + Trabajo & Lista */}
+        {/* Actions: [+] & [Lista] */}
         <div className="pointer-events-auto flex items-center gap-1.5 shrink-0">
           <button
             onClick={onOpenAddJob}
-            className="px-3 py-2 rounded-2xl bg-gradient-to-r from-[#007AFF] to-cyan-500 hover:from-blue-600 hover:to-cyan-400 text-white font-black text-xs shadow-lg shadow-blue-500/25 active:scale-95 transition flex items-center gap-1.5 border border-white/15"
-            title="Añadir nuevo trabajo"
+            className="w-9 h-9 rounded-2xl bg-gradient-to-r from-[#007AFF] to-cyan-500 hover:from-blue-600 hover:to-cyan-400 text-white font-black shadow-lg shadow-blue-500/25 active:scale-95 transition flex items-center justify-center border border-white/15 cursor-pointer"
+            title="Añadir nuevo trabajo (+)"
           >
-            <Plus className="h-4 w-4 stroke-[3]" />
-            <span className="text-xs font-black tracking-tight">Trabajo</span>
+            <Plus className="h-5 w-5 stroke-[3]" />
           </button>
 
           <button
             onClick={onSwitchToClassic}
-            className="p-2 rounded-2xl bg-[#0f1722]/90 backdrop-blur-2xl hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 shadow-xl active:scale-95 transition"
+            className="w-9 h-9 rounded-2xl bg-[#0f1722]/90 backdrop-blur-2xl hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 shadow-xl active:scale-95 transition flex items-center justify-center cursor-pointer"
             title="Cambiar a Vista Lista"
           >
             <List className="h-4 w-4" />

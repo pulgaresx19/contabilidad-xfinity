@@ -1464,7 +1464,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   <span>Galería / Fotos</span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/heic,image/heif,image/webp,.jpg,.jpeg,.png,.heic"
                     multiple
                     onChange={handleCancelPhotoSelect}
                     className="hidden"
@@ -1605,7 +1605,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   <span>Galería / Fotos</span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/heic,image/heif,image/webp,.jpg,.jpeg,.png,.heic"
                     multiple
                     onChange={handleAddPhotoToCancelled}
                     className="hidden"
