@@ -121,14 +121,15 @@ export async function preprocessImageForOcr(fileOrBlob) {
           const imgData = ctx.getImageData(0, 0, width, height);
           const data = imgData.data;
 
-          // 1. Color removal and contrast thresholding
+          // 1. Color removal and contrast thresholding via luminance
           for (let i = 0; i < data.length; i += 4) {
             const r = data[i];
             const g = data[i + 1];
             const b = data[i + 2];
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
 
-            // If any channel is bright or lightness is high, it's background/highlight -> pure white
-            if (r > 115 || g > 115 || b > 115) {
+            // Turn cyan background and light highlights to white, while preserving black text strokes
+            if (lum > 110) {
               data[i] = 255;
               data[i + 1] = 255;
               data[i + 2] = 255;

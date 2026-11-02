@@ -318,16 +318,30 @@ export function initApiAdapter() {
 
         if (cleanUrl === '/api/parse-dispatch' && method === 'POST') {
           const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
-          const text = body.text || '';
+          const text = body.rawText || body.text || '';
+          const defaultDate = body.defaultDate || null;
+          const defaultTech = body.defaultTech || null;
           const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-          const parsedOrders = [];
+          const parsed = [];
+          const seenJobs = new Set();
+          const seenAddrs = new Set();
           for (const line of lines) {
-            const p = parseDispatchLine(line);
-            if (p) parsedOrders.push(p);
+            const p = parseDispatchLine(line, defaultDate, defaultTech);
+            if (p) {
+              const addrKey = (p.address || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+              if (addrKey && addrKey !== 'DIRECCIONPORVERIFICAR') {
+                if (seenAddrs.has(addrKey)) continue;
+                seenAddrs.add(addrKey);
+              }
+              if (seenJobs.has(p.job_id)) continue;
+              seenJobs.add(p.job_id);
+              parsed.push(p);
+            }
           }
           return jsonResponse({
-            count: parsedOrders.length,
-            parsedOrders
+            count: parsed.length,
+            parsed,
+            parsedOrders: parsed
           });
         }
 

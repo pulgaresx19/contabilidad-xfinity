@@ -235,18 +235,19 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
         body: JSON.stringify({ rawText: pasteText, defaultDate: sheetDate, defaultTech: techId })
       });
       const data = await res.json();
-      if (res.ok && data.parsed && data.parsed.length > 0) {
-        const detectedDate = data.parsed[0]?.work_date || sheetDate;
+      const list = data.parsed || data.parsedOrders || [];
+      if (res.ok && list.length > 0) {
+        const detectedDate = list[0]?.work_date || sheetDate;
         if (detectedDate && detectedDate !== sheetDate) {
           setSheetDate(detectedDate);
         }
         setExtractedOrders(
-          data.parsed.map(o => ({
+          list.map(o => ({
             ...o,
             rate_calculated: calcOrderRate(o.drop_footage, o.bore_type)
           }))
         );
-        setMessage({ type: 'success', text: `¡${data.parsed.length} orden(es) interpretada(s) del texto correctamente!` });
+        setMessage({ type: 'success', text: `¡${list.length} orden(es) interpretada(s) del texto correctamente!` });
       } else {
         setMessage({ type: 'warning', text: 'No se reconocieron órdenes válidas en el texto. Revisa el formato o usa el ejemplo.' });
       }

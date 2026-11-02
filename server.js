@@ -385,7 +385,7 @@ async function smartScanDispatchSheet(imagePath, defaultDate, defaultTech) {
         .extract({ left: 0, top, width: meta.width, height: h })
         .resize({ width: meta.width * 4, height: h * 4, kernel: 'lanczos3' })
         .grayscale()
-        .threshold(180)
+        .normalize()
         .toBuffer();
 
       const rowRes = await worker.recognize(rowBuf);
@@ -401,7 +401,7 @@ async function smartScanDispatchSheet(imagePath, defaultDate, defaultTech) {
     const fullBuf = await sharp(imagePath)
       .resize({ width: Math.max(2500, meta.width * 2.5), kernel: 'lanczos3' })
       .grayscale()
-      .threshold(175)
+      .normalize()
       .toBuffer();
 
     await worker.setParameters({ tessedit_pageseg_mode: 6 }); // Single uniform block of text

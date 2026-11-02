@@ -269,8 +269,24 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
     .replace(/\b(?:0ROP|OROP|DR0P|DR0|JR0)\b/gi, 'DROP')
     .replace(/0ROP[:\s]/gi, 'DROP ');
 
-  cleanLine = cleanLine.replace(/(\d{1,5})([a-zA-Z])/g, '$1 $2');
-  cleanLine = cleanLine.replace(/\b([A-Z]{3,})(TRL|BLVD|CIR|PKWY)\b/gi, '$1 $2');
+  // Clean pipes and noise from OCR table cells
+  cleanLine = cleanLine.replace(/[|~_\[\]]+/g, ' ');
+  // Split merged 6-digit Job ID and street house number (e.g. 72061223608 -> 720612 23608)
+  cleanLine = cleanLine.replace(/\b([5-9]\d{5})(\d{1,5})\s+([A-Za-z])/g, '$1 $2 $3');
+  // If OCR read table border | before job ID as 1 (e.g. 1833906 121935 -> 833906 21935)
+  cleanLine = cleanLine.replace(/\b1([5-9]\d{5})\s+1?(\d{1,5})\s+/g, '$1 $2 ');
+  // Fix OCR artifacts like 4A0 -> 40
+  cleanLine = cleanLine.replace(/\b4A0\s*/gi, '40 ');
+  // Protect tech code like P0G2
+  cleanLine = cleanLine.replace(/(\d{1,5})([a-zA-Z])/g, (m, p1, p2) => (m.toUpperCase().includes('P0G') ? m : p1 + ' ' + p2));
+  // Separate street types stuck to street names (when followed by period, comma or space)
+  cleanLine = cleanLine.replace(/\b([A-Za-z]{3,})(DR|AVE|ST|RD|LN|CT|WAY|CIR|TRL|BLVD|PKWY|TER|LOOP)[.,]/gi, '$1 $2.');
+  cleanLine = cleanLine.replace(/\b([A-Za-z]{3,})(TRL|BLVD|CIR|PKWY)\b/gi, '$1 $2');
+  // Fix WOLF & MISHAWAKA & HUNTERS
+  cleanLine = cleanLine.replace(/\bW\s*OLF\b/gi, 'W WOLF');
+  cleanLine = cleanLine.replace(/\bWW\s*WOLF\b/gi, 'W WOLF');
+  cleanLine = cleanLine.replace(/\bWW\s*/gi, 'W ');
+  cleanLine = cleanLine.replace(/\bHUN\s+TERS\b/gi, 'HUNTERS');
 
   // Detect Date
   let workDate = defaultDate;
@@ -320,7 +336,7 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
       .trim();
 
     const addrEndIndex = postJobText.indexOf(addrMatch[1]) + addrMatch[1].length;
-    textAfterAddr = postJobText.substring(addrEndIndex).trim();
+    textAfterAddr = postJobText.substring(addrEndIndex).replace(/[|\[\]~_]+/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
   // City detection: extract directly from OCR text after address (no hardcoded fallback)
@@ -394,6 +410,16 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
     if (extraBlocks > 0) rate += extraBlocks * 25;
   }
 
+  // Obstacles
+  let obstacles = 'N';
+  const obsMatch = postJobText.match(/Obstacl(?:es|ias)?[:\s]*([A-Za-z, ]+?)(?:\/|Premise|NBR|$)/i);
+  if (obsMatch) {
+    const obsVal = obsMatch[1].trim().toUpperCase();
+    if (obsVal !== 'N' && obsVal.length > 0) {
+      obstacles = obsVal.includes('LANDSC') ? 'LANDSC' : (obsVal.includes('SPRKR') || obsVal.includes('SPRKLR') ? 'SPRKL' : obsVal);
+    }
+  }
+
   return {
     work_date: workDate,
     tech_id: techId,
@@ -406,8 +432,8 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
     drop_footage: dropFootage,
     cable_type: cableType,
     bore_type: boreType,
-    is_temp: /TEMP[:\s-]*Y/i.test(postJobText) ? 1 : 0,
-    obstacles: /Obstacl(?:es|ias)?[:\s]*([A-Za-z, ]+?)(?:\/|Premise|NBR|$)/i.test(postJobText) ? 'LANDSC' : 'N',
+    is_temp: /TEMP[:\s.\-_]*Y/i.test(postJobText) ? 1 : 0,
+    obstacles,
     premise_access: /RQHM/i.test(postJobText) ? 'RQHM' : /DOG/i.test(postJobText) ? 'DOG' : 'N',
     neighbor_notice: /NBR[:\s]*2/i.test(postJobText) ? '2' : 'N',
     raw_notes: '',
