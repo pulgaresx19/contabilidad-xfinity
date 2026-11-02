@@ -206,254 +206,212 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div 
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-md rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-2xl space-y-3.5 max-h-[90vh] overflow-y-auto mx-auto"
+        className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-white transition-all"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
-          <div className="flex items-center gap-2">
-            <div className={`p-2 rounded-xl ${
-              isCancelled 
-                ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' 
-                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+        {/* 1. Header (Misma estructura idéntica de Travesía del Día y PhotoModal) */}
+        <div className="px-4 sm:px-5 py-3.5 border-b border-white/10 flex items-center justify-between bg-slate-900/70 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-md ${
+              isCancelled
+                ? 'bg-gradient-to-tr from-rose-500 to-amber-600 text-white shadow-rose-500/20'
+                : 'bg-gradient-to-tr from-cyan-500 to-blue-600 text-slate-950 shadow-cyan-500/20'
             }`}>
-              {isCancelled ? <AlertTriangle className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+              {isCancelled ? <AlertTriangle className="h-4 w-4 stroke-[2.5]" /> : <Share2 className="h-4 w-4 stroke-[2.5]" />}
             </div>
-            <div>
-              <h3 className="text-sm font-black text-slate-900 dark:text-white">
+            <div className="min-w-0">
+              <h3 className="text-sm font-black text-white truncate">
                 {isCancelled ? 'Constancia No Realizado' : 'Reportar por WhatsApp'}
               </h3>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono font-bold">
-                  Orden #{order.job_id}
-                </span>
-                {isCancelled && (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-900">
-                    Cancelado
-                  </span>
-                )}
-              </div>
+              <p className="text-[10.5px] text-slate-400 font-medium truncate">
+                #{order.job_id} • {order.address}{order.city ? `, ${order.city}` : ''}
+              </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
             title="Cerrar"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Tarjeta Visual Estética */}
-        {isCancelled ? (
-          <div className="bg-rose-50/70 dark:bg-rose-950/30 p-3 rounded-2xl border border-rose-200 dark:border-rose-900/60 text-xs space-y-2 shadow-2xs">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="font-bold text-slate-900 dark:text-white text-xs truncate">
-                  {order.address}
-                </p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                  {order.city ? `${order.city} • ` : ''}{order.work_date}
-                </p>
-              </div>
-
-              <div className="text-right shrink-0">
-                <span className="text-[9px] text-rose-600 dark:text-rose-400 uppercase block font-bold">Estado</span>
-                <span className="text-xs font-black font-mono text-rose-700 dark:text-rose-300">
-                  No Realizado
-                </span>
-              </div>
-            </div>
-
-            {/* Motivo de No Realizado */}
-            <div className="pt-2 border-t border-rose-200/80 dark:border-rose-900/60 flex items-start gap-1.5">
-              <AlertTriangle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <span className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400 block tracking-wider">
-                  Motivo Registrado:
-                </span>
-                <p className="text-xs font-semibold text-rose-950 dark:text-rose-100 leading-snug">
-                  {order.cancel_reason || 'Sin motivo detallado'}
-                </p>
-              </div>
-            </div>
+        {/* 2. Quick KPI / Specs Bar (Idéntico a Travesía del Día y PhotoModal) */}
+        <div className="grid grid-cols-3 gap-2 px-4 py-2.5 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
+          <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
+            <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+              {isCancelled ? 'Motivo' : 'Metraje / Cable'}
+            </span>
+            <span className={`text-sm font-black font-mono truncate block ${isCancelled ? 'text-rose-400' : 'text-cyan-400'}`}>
+              {isCancelled 
+                ? (order.cancel_reason ? order.cancel_reason.slice(0, 15) : 'Inconveniente') 
+                : `${order.drop_footage || 0} ft • ${order.cable_type || 'RG-6'}`}
+            </span>
           </div>
-        ) : (
-          <div className="bg-slate-50 dark:bg-slate-950/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs space-y-2 shadow-2xs">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="font-bold text-slate-900 dark:text-white text-xs truncate">
-                  {order.address}
-                </p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                  {order.city ? `${order.city} • ` : ''}{order.work_date}
-                </p>
-              </div>
+          <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
+            <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+              Evidencias
+            </span>
+            <span className="text-sm font-black text-white font-mono">
+              {orderPhotos.length} {orderPhotos.length === 1 ? 'adjunta' : 'adjuntas'}
+            </span>
+          </div>
+          <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
+            <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+              {isCancelled ? 'Estado' : 'Tarifa'}
+            </span>
+            <span className={`text-sm font-black font-mono ${isCancelled ? 'text-rose-400' : 'text-emerald-400'}`}>
+              {isCancelled ? 'No Realizado' : `$${order.rate_calculated || 100}`}
+            </span>
+          </div>
+        </div>
 
-              <div className="text-right shrink-0">
-                <span className="text-[9px] text-slate-400 uppercase block font-bold">Tarifa</span>
-                <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">
-                  ${order.rate_calculated}
-                </span>
-              </div>
-            </div>
-
-            {/* Especificaciones Técnicas y Componente Driveway */}
-            <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-200 dark:border-slate-800/80 font-mono text-[10px]">
-              <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-300 font-bold border border-slate-200 dark:border-slate-800">
-                {order.drop_footage} ft
-              </span>
-              <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
-                {order.cable_type || 'RG-6'}
-              </span>
-
-              {/* Badge Driveway destacado */}
-              {(order.bore_type && order.bore_type.includes('DW')) ? (
-                <span className="px-2 py-0.5 rounded-lg bg-cyan-100 text-cyan-900 dark:bg-cyan-500/20 dark:text-cyan-300 font-bold border border-cyan-300 dark:border-cyan-500/40 flex items-center gap-1 shadow-2xs">
-                  <span>🚗 Driveway Bore (DW)</span>
-                  <span className="font-black text-cyan-700 dark:text-cyan-400">+$30</span>
-                </span>
-              ) : (order.bore_type && order.bore_type.includes('SW')) ? (
-                <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
-                  Sidewalk (SW)
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded-lg bg-white/60 dark:bg-slate-900/60 text-slate-400 border border-slate-200 dark:border-slate-800">
-                  Sin Bore
+        {/* 3. Cuerpo del Modal Scrollable */}
+        <div className="p-4 overflow-y-auto space-y-3.5 flex-1 scrollbar-none bg-[#101722]">
+          
+          {/* Detalles Técnicos Extra si aplican (Driveway / Ajustes) */}
+          {((order.bore_type && order.bore_type.includes('DW')) || (order.manual_adjustment && order.manual_adjustment !== 0)) && (
+            <div className="bg-[#16202c] border border-white/5 rounded-2xl p-2.5 flex items-center gap-2 flex-wrap text-xs">
+              {order.bore_type && order.bore_type.includes('DW') && (
+                <span className="px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40 text-[10px] flex items-center gap-1 font-mono">
+                  🚗 Driveway Bore (+$30)
                 </span>
               )}
-
-              {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
-                <span className={`px-2 py-0.5 rounded-lg font-bold border ${
+              {order.manual_adjustment && order.manual_adjustment !== 0 && (
+                <span className={`px-2 py-0.5 rounded-lg font-bold border text-[10px] font-mono ${
                   order.manual_adjustment > 0
-                    ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
-                    : 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30'
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                    : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                 }`}>
                   {order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`} {order.adjustment_reason || 'Ajuste'}
                 </span>
               )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Texto del Reporte Editable */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-              {isCancelled ? 'Mensaje de Constancia (Editable):' : 'Mensaje del Reporte (Editable):'}
-            </label>
-            <button
-              type="button"
-              onClick={handleCopyText}
-              className={`text-[10px] font-bold hover:underline flex items-center gap-1 ${
-                isCancelled ? 'text-rose-600 dark:text-rose-400' : 'text-cyan-600 dark:text-cyan-400'
+          {/* Texto del Reporte Editable */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                {isCancelled ? 'Mensaje de Constancia (Editable)' : 'Mensaje del Reporte (Editable)'}
+              </label>
+              <button
+                type="button"
+                onClick={handleCopyText}
+                className="px-2.5 py-1 bg-[#16202c] hover:bg-[#1e2b3b] text-slate-300 border border-white/10 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+              >
+                {copiedText ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3 text-cyan-400" />}
+                <span>{copiedText ? '¡Copiado!' : 'Copiar Texto'}</span>
+              </button>
+            </div>
+
+            <textarea
+              rows={isCancelled ? 7 : 6}
+              value={reportText}
+              onChange={(e) => setReportText(e.target.value)}
+              placeholder="Escribe o modifica los detalles del reporte..."
+              className={`w-full bg-[#0d141e] border border-white/10 rounded-2xl p-3 text-xs font-mono text-slate-200 focus:outline-none leading-relaxed shadow-inner resize-none ${
+                isCancelled ? 'focus:border-rose-500' : 'focus:border-cyan-400'
               }`}
-            >
-              {copiedText ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-              <span>{copiedText ? '¡Copiado!' : 'Copiar texto'}</span>
-            </button>
+            />
+            <span className="text-[10px] text-slate-500 block px-0.5">
+              💡 Puedes editar cualquier dato o agregar notas antes de enviarlo al supervisor.
+            </span>
           </div>
 
-          <textarea
-            rows={isCancelled ? 7 : 6}
-            value={reportText}
-            onChange={(e) => setReportText(e.target.value)}
-            placeholder="Escribe o modifica los detalles del reporte..."
-            className={`w-full bg-slate-50 dark:bg-slate-950/90 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-none leading-relaxed shadow-inner ${
-              isCancelled ? 'focus:border-rose-500' : 'focus:border-emerald-500'
-            }`}
-          />
-          <span className="text-[10px] text-slate-400 block px-0.5">
-            💡 Puedes editar cualquier dato o agregar notas antes de enviarlo al supervisor.
-          </span>
-        </div>
-
-        {/* Galería de Fotos (Todas de una) */}
-        <div className="space-y-1.5 pt-1 border-t border-slate-100 dark:border-slate-800/80">
-          <div className="flex items-center justify-between">
-            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <Camera className={`h-3.5 w-3.5 ${isCancelled ? 'text-rose-500' : 'text-cyan-500'}`} />
-              <span>{isCancelled ? 'Fotos del Obstáculo' : 'Fotos de Evidencia'} ({orderPhotos.length})</span>
-            </label>
-            {orderPhotos.length > 0 && (
-              <span className={`text-[10px] font-bold ${isCancelled ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                Se enviarán juntas con el texto
+          {/* Galería de Fotos Adjuntas */}
+          <div className="space-y-2 pt-1 border-t border-white/5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Camera className={`h-3.5 w-3.5 ${isCancelled ? 'text-rose-400' : 'text-cyan-400'}`} />
+                <span>{isCancelled ? 'Fotos del Obstáculo' : 'Fotos Adjuntas'} ({orderPhotos.length})</span>
               </span>
+              {orderPhotos.length > 0 && (
+                <span className={`text-[10px] font-bold ${isCancelled ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  Se adjuntarán juntas
+                </span>
+              )}
+            </div>
+
+            {loadingPhotos ? (
+              <div className="py-4 text-center text-xs text-slate-400 font-medium">Cargando fotos del trabajo...</div>
+            ) : orderPhotos.length > 0 ? (
+              <div className="grid grid-cols-3 gap-2 p-2 bg-[#0d141e] rounded-2xl border border-white/5 max-h-36 overflow-y-auto scrollbar-none">
+                {orderPhotos.map((p, idx) => (
+                  <div 
+                    key={p.id || idx} 
+                    onClick={() => setPreviewPhoto(p.photo_data || `/uploads/${p.filename}`)}
+                    className="relative rounded-xl overflow-hidden border border-white/10 bg-black/40 aspect-video group cursor-pointer hover:border-cyan-400/80 transition"
+                    title="Toca para ver la foto completa"
+                  >
+                    <img 
+                      src={p.photo_data || `/uploads/${p.filename}`} 
+                      alt={p.category || `Foto ${idx + 1}`} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition" 
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                      <ExternalLink className="h-3.5 w-3.5 text-white" />
+                    </div>
+                    <span className="absolute bottom-0.5 left-0.5 bg-black/80 backdrop-blur-xs text-[8px] text-cyan-300 border border-cyan-400/20 px-1 py-0.2 rounded font-mono truncate max-w-[90%]">
+                      {p.category || `#${idx + 1}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-[10.5px] text-slate-400 italic text-center py-4 bg-[#0d141e]/50 rounded-2xl border border-dashed border-white/10">
+                {isCancelled ? 'Sin fotos de constancia (se enviará solo el mensaje de texto).' : 'Sin fotos adjuntas (se enviará solo el mensaje de texto).'}
+              </div>
             )}
           </div>
-
-          {loadingPhotos ? (
-            <div className="py-3 text-center text-xs text-slate-400">Cargando fotos del trabajo...</div>
-          ) : orderPhotos.length > 0 ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-36 overflow-y-auto p-1 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800/70">
-              {orderPhotos.map((p, idx) => (
-                <div 
-                  key={p.id || idx} 
-                  onClick={() => setPreviewPhoto(p.photo_data || `/uploads/${p.filename}`)}
-                  className="relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-black/40 aspect-video group cursor-pointer hover:border-cyan-400/80 transition"
-                  title="Toca para ver la foto en grande"
-                >
-                  <img 
-                    src={p.photo_data || `/uploads/${p.filename}`} 
-                    alt={p.category || `Foto ${idx + 1}`} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition" 
-                  />
-                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                    <ExternalLink className="h-3.5 w-3.5 text-white" />
-                  </div>
-                  <span className="absolute bottom-0.5 left-0.5 bg-black/75 text-[8px] text-white px-1 py-0.2 rounded font-mono truncate max-w-[90%]">
-                    {p.category || `#${idx + 1}`}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-[10px] text-slate-400 italic text-center py-2 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-              {isCancelled ? 'Sin fotos de constancia (se enviará solo el mensaje de texto explicativo).' : 'Sin fotos adjuntas (se enviará solo el mensaje de texto).'}
-            </div>
-          )}
         </div>
 
-        {/* Botón Principal: Enviar TODO JUNTOS a WhatsApp */}
-        <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+        {/* 4. Footer (Mismo estilo que Travesía del Día y PhotoModal) */}
+        <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-xs font-bold transition active:scale-95 cursor-pointer border border-white/10 shadow-sm"
+          >
+            Cancelar
+          </button>
+
           <button
             type="button"
             onClick={handleSendReportAndPhotos}
             disabled={sharing}
-            className={`w-full py-3.5 px-4 font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg active:scale-95 transition disabled:opacity-50 ${
+            className={`px-4 py-2 text-xs font-black rounded-xl shadow-lg transition active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
               isCancelled
-                ? 'bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-rose-600/25 ring-2 ring-rose-400/40'
-                : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-500/25 ring-2 ring-emerald-400/40'
+                ? 'bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-rose-600/25 ring-2 ring-rose-400/30'
+                : 'bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-cyan-400 text-white shadow-cyan-600/25 ring-2 ring-cyan-400/30'
             }`}
           >
             {sharing ? (
-              <span>Preparando y enviando...</span>
+              <span>Preparando...</span>
             ) : (
               <>
                 <Share2 className="h-4 w-4 stroke-[2.5]" />
-                <span>{isCancelled ? 'Enviar Constancia y Fotos a WhatsApp' : 'Enviar Reporte y Fotos a WhatsApp'}</span>
+                <span>{isCancelled ? 'Enviar Constancia' : 'Enviar a WhatsApp'}</span>
               </>
             )}
-          </button>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full py-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 text-xs font-bold transition text-center"
-          >
-            Cancelar
           </button>
         </div>
       </div>
 
-      {/* FULLSCREEN PHOTO PREVIEW LIGHTBOX (IN-APP - EN GRANDE) */}
+      {/* FULLSCREEN PHOTO PREVIEW LIGHTBOX */}
       {previewPhoto && (
         <div
           onClick={() => setPreviewPhoto(null)}
-          className="fixed inset-0 z-[70] bg-black/95 backdrop-blur-md flex items-center justify-center p-3 animate-fade-in"
+          className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-3 animate-fade-in"
         >
           <div 
             className="relative max-w-lg w-full flex flex-col items-center"
@@ -462,7 +420,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             <button
               type="button"
               onClick={() => setPreviewPhoto(null)}
-              className="absolute -top-11 right-0 p-2 text-white hover:text-cyan-400 bg-slate-800/80 rounded-full transition shadow-lg active:scale-90"
+              className="absolute -top-11 right-0 p-2 text-white hover:text-cyan-400 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full transition shadow-lg active:scale-90 cursor-pointer"
               title="Cerrar foto"
             >
               <X className="h-5 w-5" />
@@ -471,13 +429,13 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             <img
               src={previewPhoto}
               alt="Evidencia en grande"
-              className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain border border-slate-700 shadow-2xl"
+              className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain border border-white/10 shadow-2xl"
             />
 
             <button
               type="button"
               onClick={() => setPreviewPhoto(null)}
-              className="mt-3 px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition shadow active:scale-95"
+              className="mt-3 px-5 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/10 rounded-xl text-xs font-bold transition shadow active:scale-95 cursor-pointer"
             >
               Cerrar Foto
             </button>
