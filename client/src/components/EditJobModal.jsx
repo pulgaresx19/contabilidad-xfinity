@@ -157,384 +157,428 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div 
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden mx-auto"
+        className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-white"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/70">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-cyan-100 text-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-400 rounded-xl">
-              <SlidersHorizontal className="h-4 w-4" />
+        {/* Header Cockpit */}
+        <div className="px-4 sm:px-5 py-3.5 border-b border-white/10 flex items-center justify-between bg-slate-900/70 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white font-bold shrink-0">
+              <SlidersHorizontal className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Editar Trabajo #{order.job_id}
-              </h3>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                Modificar datos, dirección, metraje o tarifa
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono truncate">
+                  Editar Job #{order.job_id}
+                </h3>
+                <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
+                  formData.status === 'Completado' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                  : formData.status === 'No Realizado' ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                  : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                }`}>
+                  {formData.status}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-mono truncate">
+                Modificar tarifa, metraje o dirección
               </p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-xl bg-slate-100 dark:bg-slate-800 transition"
+            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition shrink-0 ml-2"
+            title="Cerrar ventana"
           >
-            <X className="h-4 w-4" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Formulario */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 overflow-y-auto space-y-3.5 flex-1 text-xs">
-          {error && (
-            <div className="p-2.5 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-400 rounded-xl text-xs flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Saldo Final Destacado (Medallón de Dinero) */}
-          <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between shadow-xs">
-            <div>
-              <span className="text-[10px] text-emerald-800 dark:text-emerald-400 font-bold uppercase tracking-wider block">
-                Valor Total del Trabajo
-              </span>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                Base $100 {(formData.bore_type || '').includes('DW') ? '+ $30 Bore' : ''} {formData.drop_footage > 300 ? '+ Metraje extra' : ''} {formData.manual_adjustment > 0 ? `+ $${formData.manual_adjustment} Bono` : formData.manual_adjustment < 0 ? `- $${Math.abs(formData.manual_adjustment)} Descuento` : ''}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500 text-slate-950 rounded-xl font-mono font-black shadow-xs shrink-0">
-              <span className="text-xs">$</span>
-              <span className="text-lg sm:text-xl leading-none">{formData.rate_calculated}</span>
-            </div>
+        {/* 3-box KPI bar */}
+        <div className="grid grid-cols-3 gap-2 px-4 py-2.5 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
+          <div className="bg-[#16202c] border border-white/5 rounded-xl py-1.5 px-1">
+            <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Valor Total</span>
+            <span className="text-xs sm:text-sm font-black font-mono text-emerald-400 leading-none">
+              ${formData.rate_calculated}
+            </span>
           </div>
-
-          {/* Job ID y Fecha Asignada (50% y 50% exactamente simétricos) */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="min-w-0">
-              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider truncate">
-                Work Order # (Job ID) *
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="ej. 734521"
-                value={formData.job_id}
-                onChange={(e) => setFormData({ ...formData, job_id: e.target.value })}
-                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs shadow-2xs"
-                style={{ height: '40px', minHeight: '40px', maxHeight: '40px', fontSize: '12px', lineHeight: 'normal' }}
-              />
-            </div>
-
-            <div className="min-w-0">
-              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider truncate">
-                Fecha Asignada *
-              </label>
-              <input
-                type="date"
-                required
-                value={formData.work_date}
-                onChange={(e) => setFormData({ ...formData, work_date: e.target.value })}
-                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500 font-mono font-bold text-xs [color-scheme:light] dark:[color-scheme:dark] shadow-2xs"
-                style={{ height: '40px', minHeight: '40px', maxHeight: '40px', fontSize: '12px', lineHeight: 'normal' }}
-              />
-            </div>
+          <div className="bg-[#16202c] border border-white/5 rounded-xl py-1.5 px-1">
+            <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Metraje</span>
+            <span className="text-xs sm:text-sm font-black text-amber-300 font-mono leading-none">
+              {formData.drop_footage || 0} ft
+            </span>
           </div>
-
-          {/* Dirección de la Vivienda */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider">
-              Dirección de la Vivienda *
-            </label>
-            <div className="relative">
-              <MapPin className="h-4 w-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
-              <input
-                type="text"
-                required
-                placeholder="ej. 23322 Ironwood Dr"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-cyan-500 text-xs shadow-2xs"
-              />
-            </div>
+          <div className="bg-[#16202c] border border-white/5 rounded-xl py-1.5 px-1">
+            <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Cable</span>
+            <span className="text-xs sm:text-sm font-black text-cyan-400 font-mono leading-none">
+              {formData.cable_type || 'RG-6'}
+            </span>
           </div>
+        </div>
 
-          {/* Ciudad y Teléfono (Lineales 50% / 50%) */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="min-w-0">
-              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider truncate">
-                Ciudad (Manual)
-              </label>
-              <input
-                type="text"
-                placeholder="Escribe la ciudad..."
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-cyan-500 uppercase text-xs shadow-2xs"
-              />
-            </div>
-
-            <div className="min-w-0">
-              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider truncate">
-                Teléfono del Cliente
-              </label>
-              <div className="relative">
-                <Phone className="h-4 w-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
-                <input
-                  type="tel"
-                  placeholder="ej. 5742094475"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-slate-900 dark:text-white font-mono focus:outline-none focus:border-cyan-500 text-xs shadow-2xs"
-                />
+        {/* Formulario con Scroll */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0 text-xs">
+            
+            {/* Mensaje de Error */}
+            {error && (
+              <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                <span>{error}</span>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Metraje y Cable (Lineales 50% / 50%) */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider truncate">
-                Metraje de Drop (Pies)
-              </label>
-              <div className="relative">
-                <Ruler className="h-4 w-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
-                <input
-                  type="number"
-                  step="0.1"
-                  placeholder="0.0"
-                  value={formData.drop_footage}
-                  onChange={(e) => handleFootageChange(e.target.value)}
-                  className="w-full h-10 box-border bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs shadow-2xs"
-                />
-              </div>
-              {formData.drop_footage > 300 && (
-                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 block mt-1 font-bold">
-                  +{Math.floor((formData.drop_footage - 300) / 100) * 25} bono metraje (&gt;300 ft)
+            {/* Desglose de Tarifa */}
+            <div className="bg-[#16202c] border border-white/5 rounded-2xl p-2.5 flex items-center justify-between shadow-xs">
+              <div>
+                <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">
+                  Desglose de Tarifa
                 </span>
-              )}
+                <span className="text-[10px] text-slate-400 font-mono">
+                  Base $100 {(formData.bore_type || '').includes('DW') ? '+ $30 Bore' : ''} {formData.drop_footage > 300 ? `+ $${Math.floor((formData.drop_footage - 300) / 100) * 25} Metraje` : ''} {formData.manual_adjustment > 0 ? `+ $${formData.manual_adjustment} Bono` : formData.manual_adjustment < 0 ? `- $${Math.abs(formData.manual_adjustment)} Descuento` : ''}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1 px-2.5 py-1 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 rounded-xl font-mono font-black shadow-xs shrink-0">
+                <span className="text-xs">$</span>
+                <span className="text-base font-bold leading-none">{formData.rate_calculated}</span>
+              </div>
             </div>
 
+            {/* Job ID y Fecha Asignada */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="min-w-0">
+                <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider truncate">
+                  Job ID *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ej. 734521"
+                  value={formData.job_id}
+                  onChange={(e) => setFormData({ ...formData, job_id: e.target.value })}
+                  className="w-full bg-[#16202c] border border-white/10 rounded-xl px-3 py-2 text-white font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs transition"
+                />
+              </div>
+
+              <div className="min-w-0">
+                <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider truncate">
+                  Fecha Asignada *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formData.work_date}
+                  onChange={(e) => setFormData({ ...formData, work_date: e.target.value })}
+                  className="w-full bg-[#16202c] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500 font-mono font-bold text-xs transition [color-scheme:dark]"
+                />
+              </div>
+            </div>
+
+            {/* Dirección de la Vivienda */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1 uppercase tracking-wider truncate">
-                Tipo de Cable
+              <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
+                Dirección de la Vivienda *
               </label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {['RG-6', 'RG-11'].map((c) => (
+              <div className="relative">
+                <MapPin className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                <input
+                  type="text"
+                  required
+                  placeholder="ej. 23322 Ironwood Dr"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  className="w-full bg-[#16202c] border border-white/10 rounded-xl pl-9 pr-3 py-2 text-white font-semibold focus:outline-none focus:border-cyan-500 text-xs transition"
+                />
+              </div>
+            </div>
+
+            {/* Ciudad y Teléfono */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="min-w-0">
+                <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider truncate">
+                  Ciudad
+                </label>
+                <input
+                  type="text"
+                  placeholder="Escribe la ciudad..."
+                  value={formData.city}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  className="w-full bg-[#16202c] border border-white/10 rounded-xl px-3 py-2 text-white font-semibold focus:outline-none focus:border-cyan-500 uppercase text-xs transition"
+                />
+              </div>
+
+              <div className="min-w-0">
+                <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider truncate">
+                  Teléfono
+                </label>
+                <div className="relative">
+                  <Phone className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                  <input
+                    type="tel"
+                    placeholder="ej. 5742094475"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full bg-[#16202c] border border-white/10 rounded-xl pl-9 pr-3 py-2 text-white font-mono focus:outline-none focus:border-cyan-500 text-xs transition"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Metraje y Cable */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider truncate">
+                  Metraje Drop (Pies)
+                </label>
+                <div className="relative">
+                  <Ruler className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="0.0"
+                    value={formData.drop_footage}
+                    onChange={(e) => handleFootageChange(e.target.value)}
+                    className="w-full bg-[#16202c] border border-white/10 rounded-xl pl-9 pr-3 py-2 text-white font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs transition"
+                  />
+                </div>
+                {formData.drop_footage > 300 && (
+                  <span className="text-[9px] text-emerald-400 block mt-1 font-bold font-mono">
+                    +{Math.floor((formData.drop_footage - 300) / 100) * 25} bono metraje (&gt;300 ft)
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider truncate">
+                  Tipo de Cable
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {['RG-6', 'RG-11'].map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, cable_type: c })}
+                      className={`py-2 rounded-xl text-xs font-bold border transition ${
+                        formData.cable_type === c
+                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm font-black'
+                          : 'bg-[#16202c] border-white/10 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Tipo de Perforación / Bore */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
+                Tipo de Perforación / Bore
+              </label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { id: 'N', label: 'Sin Bore' },
+                  { id: 'SW:1', label: 'Sidewalk' },
+                  { id: 'DW:1', label: 'Driveway (+$30)' }
+                ].map((b) => {
+                  const active = formData.bore_type === b.id || (b.id === 'DW:1' && (formData.bore_type || '').includes('DW'));
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => handleBoreChange(b.id)}
+                      className={`py-2 px-1 rounded-xl text-[11px] font-bold border text-center transition ${
+                        active
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm font-black'
+                          : 'bg-[#16202c] border-white/10 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {b.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Remarks / Obstáculos */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
+                Remarks / Obstáculos Extras
+              </label>
+              <input
+                type="text"
+                placeholder="Notas, portón, perro, zanja..."
+                value={formData.raw_notes}
+                onChange={(e) => setFormData({ ...formData, raw_notes: e.target.value })}
+                className="w-full bg-[#16202c] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition"
+              />
+            </div>
+
+            {/* Ajuste Especial de Supervisor */}
+            <div className="bg-[#16202c] border border-white/10 rounded-2xl p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                  Ajuste Especial de Supervisor
+                </span>
+                <span className="text-[9px] text-slate-400 font-mono">
+                  {formData.manual_adjustment !== 0 ? (
+                    formData.manual_adjustment > 0 ? (
+                      <span className="text-emerald-400 font-bold">+${formData.manual_adjustment}</span>
+                    ) : (
+                      <span className="text-amber-400 font-bold">-${Math.abs(formData.manual_adjustment)}</span>
+                    )
+                  ) : (
+                    'Opcional'
+                  )}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { id: 'none', label: 'Sin Ajuste' },
+                  { id: 'add', label: '+ Bono' },
+                  { id: 'sub', label: '- Descuento' }
+                ].map((t) => (
                   <button
-                    key={c}
+                    key={t.id}
                     type="button"
-                    onClick={() => setFormData({ ...formData, cable_type: c })}
-                    className={`h-10 rounded-xl text-xs font-bold border transition ${
-                      formData.cable_type === c
-                        ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-sm'
-                        : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
+                    onClick={() => handleAdjustChange(t.id, t.id === 'none' ? '' : adjustVal)}
+                    className={`py-1.5 rounded-xl text-xs font-bold border transition ${
+                      adjustType === t.id
+                        ? t.id === 'add'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm font-black'
+                          : t.id === 'sub'
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm font-black'
+                          : 'bg-white/10 text-white border-white/20'
+                        : 'bg-[#0d141e] border-white/5 text-slate-400 hover:text-white'
                     }`}
                   >
-                    {c}
+                    {t.label}
                   </button>
                 ))}
               </div>
-            </div>
-          </div>
 
-          {/* Tipo de Bore */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1 uppercase">
-              Tipo de Perforación / Bore
-            </label>
-            <div className="grid grid-cols-3 gap-1.5">
-              {[
-                { id: 'N', label: 'Sin Bore' },
-                { id: 'SW:1', label: 'Sidewalk' },
-                { id: 'DW:1', label: 'Driveway (+$30)' }
-              ].map((b) => (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => handleBoreChange(b.id)}
-                  className={`py-2 px-1 rounded-xl text-[11px] font-bold border text-center transition ${
-                    formData.bore_type === b.id || (b.id === 'DW:1' && (formData.bore_type || '').includes('DW'))
-                      ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-sm font-black'
-                      : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
-                  }`}
-                >
-                  {b.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Remarks / Obstáculos Extras */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1 uppercase">
-              Remarks / Obstáculos Extras
-            </label>
-            <input
-              type="text"
-              placeholder="Notas, portón, perro, zanja..."
-              value={formData.raw_notes}
-              onChange={(e) => setFormData({ ...formData, raw_notes: e.target.value })}
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-cyan-500"
-            />
-          </div>
-
-          {/* Ajuste Manual de Supervisor */}
-          <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase">
-                Ajuste Especial de Supervisor
-              </span>
-              <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono">
-                {formData.manual_adjustment !== 0 ? (
-                  formData.manual_adjustment > 0 ? (
-                    <span className="text-emerald-500 font-bold">+${formData.manual_adjustment}</span>
-                  ) : (
-                    <span className="text-amber-500 font-bold">-${Math.abs(formData.manual_adjustment)}</span>
-                  )
-                ) : (
-                  'Opcional'
-                )}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-1">
-              {[
-                { id: 'none', label: 'Sin Ajuste' },
-                { id: 'add', label: '+ Bono' },
-                { id: 'sub', label: '- Descuento' }
-              ].map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => handleAdjustChange(t.id, t.id === 'none' ? '' : adjustVal)}
-                  className={`py-1.5 rounded-lg text-xs font-bold border transition ${
-                    adjustType === t.id
-                      ? t.id === 'add'
-                        ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-sm'
-                        : t.id === 'sub'
-                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
-                        : 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white border-slate-300'
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            {adjustType !== 'none' && (
-              <div className="space-y-2 pt-1">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[9px] text-slate-500 dark:text-slate-400 block mb-0.5 font-bold uppercase">
-                      {adjustType === 'add' ? 'Monto a Sumar ($)' : 'Monto a Descontar ($)'}:
-                    </label>
-                    <div className="relative">
-                      <span className={`absolute left-2.5 top-1.5 text-xs font-mono font-bold ${
-                        adjustType === 'add' ? 'text-emerald-500' : 'text-amber-500'
-                      }`}>
-                        {adjustType === 'add' ? '+$' : '-$'}
-                      </span>
+              {adjustType !== 'none' && (
+                <div className="space-y-2 pt-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] text-slate-400 block mb-0.5 font-bold uppercase tracking-wider">
+                        {adjustType === 'add' ? 'Monto a Sumar ($)' : 'Monto a Descontar ($)'}:
+                      </label>
+                      <div className="relative">
+                        <span className={`absolute left-2.5 top-2 text-xs font-mono font-bold ${
+                          adjustType === 'add' ? 'text-emerald-400' : 'text-amber-400'
+                        }`}>
+                          {adjustType === 'add' ? '+$' : '-$'}
+                        </span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          placeholder="ej. 25 o 30"
+                          value={adjustVal}
+                          onChange={(e) => handleAdjustChange(adjustType, e.target.value)}
+                          className="w-full bg-[#0d141e] border border-white/10 rounded-xl pl-8 pr-2.5 py-1.5 text-xs text-white font-mono font-bold focus:outline-none focus:border-cyan-500 transition"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-slate-400 block mb-0.5 font-bold uppercase tracking-wider">
+                        Motivo del ajuste:
+                      </label>
                       <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        placeholder="ej. 25 o 30"
-                        value={adjustVal}
-                        onChange={(e) => handleAdjustChange(adjustType, e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg pl-7 pr-2.5 py-1.5 text-xs text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-cyan-500"
+                        type="text"
+                        placeholder="ej. Suelo rocoso / Descuento DW"
+                        value={formData.adjustment_reason}
+                        onChange={(e) => setFormData({ ...formData, adjustment_reason: e.target.value })}
+                        className="w-full bg-[#0d141e] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition"
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 dark:text-slate-400 block mb-0.5 font-bold uppercase">
-                      Motivo del ajuste:
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="ej. Suelo rocoso / Descuento DW"
-                      value={formData.adjustment_reason}
-                      onChange={(e) => setFormData({ ...formData, adjustment_reason: e.target.value })}
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500"
-                    />
+
+                  {/* Botones rápidos */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <span className="text-[9px] text-slate-500 uppercase font-bold">Rápidos:</span>
+                    {adjustType === 'sub' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleAdjustChange('sub', '30');
+                            setFormData(prev => ({ ...prev, adjustment_reason: 'Supervisor descontó DW (no se perforó)' }));
+                          }}
+                          className="px-2 py-0.5 bg-[#0d141e] hover:bg-[#182332] border border-white/5 text-amber-300 text-[10px] font-bold rounded-lg transition"
+                        >
+                          -$30 (Sin DW)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleAdjustChange('sub', '25');
+                            setFormData(prev => ({ ...prev, adjustment_reason: 'Deducción / Descuento parcial' }));
+                          }}
+                          className="px-2 py-0.5 bg-[#0d141e] hover:bg-[#182332] border border-white/5 text-amber-300 text-[10px] font-bold rounded-lg transition"
+                        >
+                          -$25
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleAdjustChange('add', '25');
+                            setFormData(prev => ({ ...prev, adjustment_reason: 'Bono metraje extra autorizado' }));
+                          }}
+                          className="px-2 py-0.5 bg-[#0d141e] hover:bg-[#182332] border border-white/5 text-emerald-300 text-[10px] font-bold rounded-lg transition"
+                        >
+                          +$25 (Bono)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleAdjustChange('add', '30');
+                            setFormData(prev => ({ ...prev, adjustment_reason: 'Driveway Bore autorizado' }));
+                          }}
+                          className="px-2 py-0.5 bg-[#0d141e] hover:bg-[#182332] border border-white/5 text-emerald-300 text-[10px] font-bold rounded-lg transition"
+                        >
+                          +$30 (DW)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleAdjustChange('add', '50');
+                            setFormData(prev => ({ ...prev, adjustment_reason: 'Trabajo complejo / rocoso' }));
+                          }}
+                          className="px-2 py-0.5 bg-[#0d141e] hover:bg-[#182332] border border-white/5 text-emerald-300 text-[10px] font-bold rounded-lg transition"
+                        >
+                          +$50 (Extra)
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
-
-                {/* Botones rápidos */}
-                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                  <span className="text-[9px] text-slate-400">Rápidos:</span>
-                  {adjustType === 'sub' ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleAdjustChange('sub', '30');
-                          setFormData(prev => ({ ...prev, adjustment_reason: 'Supervisor descontó DW (no se perforó)' }));
-                        }}
-                        className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-300 text-[10px] font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition"
-                      >
-                        -$30 (Sin DW)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleAdjustChange('sub', '25');
-                          setFormData(prev => ({ ...prev, adjustment_reason: 'Deducción / Descuento parcial' }));
-                        }}
-                        className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-300 text-[10px] font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition"
-                      >
-                        -$25
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleAdjustChange('add', '25');
-                          setFormData(prev => ({ ...prev, adjustment_reason: 'Bono metraje extra autorizado' }));
-                        }}
-                        className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-300 text-[10px] font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition"
-                      >
-                        +$25 (Bono)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleAdjustChange('add', '30');
-                          setFormData(prev => ({ ...prev, adjustment_reason: 'Driveway Bore autorizado' }));
-                        }}
-                        className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-300 text-[10px] font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition"
-                      >
-                        +$30 (DW)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleAdjustChange('add', '50');
-                          setFormData(prev => ({ ...prev, adjustment_reason: 'Trabajo complejo / rocoso' }));
-                        }}
-                        className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-300 text-[10px] font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition"
-                      >
-                        +$50 (Extra)
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
-          {/* Botones de Acción */}
-          <div className="pt-2 flex items-center gap-2">
+          {/* Footer Estandarizado Cockpit */}
+          <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-3 shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-2xl transition"
+              disabled={saving}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition active:scale-95 border border-white/10"
             >
               Cancelar
             </button>
@@ -542,13 +586,13 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 active:scale-95 transition"
+              className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-1.5 transition active:scale-95 disabled:opacity-50"
             >
               {saving ? (
                 <span>Guardando...</span>
               ) : (
                 <>
-                  <Save className="h-4 w-4 stroke-[2.5]" />
+                  <Save className="w-3.5 h-3.5 stroke-[2.5]" />
                   <span>Guardar Cambios</span>
                 </>
               )}

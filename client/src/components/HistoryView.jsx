@@ -4,11 +4,12 @@ import {
   Trash2, ExternalLink, Image as ImageIcon, X, DollarSign, 
   Ruler, ChevronRight, Copy, Camera, AlertCircle, FileText, 
   ShieldAlert, CheckCircle, Search, Filter, Sparkles, MapPin, Phone, ShieldCheck, AlertTriangle,
-  BarChart3, Sun
+  BarChart3, Sun, Pencil
 } from 'lucide-react';
 import ShareReportModal from './ShareReportModal';
 import TodayView from './TodayView';
 import MonthlyView from './MonthlyView';
+import EditJobModal from './EditJobModal';
 
 export default function HistoryView({ 
   orders = [], 
@@ -25,7 +26,8 @@ export default function HistoryView({
   const [copiedJobId, setCopiedJobId] = useState(null);
   const [updatingWeekKey, setUpdatingWeekKey] = useState(null);
   const [reportOrder, setReportOrder] = useState(null); // Order to report via ShareReportModal
-  const [selectedPhoto, setSelectedPhoto] = useState(null); // Fullscreen photo modal
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [editingOrder, setEditingOrder] = useState(null); // Fullscreen photo modal
 
   // General orders search and status filter
   const [orderSearch, setOrderSearch] = useState('');
@@ -526,6 +528,16 @@ ${jobLines}
 
                       <div className="flex items-center gap-1.5">
                         <button
+                          type="button"
+                          onClick={() => setEditingOrder(order)}
+                          className="text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-2 py-1 rounded-lg flex items-center gap-1 transition active:scale-95 shadow-xs"
+                          title="Editar orden"
+                        >
+                          <Pencil className="h-3 w-3 text-cyan-400" />
+                          <span>Editar</span>
+                        </button>
+
+                        <button
                           onClick={() => copySingleJobClaim(order)}
                           className="text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-2.5 py-1 rounded-lg flex items-center gap-1 transition active:scale-95 shadow-xs"
                           title="Copiar comprobante al portapapeles"
@@ -789,7 +801,17 @@ ${jobLines}
                             <span>Fotos de Evidencia ({photos.length})</span>
                           </span>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditingOrder(order)}
+                              className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold"
+                              title="Editar orden"
+                            >
+                              <Pencil className="h-3 w-3" />
+                              <span>Editar</span>
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => copySingleJobClaim(order)}
@@ -895,6 +917,18 @@ ${jobLines}
         onClose={() => setReportOrder(null)}
         onOrderUpdated={onRefresh}
       />
+      {editingOrder && (
+        <EditJobModal
+          order={editingOrder}
+          isOpen={Boolean(editingOrder)}
+          onClose={() => setEditingOrder(null)}
+          onJobUpdated={() => {
+            setEditingOrder(null);
+            if (onRefresh) onRefresh();
+            if (onOrderUpdated) onOrderUpdated();
+          }}
+        />
+      )}
     </div>
   );
 }
