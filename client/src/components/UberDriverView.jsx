@@ -149,6 +149,7 @@ export default function UberDriverView({
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
   const routeBadgeMarkersRef = useRef([]);
+  const travesiaBadgeMarkersRef = useRef([]);
   const userMarkerRef = useRef(null);
   const abortControllerRef = useRef(null);
 
@@ -563,6 +564,9 @@ export default function UberDriverView({
           geometry: { type: 'LineString', coordinates: cached.coordinates }
         });
       }
+      if (map) {
+        renderTravesiaLegBadges(map, cached.legs);
+      }
       return;
     }
 
@@ -610,6 +614,9 @@ export default function UberDriverView({
               geometry: { type: 'LineString', coordinates }
             });
           }
+          if (map) {
+            renderTravesiaLegBadges(map, legs);
+          }
           return;
         }
       }
@@ -653,6 +660,47 @@ export default function UberDriverView({
         geometry: { type: 'LineString', coordinates: fallbackCoordinates }
       });
     }
+    if (map) {
+      renderTravesiaLegBadges(map, fallbackLegs);
+    }
+  };
+
+  // Render subtle floating badges on the map along each travesía leg (between consecutive stops)
+  const renderTravesiaLegBadges = (map, legs) => {
+    if (!map) return;
+    // Clear previous travesía leg badges
+    travesiaBadgeMarkersRef.current.forEach(m => m.remove());
+    travesiaBadgeMarkersRef.current = [];
+
+    if (!legs || legs.length === 0) return;
+
+    legs.forEach((leg) => {
+      const { fromOrder, toOrder, minutes, miles, fromIndex, toIndex } = leg;
+      if (!fromOrder?.latitude || !fromOrder?.longitude || !toOrder?.latitude || !toOrder?.longitude) return;
+
+      const midLng = (Number(fromOrder.longitude) + Number(toOrder.longitude)) / 2;
+      const midLat = (Number(fromOrder.latitude) + Number(toOrder.latitude)) / 2;
+
+      const legBadgeEl = document.createElement('div');
+      legBadgeEl.className = 'apple-travesia-leg-badge';
+      legBadgeEl.title = `De #${fromIndex + 1} a #${toIndex + 1}: ${minutes} min (~${miles.toFixed(1)} mi). Toca para seleccionar.`;
+      legBadgeEl.innerHTML = `
+        <span class="leg-time">+${minutes} min</span>
+        <span class="leg-dot">•</span>
+        <span class="leg-dist">${miles.toFixed(1)} mi</span>
+      `;
+
+      legBadgeEl.onclick = (e) => {
+        e.stopPropagation();
+        handleSelectJob(toOrder);
+      };
+
+      const legMarker = new mapboxgl.Marker({ element: legBadgeEl, anchor: 'center' })
+        .setLngLat([midLng, midLat])
+        .addTo(map);
+
+      travesiaBadgeMarkersRef.current.push(legMarker);
+    });
   };
 
   // Keep travesia route updated whenever activeOrders changes
@@ -1079,6 +1127,8 @@ export default function UberDriverView({
     mapInstanceRef.current = map;
 
     return () => {
+      travesiaBadgeMarkersRef.current.forEach(m => m.remove());
+      travesiaBadgeMarkersRef.current = [];
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -1125,6 +1175,12 @@ export default function UberDriverView({
 
     routeBadgeMarkersRef.current.forEach(m => m.remove());
     routeBadgeMarkersRef.current = [];
+
+    travesiaBadgeMarkersRef.current.forEach(m => m.remove());
+    travesiaBadgeMarkersRef.current = [];
+    if (map && travesiaLegs && travesiaLegs.length > 0) {
+      renderTravesiaLegBadges(map, travesiaLegs);
+    }
 
     if (userMarkerRef.current) {
       userMarkerRef.current.remove();

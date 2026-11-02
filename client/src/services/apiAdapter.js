@@ -83,11 +83,30 @@ export function initApiAdapter() {
           }
         }
 
+        // --- REORDER ROUTE (Persist live order in IndexedDB & forward to Express SQLite) ---
+        if (cleanUrl === '/api/orders/reorder-route' && method === 'POST') {
+          const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
+          const items = body.orders || body.orderedIds || [];
+          await localDb.reorderRoute(items);
+          try {
+            await originalFetch(input, init);
+          } catch (e) {}
+          return jsonResponse({ success: true });
+        }
+
         // --- SINGLE ORDER & ACTIONS ---
         const orderMatch = cleanUrl.match(/^\/api\/orders\/(\d+)(\/.*)?$/);
         if (orderMatch) {
           const orderId = orderMatch[1];
           const subAction = orderMatch[2] || '';
+
+          // /api/orders/:id/coords
+          if (subAction === '/coords' && method === 'PATCH') {
+            const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
+            await localDb.updateOrder(orderId, { latitude: body.latitude, longitude: body.longitude });
+            try { await originalFetch(input, init); } catch (e) {}
+            return jsonResponse({ success: true });
+          }
 
           // /api/orders/:id/adjust
           if (subAction === '/adjust' && method === 'POST') {

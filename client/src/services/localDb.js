@@ -283,6 +283,19 @@ export function calculateOrderRate(order, settings) {
   return total;
 }
 
+function normalizeDateStr(d) {
+  if (!d) return '';
+  const str = String(d).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  const m = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (m) {
+    const mm = m[1].padStart(2, '0');
+    const dd = m[2].padStart(2, '0');
+    return `${m[3]}-${mm}-${dd}`;
+  }
+  return str;
+}
+
 export async function getOrders(filters = {}) {
   const db = await getDb();
   return new Promise((resolve, reject) => {
@@ -315,7 +328,8 @@ export async function getOrders(filters = {}) {
 
         // Filter: Date
         if (filters.date) {
-          orders = orders.filter((o) => o.work_date === filters.date);
+          const targetNorm = normalizeDateStr(filters.date);
+          orders = orders.filter((o) => normalizeDateStr(o.work_date) === targetNorm);
         }
 
         // Filter: Cable Type
@@ -346,10 +360,15 @@ export async function getOrders(filters = {}) {
           );
         }
 
-        // Sort: work_date DESC, id DESC
+        // Sort: work_date DESC, (CASE WHEN route_order > 0 THEN route_order ELSE 9999) ASC, id ASC
         orders.sort((a, b) => {
-          if (b.work_date !== a.work_date) return b.work_date.localeCompare(a.work_date);
-          return (b.id || 0) - (a.id || 0);
+          const dateA = normalizeDateStr(a.work_date);
+          const dateB = normalizeDateStr(b.work_date);
+          if (dateB !== dateA) return dateB.localeCompare(dateA);
+          const orderA = Number(a.route_order) > 0 ? Number(a.route_order) : 9999;
+          const orderB = Number(b.route_order) > 0 ? Number(b.route_order) : 9999;
+          if (orderA !== orderB) return orderA - orderB;
+          return (a.id || 0) - (b.id || 0);
         });
 
         resolve(orders);
@@ -412,6 +431,9 @@ export async function createOrder(data) {
     neighbor_notice: data.neighbor_notice || 'N',
     raw_notes: data.raw_notes || '',
     rate_calculated: calculatedRate,
+    route_order: data.route_order !== undefined ? Number(data.route_order) : 0,
+    latitude: data.latitude !== undefined ? data.latitude : null,
+    longitude: data.longitude !== undefined ? data.longitude : null,
     manual_adjustment: parseFloat(data.manual_adjustment) || 0,
     adjustment_reason: data.adjustment_reason || '',
     cancel_reason: data.cancel_reason || '',
@@ -518,6 +540,39 @@ export async function setWhatsappShared(id, shared = true) {
   return updateOrder(id, {
     whatsapp_shared: isShared,
     whatsapp_shared_at: now
+  });
+}
+
+export async function reorderRoute(ordersOrIds = []) {
+  const db = await getDb();
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction(['work_orders'], 'readwrite');
+      const store = tx.objectStore('work_orders');
+      const getAllReq = store.getAll();
+
+      getAllReq.onsuccess = () => {
+        const allOrders = getAllReq.result || [];
+        ordersOrIds.forEach((item, idx) => {
+          const id = typeof item === 'object' ? item.id : item;
+          const jobId = typeof item === 'object' ? String(item.job_id || '') : String(item || '');
+          const match = allOrders.find(o => 
+            String(o.id) === String(id) || 
+            (jobId && String(o.job_id) === jobId)
+          );
+          if (match) {
+            match.route_order = idx + 1;
+            match.updated_at = new Date().toISOString();
+            store.put(match);
+          }
+        });
+      };
+
+      tx.oncomplete = () => resolve({ success: true });
+      tx.onerror = () => reject(tx.error);
+    } catch (e) {
+      reject(e);
+    }
   });
 }
 
