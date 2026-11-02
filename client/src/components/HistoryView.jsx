@@ -25,6 +25,7 @@ export default function HistoryView({
   const [copiedJobId, setCopiedJobId] = useState(null);
   const [updatingWeekKey, setUpdatingWeekKey] = useState(null);
   const [reportOrder, setReportOrder] = useState(null); // Order to report via ShareReportModal
+  const [selectedPhoto, setSelectedPhoto] = useState(null); // Fullscreen photo modal
 
   // General orders search and status filter
   const [orderSearch, setOrderSearch] = useState('');

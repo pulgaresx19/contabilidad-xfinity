@@ -213,6 +213,10 @@ export default function UberDriverView({
   mapThemeRef.current = mapTheme;
   const [showThemePicker, setShowThemePicker] = useState(false);
 
+  // Overlay modal for day's full jobs list
+  const [showDayJobsOverlay, setShowDayJobsOverlay] = useState(false);
+  const [overlayStatusFilter, setOverlayStatusFilter] = useState('ALL');
+
   // Travesía Organizer Modal State
   const [showTripModal, setShowTripModal] = useState(false);
   const [tempOrdersList, setTempOrdersList] = useState([]);
@@ -1388,9 +1392,10 @@ export default function UberDriverView({
           </button>
 
           <button
-            onClick={onSwitchToClassic}
+            type="button"
+            onClick={() => setShowDayJobsOverlay(true)}
             className="w-9 h-9 rounded-2xl bg-[#0f1722]/90 backdrop-blur-2xl hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 shadow-xl active:scale-95 transition flex items-center justify-center cursor-pointer"
-            title="Cambiar a Vista Lista"
+            title="Ver lista de trabajos del día"
           >
             <List className="h-4 w-4" />
           </button>
@@ -2136,6 +2141,205 @@ export default function UberDriverView({
                 className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-md active:scale-95 transition"
               >
                 {isSavingTrip ? 'Guardando...' : 'Guardar y Aplicar Travesía'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. COMPONENTE SUPERPUESTO: LISTA GENERAL DE TRABAJOS DEL DÍA */}
+      {showDayJobsOverlay && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowDayJobsOverlay(false);
+          }}
+        >
+          <div className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl text-white">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between bg-slate-900/60 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                  <List className="h-4 w-4 stroke-[2.5]" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-black text-white truncate">
+                    Trabajos del Día
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-medium truncate">
+                    {formatDateFriendly(activeDate)} • {orders.length} {orders.length === 1 ? 'trabajo' : 'trabajos'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDayJobsOverlay(false)}
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+                title="Cerrar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Quick KPI Bar */}
+            <div className="grid grid-cols-3 gap-2 px-4 py-3 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
+              <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
+                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+                  Total Estimado
+                </span>
+                <span className="text-sm font-black text-emerald-400 font-mono">
+                  ${orders.reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0).toFixed(0)}
+                </span>
+              </div>
+              <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
+                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+                  Completados
+                </span>
+                <span className="text-sm font-black text-white font-mono">
+                  {orders.filter(o => o.status === 'Completado').length} / {orders.length}
+                </span>
+              </div>
+              <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
+                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+                  Metraje
+                </span>
+                <span className="text-sm font-black text-cyan-400 font-mono">
+                  {Math.round(orders.reduce((sum, o) => sum + (parseFloat(o.drop_footage) || 0), 0))} ft
+                </span>
+              </div>
+            </div>
+
+            {/* Status Filter Tabs */}
+            <div className="flex items-center gap-1.5 px-4 py-2 border-b border-white/5 bg-[#101722] shrink-0 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'ALL', label: `Todos (${orders.length})` },
+                { id: 'Pendiente', label: `Pendientes (${orders.filter(o => o.status !== 'Completado' && o.status !== 'No Realizado').length})` },
+                { id: 'Completado', label: `Completados (${orders.filter(o => o.status === 'Completado').length})` },
+                { id: 'No Realizado', label: `Cancelados (${orders.filter(o => o.status === 'No Realizado').length})` },
+              ].map(f => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setOverlayStatusFilter(f.id)}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition whitespace-nowrap cursor-pointer ${
+                    overlayStatusFilter === f.id
+                      ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                      : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Jobs List (Scrollable) */}
+            <div className="p-3 space-y-2 overflow-y-auto flex-1 min-h-0">
+              {orders
+                .filter(o => {
+                  if (overlayStatusFilter === 'ALL') return true;
+                  if (overlayStatusFilter === 'Pendiente') return o.status !== 'Completado' && o.status !== 'No Realizado';
+                  return o.status === overlayStatusFilter;
+                })
+                .map((ord, idx) => {
+                  const isTarget = selectedOrder?.id === ord.id;
+                  const isCompleted = ord.status === 'Completado';
+                  const isCancelled = ord.status === 'No Realizado';
+                  const isReported = ord.is_reported || ord.status === 'Reportado';
+                  const originalIdx = orders.findIndex(x => x.id === ord.id);
+
+                  return (
+                    <div
+                      key={ord.id || idx}
+                      onClick={() => {
+                        handleSelectJob(ord);
+                        setShowDayJobsOverlay(false);
+                      }}
+                      className={`p-3 rounded-2xl border cursor-pointer transition select-none flex items-center justify-between gap-3 ${
+                        isTarget
+                          ? 'bg-[#007AFF]/20 border-[#007AFF]/70 shadow-lg ring-1 ring-[#007AFF]/40'
+                          : 'bg-[#16202c]/90 border-white/5 hover:border-white/20 hover:bg-[#1a2634]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Stop Number Circle */}
+                        <span className={`w-7 h-7 rounded-full text-white font-black text-xs flex items-center justify-center font-sans shrink-0 shadow-sm ${
+                          isCompleted
+                            ? 'bg-emerald-600/80 text-white'
+                            : isCancelled
+                            ? 'bg-rose-600/80 text-white'
+                            : 'bg-slate-700 text-slate-200'
+                        }`}>
+                          {isCompleted ? '✓' : isCancelled ? '✕' : (originalIdx >= 0 ? originalIdx + 1 : idx + 1)}
+                        </span>
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-white truncate">
+                              {ord.address}
+                            </span>
+                            {ord.bore_type && ord.bore_type.includes('DW') && (
+                              <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md shrink-0">
+                                DW
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10.5px] text-slate-400 flex items-center gap-1.5 mt-0.5 truncate">
+                            <span>{ord.city || 'Skokie'}</span>
+                            <span>•</span>
+                            <span className="font-mono text-cyan-300">#{ord.job_id}</span>
+                            <span>•</span>
+                            <span>{ord.drop_footage || 0} ft</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0 flex flex-col items-end">
+                        <div className="text-xs font-mono font-black text-emerald-400">
+                          ${ord.rate_calculated || 100}
+                        </div>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-0.5 ${
+                          isReported
+                            ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                            : isCompleted
+                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                            : isCancelled
+                            ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                            : 'bg-slate-800 text-slate-300 border border-slate-700'
+                        }`}>
+                          {isReported ? 'Reportado' : (ord.status || 'Pendiente')}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+
+              {orders.length === 0 && (
+                <div className="py-12 text-center text-slate-400 text-xs">
+                  No hay trabajos registrados para esta jornada.
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 py-3 border-t border-white/10 bg-slate-900/60 flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDayJobsOverlay(false);
+                  if (onOpenAddJob) onOpenAddJob();
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#007AFF] to-cyan-500 hover:from-blue-600 hover:to-cyan-400 text-white text-xs font-bold shadow-sm transition active:scale-95 cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5 stroke-[3]" />
+                <span>Añadir Trabajo</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowDayJobsOverlay(false)}
+                className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition active:scale-95 cursor-pointer"
+              >
+                Cerrar
               </button>
             </div>
           </div>
