@@ -1417,21 +1417,21 @@ export default function UberDriverView({
 
       {/* 2. TOP HUD: PREMIUM COCKPIT DATE & BALANCE PILL + ACTION BUTTONS */}
       <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between pointer-events-none gap-2">
-        {/* Fixed-Size Static Date Selector Card */}
-        <div className="pointer-events-auto bg-[#0f1722]/94 backdrop-blur-2xl border border-white/10 rounded-2xl px-1.5 sm:px-2 py-1 shadow-[0_8px_30px_rgba(0,0,0,0.5)] flex items-center justify-between w-[155px] sm:w-[185px] h-[52px] select-none shrink-0">
+        {/* Fixed-Height Linear Date Selector Pill */}
+        <div className="pointer-events-auto bg-[#0f1722]/95 backdrop-blur-2xl border border-white/10 rounded-2xl px-1 sm:px-1.5 h-9 shadow-xl flex items-center gap-1 select-none shrink-0">
           {/* Previous Day Chevron */}
           <button
             type="button"
             onClick={() => onShiftDay(-1)}
-            className="w-6 h-8 flex items-center justify-center hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition active:scale-90 text-sm font-black shrink-0 cursor-pointer"
+            className="w-6 h-7 flex items-center justify-center hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition active:scale-90 text-sm font-black shrink-0 cursor-pointer"
             title="Día anterior"
           >
             ‹
           </button>
           
-          {/* Center Date & Details (Fixed Width, Never Shifts) */}
+          {/* Center Date & Today Indicator (Single Line, Never Shifts) */}
           <div 
-            className="flex-1 min-w-0 flex flex-col items-center justify-center px-1 cursor-pointer"
+            className="flex items-center gap-1.5 px-1 cursor-pointer"
             onClick={() => {
               if (dateInputRef.current) {
                 if (typeof dateInputRef.current.showPicker === 'function') {
@@ -1455,42 +1455,32 @@ export default function UberDriverView({
               tabIndex={-1}
             />
 
-            {/* Line 1: Exact formatted date */}
-            <div className="flex items-center justify-center w-full">
-              <span className="text-xs font-black text-white truncate tracking-tight font-mono">
-                {formattedHudDate}
-              </span>
-            </div>
+            <span className="text-xs font-black text-white truncate tracking-tight font-mono">
+              {formattedHudDate}
+            </span>
 
-            {/* Line 2: Orders Count on Left, [Hoy / Ir hoy] Badge on Right */}
-            <div className="flex items-center justify-between w-full mt-0.5 px-0.5">
-              <span className="text-[10px] text-cyan-400 font-mono font-bold truncate">
-                {activeOrders.length} {activeOrders.length === 1 ? 'orden' : 'órdenes'}
+            {isViewingToday ? (
+              <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded-full shrink-0 select-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Hoy</span>
               </span>
-
-              {isViewingToday ? (
-                <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 rounded-full shrink-0 select-none">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>Hoy</span>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onGoToToday(); }}
-                  className="inline-flex items-center gap-0.5 text-[9px] font-black text-amber-300 hover:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-1.5 py-0.2 rounded-full transition active:scale-90 shrink-0 cursor-pointer shadow-xs select-none"
-                  title="Volver a la fecha de hoy"
-                >
-                  <span>Ir hoy</span>
-                </button>
-              )}
-            </div>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onGoToToday(); }}
+                className="inline-flex items-center text-[9px] font-black text-amber-300 hover:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-1.5 py-0.5 rounded-full transition active:scale-90 shrink-0 cursor-pointer shadow-xs select-none"
+                title="Volver a la fecha de hoy"
+              >
+                <span>Ir hoy</span>
+              </button>
+            )}
           </div>
 
           {/* Next Day Chevron */}
           <button
             type="button"
             onClick={() => onShiftDay(1)}
-            className="w-6 h-8 flex items-center justify-center hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition active:scale-90 text-sm font-black shrink-0 cursor-pointer"
+            className="w-6 h-7 flex items-center justify-center hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition active:scale-90 text-sm font-black shrink-0 cursor-pointer"
             title="Día siguiente"
           >
             ›
@@ -1500,11 +1490,12 @@ export default function UberDriverView({
         {/* Actions: [+] & [Travesía / Lista de Trabajos] & [Saldo Diario] */}
         <div className="pointer-events-auto flex items-center gap-1 sm:gap-1.5 shrink-0">
           <button
+            type="button"
             onClick={onOpenAddJob}
-            className="w-9 h-9 rounded-2xl bg-gradient-to-r from-[#007AFF] to-cyan-500 hover:from-blue-600 hover:to-cyan-400 text-white font-black shadow-lg shadow-blue-500/25 active:scale-95 transition flex items-center justify-center border border-white/15 cursor-pointer"
+            className="w-9 h-9 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-md shadow-cyan-500/30 active:scale-95 transition-all flex items-center justify-center border border-white/20 outline-none focus:outline-none select-none cursor-pointer"
             title="Añadir nuevo trabajo (+)"
           >
-            <Plus className="h-5 w-5 stroke-[3]" />
+            <Plus className="h-4.5 w-4.5 stroke-[3]" />
           </button>
 
           <button
@@ -1537,22 +1528,37 @@ export default function UberDriverView({
         </div>
       </div>
 
-      {/* 4. RIGHT FLOATING CONTROLS: THEME + 3D/2D + CENTRAR EN RUTA + CENTRAR EN GPS */}
+      {/* 4. RIGHT FLOATING CONTROLS: 3D/2D (TOP) + THEME (BELOW) + CENTRAR EN RUTA + CENTRAR EN GPS */}
       <div className="absolute right-3 top-20 z-20 flex flex-col gap-2 pointer-events-auto">
-        {/* Toggle Theme Popover */}
+        {/* 1. Toggle 3D / 2D Perspective (Top) */}
+        <button
+          type="button"
+          onClick={toggle3DView}
+          className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer select-none"
+          title={is3DMode ? 'Modo 3D Activo (Toca para vista 2D)' : 'Modo 2D Activo (Toca para perspectiva 3D)'}
+        >
+          <span className={`text-[11px] transition-colors ${
+            is3DMode 
+              ? 'text-cyan-400 font-black drop-shadow-[0_0_8px_rgba(34,211,238,0.7)]' 
+              : 'text-slate-300 font-bold'
+          }`}>
+            {is3DMode ? '3D' : '2D'}
+          </span>
+        </button>
+
+        {/* 2. Toggle Theme Popover (Below 3D) */}
         <div className="relative">
           <button
+            type="button"
             onClick={() => setShowThemePicker(prev => !prev)}
-            className={`w-10 h-10 rounded-full backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition ${
-              mapTheme === 'dark' || mapTheme === 'apple_dark' ? 'bg-[#007AFF] text-white' : 'bg-[#16202c]/90 text-slate-300'
-            }`}
+            className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] text-slate-300 hover:text-white backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer"
             title="Cambiar estilo de mapa"
           >
             <Layers className="h-4 w-4" />
           </button>
 
           {showThemePicker && (
-            <div className="absolute right-12 top-0 bg-[#16202c]/98 backdrop-blur-2xl border border-white/15 rounded-2xl p-2 shadow-2xl flex flex-col gap-1 w-48 z-50">
+            <div className="absolute right-12 top-0 bg-[#16202c]/98 backdrop-blur-2xl border border-white/15 rounded-2xl p-2 shadow-2xl flex flex-col gap-1 w-48 z-50 animate-in fade-in">
               <span className="text-[10px] font-black uppercase text-slate-400 px-2 py-0.5">
                 Estilo de Mapa
               </span>
@@ -1562,15 +1568,16 @@ export default function UberDriverView({
                 return (
                   <button
                     key={key}
+                    type="button"
                     onClick={() => handleChangeTheme(key)}
-                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-left transition ${
-                      active ? 'bg-[#007AFF] text-white font-bold' : 'text-slate-300 hover:bg-white/10'
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-left transition cursor-pointer ${
+                      active ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 font-bold' : 'text-slate-300 hover:bg-white/10'
                     }`}
                   >
                     <IconComponent className="h-3.5 w-3.5 shrink-0" />
                     <div className="min-w-0">
                       <div className="text-[11px] font-bold leading-tight">{t.name}</div>
-                      <div className={`text-[9px] truncate ${active ? 'text-blue-100' : 'text-slate-400'}`}>
+                      <div className={`text-[9px] truncate ${active ? 'text-cyan-400/80' : 'text-slate-400'}`}>
                         {t.description}
                       </div>
                     </div>
@@ -1580,17 +1587,6 @@ export default function UberDriverView({
             </div>
           )}
         </div>
-
-        {/* Toggle 3D Perspective */}
-        <button
-          onClick={toggle3DView}
-          className={`w-10 h-10 rounded-full backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition ${
-            is3DMode ? 'bg-[#007AFF] text-white' : 'bg-[#16202c]/90 text-slate-300'
-          }`}
-          title={is3DMode ? 'Modo 3D Activo (Toca para vista 2D)' : 'Activar perspectiva 3D'}
-        >
-          <span className="text-[11px] font-black">{is3DMode ? '3D' : '2D'}</span>
-        </button>
 
         {/* Recenter on Route Overview */}
         <button
