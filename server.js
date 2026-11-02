@@ -981,7 +981,7 @@ app.post('/api/batch-import', (req, res) => {
 // 10. Weekly Summary & Financial Accounting
 app.get('/api/weekly-summary', (req, res) => {
   try {
-    const allOrders = db.prepare('SELECT * FROM work_orders ORDER BY work_date DESC, id DESC').all();
+    const allOrders = db.prepare('SELECT * FROM work_orders ORDER BY work_date DESC, (CASE WHEN route_order > 0 THEN route_order ELSE 999 END) ASC, id ASC').all();
     const photosStmt = db.prepare('SELECT id, filename, original_name, category, created_at FROM job_photos WHERE work_order_id = ? ORDER BY id DESC');
 
     // Group orders by week based on configured closing day
@@ -1134,7 +1134,7 @@ app.post('/api/weeks/:key/status', (req, res) => {
 // 10c. Monthly Summary & Expense Accounting
 app.get('/api/monthly-summary', (req, res) => {
   try {
-    const allOrders = db.prepare('SELECT * FROM work_orders ORDER BY work_date DESC, id DESC').all();
+    const allOrders = db.prepare('SELECT * FROM work_orders ORDER BY work_date DESC, (CASE WHEN route_order > 0 THEN route_order ELSE 999 END) ASC, id ASC').all();
     const photosStmt = db.prepare('SELECT id, filename, original_name, category, created_at FROM job_photos WHERE work_order_id = ? ORDER BY id DESC');
     const cutoffSetting = getCutoffDaySetting();
 

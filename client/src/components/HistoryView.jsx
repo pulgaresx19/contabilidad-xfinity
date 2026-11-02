@@ -45,11 +45,6 @@ export default function HistoryView({ orders = [], summaryData, onRefresh, onOpe
     }
   };
 
-  // Always refresh live weekly state on mount
-  useEffect(() => {
-    if (onRefresh) onRefresh();
-  }, []);
-
   useEffect(() => {
     if (subTab === 'sheets') {
       fetchSheets();
@@ -274,8 +269,16 @@ ${jobLines}
           )}
 
           {weeks.length === 0 ? (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 text-center text-slate-500 dark:text-slate-400 text-xs shadow-sm">
-              No hay semanas registradas aún.
+            <div className="bg-[#0f1722]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 text-center shadow-lg flex flex-col items-center justify-center space-y-3 my-4 select-none">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                <Calendar className="h-6 w-6 stroke-[2]" />
+              </div>
+              <div className="space-y-1 max-w-xs">
+                <h4 className="text-sm font-black text-white">No hay semanas registradas aún</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Los cierres semanales se crean automáticamente conforme agregues y completes órdenes de trabajo.
+                </p>
+              </div>
             </div>
           ) : (
             weeks.map((w) => {

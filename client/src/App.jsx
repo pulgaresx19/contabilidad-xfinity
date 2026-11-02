@@ -16,7 +16,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('today'); // 'today' | 'history' | 'profile'
   const [orders, setOrders] = useState([]);
   const [summaryData, setSummaryData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [techName, setTechName] = useState('Javier (P0G1)');
 
   // Modals
@@ -129,13 +129,15 @@ export default function App() {
   };
 
   const refreshAll = async () => {
-    setLoading(true);
     await Promise.all([fetchOrders(), fetchSummary(), fetchSettings()]);
-    setLoading(false);
   };
 
   useEffect(() => {
-    refreshAll();
+    const init = async () => {
+      await Promise.all([fetchOrders(), fetchSummary(), fetchSettings()]);
+      setInitialLoading(false);
+    };
+    init();
   }, []);
 
   // Guarantee instant fresh data when technician switches to Cierres or Monthly balance
@@ -173,13 +175,14 @@ export default function App() {
   const pendingCount = orders.filter(o => o.status === 'Pendiente').length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-slate-950 font-sans">
-      {/* Top Mobile Header with Safe Area Inset to clear phone status bar / notch / dynamic island */}
-      <header 
-        className="bg-slate-900/90 border-b border-slate-800/80 sticky top-0 z-30 backdrop-blur-md"
-        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 1.25rem)' }}
-      >
-        <div className="max-w-md mx-auto px-4 h-13 flex items-center justify-between">
+    <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center selection:bg-cyan-500 selection:text-slate-950 font-sans ${activeTab === 'today' ? 'h-screen max-h-screen overflow-hidden' : ''}`}>
+      <div className={`w-full max-w-md flex flex-col relative ${activeTab === 'today' ? 'h-full flex-1 min-h-0 overflow-hidden' : 'min-h-screen'}`}>
+        {/* Top Mobile Header with Safe Area Inset to clear phone status bar / notch / dynamic island */}
+        <header 
+          className="w-full bg-slate-900/90 border-b border-slate-800/80 sticky top-0 z-30 backdrop-blur-md shrink-0"
+          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 0.75rem)' }}
+        >
+          <div className="w-full px-3.5 h-12 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-cyan-500/20">
               <Cable className="h-4 w-4 text-slate-950 stroke-[2.5]" />
@@ -224,14 +227,12 @@ export default function App() {
       </header>
 
       {/* Main View Area */}
-      <main className="flex-1 max-w-md w-full mx-auto px-3.5 py-2.5 pb-24">
-        {loading && orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-500 space-y-2">
-            <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-xs">Cargando...</p>
-          </div>
-        ) : (
-          <>
+      <main className={`flex-1 w-full ${
+        activeTab === 'today'
+          ? 'min-h-0 pt-1.5 pb-[4.75rem] px-3.5 flex flex-col overflow-hidden'
+          : 'px-3.5 py-2.5 pb-24 overflow-y-auto'
+      }`}>
+        <>
             {activeTab === 'today' && (
               <TodayView
                 orders={orders}
@@ -239,6 +240,7 @@ export default function App() {
                 onOpenScan={() => setIsScanModalOpen(true)}
                 onOpenPhotos={handleOpenPhotos}
                 onOrderUpdated={refreshAll}
+                onUpdateOrders={setOrders}
               />
             )}
 
@@ -267,7 +269,6 @@ export default function App() {
               />
             )}
           </>
-        )}
       </main>
 
       {/* Floating Bottom Pill Navbar */}
@@ -276,6 +277,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         pendingCount={pendingCount}
       />
+      </div>
 
       {/* Scan Modal (Opens right from Home) */}
       <ScanModal

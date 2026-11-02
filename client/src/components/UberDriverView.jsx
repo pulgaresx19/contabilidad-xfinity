@@ -3,38 +3,38 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { 
   Navigation, MapPin, Compass, Sparkles, CheckCircle2, 
-  Clock, AlertTriangle, ChevronUp, ChevronDown, Phone, 
+  Clock, AlertTriangle, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Phone, 
   Camera, Share2, DollarSign, Layers, List, Pencil, 
   Car, Calendar, ArrowRight, ArrowLeft, 
   X, Plus, Play, Pause, MoreHorizontal,
   ExternalLink, Check, Sun, Moon, Globe,
-  Route, MoveUp, MoveDown, CheckCheck, Zap, Maximize2
+  Route, MoveUp, MoveDown, CheckCheck, Zap, Maximize2, GripVertical
 } from 'lucide-react';
-import { formatDateFriendly } from '../utils/dateUtils';
+import { formatDateFriendly, normalizeDateStr } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
 
 const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
 mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
 
-// Map Theme Definitions
+// Map Theme Definitions (Nombres profesionales y explícitos)
 const MAP_THEMES = {
-  apple_dark: {
-    name: 'Apple Maps Oscuro',
+  dark: {
+    name: 'Mapa Oscuro',
     style: 'mapbox://styles/mapbox/dark-v11',
     icon: Moon,
-    description: 'Calles en gris claro y parques verdes'
+    description: 'Calles visibles y contraste nocturno'
   },
   streets: {
-    name: 'Apple Maps Día',
+    name: 'Mapa Claro',
     style: 'mapbox://styles/mapbox/streets-v12',
     icon: Sun,
-    description: 'Mapa claro tradicional'
+    description: 'Mapa claro de alta visibilidad'
   },
   satellite: {
     name: 'Satélite Real',
     style: 'mapbox://styles/mapbox/satellite-streets-v12',
     icon: Globe,
-    description: 'Fotos aéreas para ver tejados y postes'
+    description: 'Fotos aéreas para postes y acometidas'
   }
 };
 
@@ -130,6 +130,7 @@ export default function UberDriverView({
   onClearTargetFocus,
   onShiftDay,
   onGoToToday,
+  onSelectDate,
   onOpenScan,
   onOpenAddJob,
   onOpenPhotos,
@@ -141,6 +142,7 @@ export default function UberDriverView({
   onOpenShareModal,
   localSharedMap = {},
   onOrderUpdated,
+  onUpdateOrders,
   onSwitchToClassic
 }) {
   const mapContainerRef = useRef(null);
@@ -159,23 +161,13 @@ export default function UberDriverView({
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [is3DMode, setIs3DMode] = useState(true);
 
-  // Top stops ribbon ref for automatic scrolling
-  const stopsRibbonRef = useRef(null);
+  // Date picker ref for direct calendar jump
+  const dateInputRef = useRef(null);
 
   // Photos state for active job card and fullscreen lightbox
   const [selectedOrderPhotos, setSelectedOrderPhotos] = useState([]);
   const [fullscreenPhotoUrl, setFullscreenPhotoUrl] = useState(null);
   const [fullscreenPhotoIndex, setFullscreenPhotoIndex] = useState(0);
-
-  // Auto-scroll the active stop chip into view in the top ribbon
-  useEffect(() => {
-    if (stopsRibbonRef.current && selectedOrder?.id) {
-      const activeEl = stopsRibbonRef.current.querySelector(`[data-order-id="${selectedOrder.id}"]`);
-      if (activeEl) {
-        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      }
-    }
-  }, [selectedOrder?.id]);
 
   // Load photos for selected order whenever selectedOrder changes or orders list updates
   useEffect(() => {
@@ -210,10 +202,15 @@ export default function UberDriverView({
     return () => { isMounted = false; };
   }, [selectedOrder?.id, selectedOrder?.photos_count, selectedOrder?.work_photos_count, orders]);
 
-  // Map Theme state: Default is 'apple_dark'
+  // Map Theme state: Default is 'dark' (Mapa Oscuro)
   const [mapTheme, setMapTheme] = useState(() => {
-    return localStorage.getItem('xfinity_map_theme') || 'apple_dark';
+    const saved = localStorage.getItem('xfinity_map_theme');
+    if (saved === 'apple_dark' || saved === 'night' || saved === 'dark') return 'dark';
+    if (saved === 'streets' || saved === 'satellite') return saved;
+    return 'dark';
   });
+  const mapThemeRef = useRef(mapTheme);
+  mapThemeRef.current = mapTheme;
   const [showThemePicker, setShowThemePicker] = useState(false);
 
   // Travesía Organizer Modal State
@@ -221,6 +218,12 @@ export default function UberDriverView({
   const [tempOrdersList, setTempOrdersList] = useState([]);
   const [isSavingTrip, setIsSavingTrip] = useState(false);
   const [optimizedNotice, setOptimizedNotice] = useState(null);
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [touchDragIndex, setTouchDragIndex] = useState(null);
+  const [touchOverIndex, setTouchOverIndex] = useState(null);
+  const touchStartYRef = useRef(null);
+  const touchActiveIndexRef = useRef(null);
 
   // Route state
   const [activeRouteInfo, setActiveRouteInfo] = useState(null);
@@ -238,8 +241,8 @@ export default function UberDriverView({
     }
   });
 
-  // Default coordinate center: Elkhart Comcast Base
-  const DEFAULT_LNG_LAT = [-85.9773686, 41.6820000];
+  // Default coordinate center: Skokie / Chicago
+  const DEFAULT_LNG_LAT = [-87.734557, 42.033592];
 
   // Daily statistics
   const dayPending = orders.filter(o => o.status === 'Pendiente');
@@ -582,43 +585,132 @@ export default function UberDriverView({
     }
   }, [orders, targetFocusOrderId]);
 
-  // Apply Apple Maps Dark Styling
+  // Apply Professional Dark Styling (visible high-contrast streets, emerald parks and deep blue water)
   const applyCustomMapStyling = (map) => {
     if (!map) return;
-    if (mapTheme !== 'apple_dark') return;
+    const current = mapThemeRef.current;
+    const isDark = current === 'dark' || current === 'apple_dark' || current === 'night';
+    if (!isDark) return;
 
     try {
+      // 1. Dark navy slate background (exact match with photo)
       if (map.getLayer('land')) {
         map.setPaintProperty('land', 'background-color', '#1b242f');
       }
+      if (map.getLayer('background')) {
+        map.setPaintProperty('background', 'background-color', '#1b242f');
+      }
+
+      // 2. High-contrast visible roads (clear slate-blue street grid)
       if (map.getLayer('road-simple')) {
-        map.setPaintProperty('road-simple', 'line-color', '#52667a');
+        map.setPaintProperty('road-simple', 'line-color', [
+          'match',
+          ['get', 'class'],
+          ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link'],
+          '#6a829e',
+          ['secondary', 'secondary_link', 'tertiary', 'tertiary_link'],
+          '#5a708a',
+          ['street', 'street_limited'],
+          '#425468',
+          /* fallback / path / service */
+          '#3a4a5c'
+        ]);
+
+        map.setPaintProperty('road-simple', 'line-width', [
+          'interpolate',
+          ['exponential', 1.5],
+          ['zoom'],
+          10, [
+            'match',
+            ['get', 'class'],
+            ['motorway', 'trunk', 'primary'], 1.8,
+            ['secondary', 'tertiary'], 1.2,
+            0.8
+          ],
+          13, [
+            'match',
+            ['get', 'class'],
+            ['motorway', 'trunk', 'primary'], 3.0,
+            ['secondary', 'tertiary'], 2.2,
+            ['street', 'street_limited'], 1.4,
+            0.9
+          ],
+          16, [
+            'match',
+            ['get', 'class'],
+            ['motorway', 'trunk', 'primary'], 9.0,
+            ['secondary', 'tertiary'], 7.0,
+            ['street', 'street_limited'], 5.0,
+            3.0
+          ]
+        ]);
       }
+
       if (map.getLayer('bridge-simple')) {
-        map.setPaintProperty('bridge-simple', 'line-color', '#5e758c');
+        map.setPaintProperty('bridge-simple', 'line-color', [
+          'match',
+          ['get', 'class'],
+          ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link'],
+          '#6a829e',
+          ['secondary', 'secondary_link', 'tertiary', 'tertiary_link'],
+          '#5a708a',
+          '#425468'
+        ]);
       }
+
+      // 3. Vibrant rich forest green parks & golf clubs (e.g. Evanston Golf Club)
       if (map.getLayer('landuse')) {
         map.setPaintProperty('landuse', 'fill-color', [
           'match',
           ['get', 'class'],
-          ['park', 'pitch', 'cemetery', 'national_park', 'grass'],
+          ['park', 'pitch', 'cemetery', 'national_park', 'grass', 'wood', 'scrub', 'golf', 'agriculture'],
           '#184533',
-          '#202c38'
+          '#1f2a37'
         ]);
-        map.setPaintProperty('landuse', 'fill-opacity', 0.92);
+        map.setPaintProperty('landuse', 'fill-opacity', 0.95);
       }
       if (map.getLayer('national-park')) {
         map.setPaintProperty('national-park', 'fill-color', '#184533');
+        map.setPaintProperty('national-park', 'fill-opacity', 0.95);
       }
+
+      // 4. Subtle dark building footprints
+      if (map.getLayer('building')) {
+        map.setPaintProperty('building', 'fill-color', '#1d2734');
+        map.setPaintProperty('building', 'fill-outline-color', '#263445');
+      }
+
+      // 5. Deep navy water bodies
       if (map.getLayer('water')) {
         map.setPaintProperty('water', 'fill-color', '#142a3e');
       }
+
+      // 6. Crisp white street labels with dark halo
       if (map.getLayer('road-label-simple')) {
         map.setPaintProperty('road-label-simple', 'text-color', '#ffffff');
         map.setPaintProperty('road-label-simple', 'text-halo-color', '#141d27');
         map.setPaintProperty('road-label-simple', 'text-halo-width', 2);
       }
-    } catch (err) {}
+
+      // 7. Natural labels with soft emerald green text (Evanston Golf Club)
+      if (map.getLayer('natural-point-label')) {
+        map.setPaintProperty('natural-point-label', 'text-color', '#4ade80');
+        map.setPaintProperty('natural-point-label', 'text-halo-color', '#13281d');
+        map.setPaintProperty('natural-point-label', 'text-halo-width', 1.5);
+      }
+      if (map.getLayer('natural-line-label')) {
+        map.setPaintProperty('natural-line-label', 'text-color', '#4ade80');
+        map.setPaintProperty('natural-line-label', 'text-halo-color', '#13281d');
+        map.setPaintProperty('natural-line-label', 'text-halo-width', 1.5);
+      }
+      if (map.getLayer('poi-label')) {
+        map.setPaintProperty('poi-label', 'text-color', '#cbd5e1');
+        map.setPaintProperty('poi-label', 'text-halo-color', '#141d27');
+        map.setPaintProperty('poi-label', 'text-halo-width', 1.5);
+      }
+    } catch (err) {
+      console.warn('Map styling adjustment notice:', err);
+    }
   };
 
   // Helper to attach route layers cleanly whenever a style is loaded
@@ -679,7 +771,8 @@ export default function UberDriverView({
       ? [targetOrder.longitude, targetOrder.latitude] 
       : DEFAULT_LNG_LAT;
 
-    const initialStyleUrl = MAP_THEMES[mapTheme]?.style || MAP_THEMES.apple_dark.style;
+    const activeKey = (mapTheme === 'apple_dark' || mapTheme === 'night') ? 'dark' : mapTheme;
+    const initialStyleUrl = MAP_THEMES[activeKey]?.style || MAP_THEMES.dark.style;
 
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
@@ -707,9 +800,25 @@ export default function UberDriverView({
     };
   }, []);
 
+  // Guarantee Mapbox GL canvas fits perfectly without cutoffs or distortion
+  useEffect(() => {
+    const handleResize = () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.resize();
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    const timer = setTimeout(handleResize, 150);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(timer);
+    };
+  }, []);
+
   // Handle Changing Map Theme
   const handleChangeTheme = (themeKey) => {
     setMapTheme(themeKey);
+    mapThemeRef.current = themeKey;
     try {
       localStorage.setItem('xfinity_map_theme', themeKey);
     } catch (e) {}
@@ -799,7 +908,7 @@ export default function UberDriverView({
         markerEl.className = 'cursor-pointer group flex flex-col items-center';
         markerEl.innerHTML = `
           <div class="w-7 h-7 rounded-full ${bg} border-2 border-white/90 text-white font-black text-xs flex items-center justify-center shadow-lg transition-transform group-hover:scale-125">
-            ${isCompleted ? '✓' : isCancelled ? '✕' : index + 1}
+            ${index + 1}
           </div>
         `;
         markerEl.onclick = () => handleSelectJob(order);
@@ -926,33 +1035,99 @@ export default function UberDriverView({
   const handleOpenTripOrganizer = () => {
     setTempOrdersList([...orders]);
     setOptimizedNotice(null);
+    setDragIndex(null);
+    setDragOverIndex(null);
+    setTouchDragIndex(null);
+    setTouchOverIndex(null);
     setShowTripModal(true);
+  };
+
+  // REORDER HELPER FOR BOTH DRAG & DROP AND BUTTONS
+  const reorderTripList = (fromIndex, toIndex) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    setTempOrdersList(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+    setOptimizedNotice(null);
   };
 
   // MOVE STOP UP IN TRAVESÍA
   const handleMoveStopUp = (index) => {
     if (index <= 0) return;
-    setTempOrdersList(prev => {
-      const next = [...prev];
-      const temp = next[index - 1];
-      next[index - 1] = next[index];
-      next[index] = temp;
-      return next;
-    });
-    setOptimizedNotice(null);
+    reorderTripList(index, index - 1);
   };
 
   // MOVE STOP DOWN IN TRAVESÍA
   const handleMoveStopDown = (index) => {
     if (index >= tempOrdersList.length - 1) return;
-    setTempOrdersList(prev => {
-      const next = [...prev];
-      const temp = next[index + 1];
-      next[index + 1] = next[index];
-      next[index] = temp;
-      return next;
-    });
-    setOptimizedNotice(null);
+    reorderTripList(index, index + 1);
+  };
+
+  // HTML5 DESKTOP DRAG & DROP HANDLERS
+  const handleDragStart = (e, index) => {
+    setDragIndex(index);
+    try {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(index));
+    } catch (err) {}
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    try {
+      e.dataTransfer.dropEffect = 'move';
+    } catch (err) {}
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDrop = (e, targetIndex) => {
+    e.preventDefault();
+    if (dragIndex !== null && dragIndex !== targetIndex) {
+      reorderTripList(dragIndex, targetIndex);
+    }
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // MOBILE TOUCH-DRAG HANDLERS
+  const handleTouchStart = (e, index) => {
+    touchStartYRef.current = e.touches[0].clientY;
+    touchActiveIndexRef.current = index;
+    setTouchDragIndex(index);
+    setTouchOverIndex(index);
+  };
+
+  const handleTouchMove = (e) => {
+    if (touchActiveIndexRef.current === null) return;
+    const touch = e.touches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const rowEl = el ? el.closest('[data-stop-idx]') : null;
+    if (rowEl) {
+      const targetIdx = parseInt(rowEl.getAttribute('data-stop-idx'), 10);
+      if (!isNaN(targetIdx) && targetIdx !== touchOverIndex) {
+        setTouchOverIndex(targetIdx);
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (touchActiveIndexRef.current !== null && touchOverIndex !== null && touchActiveIndexRef.current !== touchOverIndex) {
+      reorderTripList(touchActiveIndexRef.current, touchOverIndex);
+    }
+    touchStartYRef.current = null;
+    touchActiveIndexRef.current = null;
+    setTouchDragIndex(null);
+    setTouchOverIndex(null);
   };
 
   // RUN AUTO-OPTIMIZER FOR SHORTEST ROUTE (TSP NEAREST NEIGHBOR)
@@ -977,23 +1152,60 @@ export default function UberDriverView({
     setIsSavingTrip(true);
     try {
       const orderedIds = tempOrdersList.map(o => o.id);
+
+      // 1. Immediately update parent orders in React state (0 ms instant reorder in top selector)
+      if (onUpdateOrders) {
+        onUpdateOrders(prevOrders => {
+          const orderMap = new Map(orderedIds.map((id, i) => [id, i + 1]));
+          return prevOrders.map(item => {
+            if (orderMap.has(item.id)) {
+              return { ...item, route_order: orderMap.get(item.id) };
+            }
+            return item;
+          });
+        });
+      }
+
+      // 2. Immediately update localStorage cached orders with new route_order
+      try {
+        const cachedStr = localStorage.getItem('xfinity_cached_orders');
+        if (cachedStr) {
+          const cachedOrders = JSON.parse(cachedStr);
+          const orderMap = new Map(orderedIds.map((id, i) => [id, i + 1]));
+          const updatedCached = cachedOrders.map(item => {
+            if (orderMap.has(item.id)) {
+              return { ...item, route_order: orderMap.get(item.id) };
+            }
+            return item;
+          });
+          localStorage.setItem('xfinity_cached_orders', JSON.stringify(updatedCached));
+        }
+      } catch (e) {
+        console.warn('Could not update localStorage cache:', e);
+      }
+
+      // 2. Persist to backend database
       const res = await fetch('/api/orders/reorder-route', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderedIds })
       });
 
-      if (res.ok) {
-        routeCacheRef.current.clear(); // Refresh route cache
-        if (onOrderUpdated) await onOrderUpdated();
-        setShowTripModal(false);
-        const newFirst = tempOrdersList[0];
-        if (newFirst) {
-          handleSelectJob(newFirst);
-        }
+      if (!res.ok) {
+        console.warn('Backend reorder response not OK:', res.status);
+      }
+
+      routeCacheRef.current.clear(); // Refresh route cache
+      if (onOrderUpdated) await onOrderUpdated();
+      setShowTripModal(false);
+      const newFirst = tempOrdersList[0];
+      if (newFirst) {
+        handleSelectJob(newFirst);
       }
     } catch (err) {
-      alert('Error guardando travesía: ' + err.message);
+      console.error('Error guardando travesía:', err);
+      if (onOrderUpdated) await onOrderUpdated();
+      setShowTripModal(false);
     } finally {
       setIsSavingTrip(false);
     }
@@ -1038,12 +1250,44 @@ export default function UberDriverView({
   const activePhotosCount = activePhotos.length || selectedPhotosCount || 0;
   const isSelectedShared = selectedOrder ? Boolean(selectedOrder.whatsapp_shared || localSharedMap[selectedOrder.id]) : false;
   const selectedRemark = selectedOrder ? getOrderRemark(selectedOrder) : null;
-  const hasDrivewayBore = selectedOrder?.bore_type && selectedOrder.bore_type.includes('DW');
+  const hasDrivewayBore = Boolean(selectedOrder?.bore_type && selectedOrder.bore_type !== 'N' && (selectedOrder.bore_type.includes('DW') || selectedOrder.bore_type.length > 0));
+  const isCallFirst = Boolean(selectedOrder && (selectedOrder.call_first === 1 || selectedOrder.call_first === true || (typeof selectedOrder.raw_notes === 'string' && /callfirst/i.test(selectedOrder.raw_notes))));
+
+  const tripMiles = useMemo(() => {
+    if (activeRouteInfo?.miles) return `${activeRouteInfo.miles.toFixed(1)} mi`;
+    if (selectedOrder?.latitude && userLocation?.lat) {
+      return `${getEstimatedDrivingMiles(userLocation.lat, userLocation.lng, selectedOrder.latitude, selectedOrder.longitude).toFixed(1)} mi`;
+    }
+    return '1.4 mi';
+  }, [activeRouteInfo?.miles, selectedOrder?.latitude, selectedOrder?.longitude, userLocation?.lat, userLocation?.lng]);
+
+  const tripMinutes = useMemo(() => {
+    if (activeRouteInfo?.minutes) return `~${activeRouteInfo.minutes} min`;
+    const numMiles = parseFloat(tripMiles) || 1.4;
+    return `~${Math.max(1, Math.round(numMiles * 2.2))} min`;
+  }, [activeRouteInfo?.minutes, tripMiles]);
+
+  const tripSummary = activeRouteInfo?.summary || selectedOrder?.city || 'Skokie';
+  const techInitial = selectedOrder?.tech_id ? selectedOrder.tech_id.trim().charAt(0).toUpperCase() : 'J';
+
+  const formattedHudDate = useMemo(() => {
+    if (!activeDate) return '';
+    const norm = normalizeDateStr(activeDate);
+    const parts = norm.split('-');
+    if (parts.length !== 3) return activeDate;
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    const d = parseInt(parts[2], 10);
+    const date = new Date(y, m - 1, d, 12, 0, 0);
+    const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    return `${days[date.getDay()]}, ${d} ${months[date.getMonth()]} ${y}`;
+  }, [activeDate]);
 
   const originInfo = useMemo(() => getOriginPoint(selectedOrder), [selectedOrder, userLocation, orders]);
 
   return (
-    <div className="relative w-full max-w-md mx-auto h-[calc(100vh-8.5rem)] rounded-3xl overflow-hidden border border-[#232f3e] bg-[#121a24] shadow-2xl flex flex-col select-none">
+    <div className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden border border-[#232f3e] bg-[#121a24] shadow-2xl flex flex-col select-none">
       
       {/* 1. MAPBOX GL 3D VECTOR CANVAS */}
       <div 
@@ -1051,36 +1295,82 @@ export default function UberDriverView({
         className="absolute inset-0 w-full h-full z-0 mapbox-3d-canvas" 
       />
 
-      {/* 2. TOP HUD: MODERN DATE & BALANCE PILL + ACTION BUTTONS */}
-      <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none gap-2">
-        {/* Date & Day Earnings Pill */}
-        <div className="pointer-events-auto bg-[#131b26]/95 backdrop-blur-2xl border border-slate-700/60 rounded-2xl px-3 py-1.5 shadow-xl flex items-center gap-2">
+      {/* 2. TOP HUD: PREMIUM COCKPIT DATE & BALANCE PILL + ACTION BUTTONS */}
+      <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between pointer-events-none gap-2">
+        {/* Fixed-Size Static Date Selector Card (w-[205px] h-[52px]) */}
+        <div className="pointer-events-auto bg-[#0f1722]/94 backdrop-blur-2xl border border-white/10 rounded-2xl px-2 py-1 shadow-[0_8px_30px_rgba(0,0,0,0.5)] flex items-center justify-between w-[205px] h-[52px] select-none shrink-0">
+          {/* Previous Day Chevron */}
           <button
+            type="button"
             onClick={() => onShiftDay(-1)}
-            className="w-6 h-6 flex items-center justify-center hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition active:scale-90"
+            className="w-6 h-8 flex items-center justify-center hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition active:scale-90 text-sm font-black shrink-0 cursor-pointer"
             title="Día anterior"
           >
             ‹
           </button>
           
-          <div className="text-center cursor-pointer px-1" onClick={onGoToToday}>
-            <div className="flex items-center justify-center gap-1.5 text-[10.5px] font-bold text-slate-200">
-              <span className={`w-1.5 h-1.5 rounded-full ${isViewingToday ? 'bg-cyan-400 animate-pulse' : 'bg-slate-500'}`} />
-              <span className="truncate">{isViewingToday ? 'Hoy' : formatDateFriendly(activeDate)}</span>
+          {/* Center Date & Details (Fixed Width, Never Shifts) */}
+          <div 
+            className="flex-1 min-w-0 flex flex-col items-center justify-center px-1 cursor-pointer"
+            onClick={() => {
+              if (dateInputRef.current) {
+                if (typeof dateInputRef.current.showPicker === 'function') {
+                  dateInputRef.current.showPicker();
+                } else {
+                  dateInputRef.current.focus();
+                }
+              }
+            }}
+            title="Toca para seleccionar otra fecha en el calendario"
+          >
+            {/* Hidden native date input for direct calendar selection */}
+            <input
+              ref={dateInputRef}
+              type="date"
+              value={activeDate || ''}
+              onChange={(e) => {
+                if (e.target.value && onSelectDate) onSelectDate(e.target.value);
+              }}
+              className="sr-only pointer-events-none"
+              tabIndex={-1}
+            />
+
+            {/* Line 1: Exact formatted date */}
+            <div className="flex items-center justify-center w-full">
+              <span className="text-xs font-black text-white truncate tracking-tight font-mono">
+                {formattedHudDate}
+              </span>
             </div>
-            <div className="flex items-center justify-center gap-1.5 leading-none mt-0.5">
-              <span className="text-xs sm:text-sm font-black font-mono text-emerald-400">
-                ${dayEarnings.toFixed(2)}
+
+            {/* Line 2: Orders Count on Left, [Hoy / Ir hoy] Badge on Right */}
+            <div className="flex items-center justify-between w-full mt-0.5 px-0.5">
+              <span className="text-[10px] text-cyan-400 font-mono font-bold truncate">
+                {orders.length} {orders.length === 1 ? 'orden' : 'órdenes'}
               </span>
-              <span className="text-[9px] font-bold text-slate-400 font-mono">
-                ✓ {dayCompleted.length}/{orders.length}
-              </span>
+
+              {isViewingToday ? (
+                <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 rounded-full shrink-0 select-none">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Hoy</span>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onGoToToday(); }}
+                  className="inline-flex items-center gap-0.5 text-[9px] font-black text-amber-300 hover:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-1.5 py-0.2 rounded-full transition active:scale-90 shrink-0 cursor-pointer shadow-xs select-none"
+                  title="Volver a la fecha de hoy"
+                >
+                  <span>Ir hoy</span>
+                </button>
+              )}
             </div>
           </div>
 
+          {/* Next Day Chevron */}
           <button
+            type="button"
             onClick={() => onShiftDay(1)}
-            className="w-6 h-6 flex items-center justify-center hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition active:scale-90"
+            className="w-6 h-8 flex items-center justify-center hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition active:scale-90 text-sm font-black shrink-0 cursor-pointer"
             title="Día siguiente"
           >
             ›
@@ -1088,19 +1378,19 @@ export default function UberDriverView({
         </div>
 
         {/* Actions: + Trabajo & Lista */}
-        <div className="pointer-events-auto flex items-center gap-1.5">
+        <div className="pointer-events-auto flex items-center gap-1.5 shrink-0">
           <button
             onClick={onOpenAddJob}
-            className="px-3 py-2 rounded-2xl bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-cyan-400 text-white font-extrabold text-xs shadow-lg shadow-cyan-600/25 active:scale-95 transition flex items-center gap-1.5"
+            className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-[#007AFF] to-cyan-500 hover:from-blue-600 hover:to-cyan-400 text-white font-black text-xs shadow-lg shadow-blue-500/25 active:scale-95 transition flex items-center gap-1.5 border border-white/15"
             title="Añadir nuevo trabajo"
           >
             <Plus className="h-4 w-4 stroke-[3]" />
-            <span className="text-[11.5px] font-black tracking-tight">+ Trabajo</span>
+            <span className="text-xs font-black tracking-tight">+ Trabajo</span>
           </button>
 
           <button
             onClick={onSwitchToClassic}
-            className="p-2 rounded-2xl bg-[#131b26]/95 backdrop-blur-xl hover:bg-[#1f2c3d] text-slate-300 hover:text-white border border-slate-700/60 shadow-lg active:scale-95 transition"
+            className="p-2 rounded-2xl bg-[#0f1722]/90 backdrop-blur-2xl hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 shadow-xl active:scale-95 transition"
             title="Cambiar a Vista Lista"
           >
             <List className="h-4 w-4" />
@@ -1108,71 +1398,14 @@ export default function UberDriverView({
         </div>
       </div>
 
-      {/* 3. MODERN HORIZONTAL STOPS RIBBON (FULL WIDTH ACROSS MAP) */}
-      {orders.length > 0 && (
-        <div className="absolute top-16 left-3 right-3 z-20 pointer-events-auto">
-          <div 
-            ref={stopsRibbonRef}
-            className="bg-[#121922]/95 backdrop-blur-2xl border border-slate-700/60 rounded-2xl p-1.5 shadow-2xl flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-smooth"
-          >
-            {orders.map((ord, idx) => {
-              const isSelected = selectedOrder?.id === ord.id;
-              const isDone = ord.status === 'Completado';
-              const isCancel = ord.status === 'No Realizado';
-              const isPending = !isDone && !isCancel;
-
-              let badgeBg = 'bg-amber-500';
-              let badgeText = idx + 1;
-              if (isDone) {
-                badgeBg = 'bg-emerald-500';
-                badgeText = '✓';
-              } else if (isCancel) {
-                badgeBg = 'bg-rose-500';
-                badgeText = '✕';
-              }
-
-              return (
-                <button
-                  key={ord.id || idx}
-                  data-order-id={ord.id}
-                  onClick={() => handleSelectJob(ord)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs transition whitespace-nowrap shrink-0 cursor-pointer active:scale-95 ${
-                    isSelected
-                      ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-cyan-500/35 ring-1.5 ring-cyan-300 font-black'
-                      : isDone
-                      ? 'bg-[#182330]/90 text-slate-300 hover:text-white border border-emerald-500/30'
-                      : isCancel
-                      ? 'bg-[#182330]/90 text-slate-400 hover:text-white border border-rose-500/20'
-                      : 'bg-[#1c2736]/95 text-slate-200 hover:text-white hover:bg-[#253346] border border-amber-500/30 font-bold'
-                  }`}
-                  title={`Parada #${idx + 1}: ${ord.address || 'Sin dirección'} (${ord.status})`}
-                >
-                  <span className={`w-4 h-4 rounded-full ${badgeBg} text-white text-[9px] flex items-center justify-center font-black shadow-sm`}>
-                    {badgeText}
-                  </span>
-                  <span className="truncate max-w-[110px] sm:max-w-[140px] text-[11px]">
-                    {ord.address ? ord.address.split(',')[0] : `Parada ${idx + 1}`}
-                  </span>
-                  <span className={`text-[10px] font-mono font-bold ${
-                    isSelected ? 'text-white' : isDone ? 'text-emerald-400' : isCancel ? 'text-slate-500 line-through' : 'text-emerald-400'
-                  }`}>
-                    ${ord.rate_calculated || 100}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* 4. RIGHT FLOATING CONTROLS: THEME + 3D/2D + CENTRAR + ORGANIZAR */}
-      <div className="absolute right-3 top-28 z-20 flex flex-col gap-2 pointer-events-auto">
+      <div className="absolute right-3 top-20 z-20 flex flex-col gap-2 pointer-events-auto">
         {/* Toggle Theme Popover */}
         <div className="relative">
           <button
             onClick={() => setShowThemePicker(prev => !prev)}
             className={`w-10 h-10 rounded-full backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition ${
-              mapTheme === 'apple_dark' ? 'bg-[#007AFF] text-white' : 'bg-[#16202c]/90 text-slate-300'
+              mapTheme === 'dark' || mapTheme === 'apple_dark' ? 'bg-[#007AFF] text-white' : 'bg-[#16202c]/90 text-slate-300'
             }`}
             title="Cambiar estilo de mapa"
           >
@@ -1186,7 +1419,7 @@ export default function UberDriverView({
               </span>
               {Object.entries(MAP_THEMES).map(([key, t]) => {
                 const IconComponent = t.icon;
-                const active = mapTheme === key;
+                const active = mapTheme === key || (key === 'dark' && (mapTheme === 'apple_dark' || mapTheme === 'night'));
                 return (
                   <button
                     key={key}
@@ -1241,338 +1474,256 @@ export default function UberDriverView({
         {/* Open Travesía Modal */}
         <button
           onClick={handleOpenTripOrganizer}
-          className="w-10 h-10 rounded-full bg-[#16202c]/90 backdrop-blur-xl border border-white/15 text-[#FF9500] hover:text-orange-400 flex items-center justify-center shadow-lg active:scale-95 transition"
+          className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#16202c]/95 to-[#1c2a3a]/95 backdrop-blur-xl border border-cyan-500/30 text-cyan-400 hover:text-cyan-300 flex items-center justify-center shadow-lg shadow-cyan-500/10 active:scale-95 transition"
           title="Organizar travesía del día"
         >
-          <Sparkles className="h-4 w-4" />
+          <Route className="h-4 w-4 stroke-[2.3]" />
         </button>
       </div>
 
       {/* 5. BOTTOM SLIDING DRAWER: REFINED ACTIVE JOB CARD */}
       <div 
-        className={`absolute bottom-0 left-0 right-0 z-30 bg-[#131b26]/98 backdrop-blur-2xl rounded-t-3xl border-t border-slate-700/60 shadow-2xl transition-all duration-300 flex flex-col ${
-          drawerState === 'expanded' ? 'h-[75%]' : 'h-[210px]'
+        className={`absolute bottom-0 left-0 right-0 z-30 bg-[#0f1722]/96 backdrop-blur-2xl rounded-t-[28px] border-t border-white/10 shadow-[0_-8px_32px_rgba(0,0,0,0.6)] transition-all duration-300 flex flex-col ${
+          drawerState === 'expanded' ? 'h-[75%]' : 'min-h-[285px] pb-2'
         }`}
       >
         {/* Grabber Handle */}
         <div 
           onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
-          className="w-full pt-2 pb-1 flex flex-col items-center justify-center cursor-pointer select-none"
+          className="w-full pt-2.5 pb-1 flex flex-col items-center justify-center cursor-pointer select-none"
         >
-          <div className="w-10 h-1 rounded-full bg-slate-500/40 hover:bg-slate-400/60 transition mb-0.5" />
+          <div className="w-12 h-1 rounded-full bg-slate-600/50 hover:bg-slate-400 transition" />
         </div>
 
         {selectedOrder ? (
-          <div className="flex-1 flex flex-col justify-between overflow-hidden px-4 pb-3">
+          <div className="flex-1 flex flex-col justify-between overflow-hidden px-3.5 pb-3">
             
-            {/* ROW 1: COMPACT HEADER (STOP # + JOB ID + STATUS + NAV CHEVRONS + RATE + EDIT) */}
-            <div className="flex items-center justify-between gap-1.5 pt-0.5">
-              <div className="flex items-center gap-1.5 min-w-0">
-                {/* Circle Stop Number */}
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 shadow-sm ${
-                  isSelectedCompleted
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                    : isSelectedCancelled
-                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
-                    : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
-                }`}>
-                  {isSelectedCompleted ? '✓' : isSelectedCancelled ? '✕' : selectedIndex + 1}
-                </span>
-
-                {/* Job ID */}
-                <span className="text-xs sm:text-sm font-black font-mono text-cyan-400 tracking-tight">
-                  #{selectedOrder.job_id}
-                </span>
-
-                {/* Status Badge */}
-                <span className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-bold flex items-center gap-1 border ${
-                  isSelectedCompleted
-                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                    : isSelectedCancelled
-                    ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                    : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                }`}>
-                  {isSelectedCompleted && <CheckCircle2 className="h-2.5 w-2.5" />}
-                  {isSelectedPending && <Clock className="h-2.5 w-2.5" />}
-                  {isSelectedCancelled && <X className="h-2.5 w-2.5" />}
-                  <span>{selectedOrder.status}</span>
-                </span>
-              </div>
-
-              {/* Navigation Chevrons + Rate + Edit */}
-              <div className="flex items-center gap-1.5 shrink-0">
-                <div className="flex items-center bg-[#1c2736] border border-white/5 rounded-lg px-1 py-0.5">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); handlePrevJob(); }}
-                    className="p-0.5 text-slate-400 hover:text-white transition active:scale-90"
-                    title="Parada anterior"
-                  >
-                    <ArrowLeft className="h-2.5 w-2.5" />
-                  </button>
-                  <span className="text-[9.5px] font-black text-slate-400 px-1 font-mono">
-                    {selectedIndex + 1}/{orders.length}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); handleNextJob(); }}
-                    className="p-0.5 text-slate-400 hover:text-white transition active:scale-90"
-                    title="Siguiente parada"
-                  >
-                    <ArrowRight className="h-2.5 w-2.5" />
-                  </button>
-                </div>
-
-                {/* Rate Medallion */}
-                <div 
-                  className={`inline-flex items-center px-2 py-0.5 rounded-lg border select-none ${
-                    isSelectedCancelled
-                      ? 'bg-slate-800/60 text-slate-500 border-slate-700 line-through'
-                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-black'
-                  }`}
-                >
-                  <span className="text-xs font-black font-mono">
-                    ${selectedOrder.rate_calculated || 100}
-                  </span>
-                </div>
-
-                {/* Edit Button */}
-                <button
-                  type="button"
-                  onClick={() => onOpenEditModal(selectedOrder)}
-                  className="p-1 rounded-lg bg-[#1c2736] text-slate-400 hover:text-cyan-400 border border-white/5 transition active:scale-90"
-                  title="Editar datos del trabajo"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-
-            {/* ROW 2: ADDRESS & SHORTCUTS (GPS + PHONE + ROUTE DISTANCE) */}
+            {/* ROW 1: TOP BAR WITH ACTION/PHONE + [ ← PARADA X DE Y → ] + EXPAND */}
             <div className="flex items-center justify-between gap-2 pt-0.5">
-              <div 
-                className="min-w-0 flex-1 cursor-pointer"
-                onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
-              >
-                <div className="flex items-center gap-1.5 truncate">
-                  <h2 className="text-xs sm:text-sm font-black text-white truncate leading-tight">
-                    {selectedOrder.address || 'Sin dirección asignada'}
-                  </h2>
-                  {activeRouteInfo && (
-                    <span className="text-cyan-400 font-bold text-[10px] shrink-0 flex items-center gap-0.5 bg-cyan-950/60 px-1.5 py-0.2 rounded border border-cyan-800/60">
-                      <Zap className="h-2.5 w-2.5 inline text-amber-400" />
-                      <span>~{activeRouteInfo.minutes}m ({activeRouteInfo.miles.toFixed(1)}mi)</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1 shrink-0">
-                {selectedOrder.phone && (
+              {/* Left Action: Circular Button (Share or Phone) */}
+              <div className="w-9 flex items-center justify-start">
+                {selectedOrder.phone ? (
                   <a
                     href={`tel:${selectedOrder.phone}`}
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/25 text-[10px] font-bold hover:bg-cyan-500/20 active:scale-95 transition"
+                    className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95 shadow-sm"
                     title={`Llamar: ${selectedOrder.phone}`}
                   >
-                    <Phone className="h-2.5 w-2.5" />
-                    <span>Llamar</span>
+                    <Phone className="h-4 w-4 text-cyan-400" />
                   </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onOpenShareModal(selectedOrder)}
+                    className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95 shadow-sm"
+                    title="Compartir orden"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </button>
                 )}
+              </div>
 
-                <a
-                  href={getNavUrl(selectedOrder)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-600/25 text-blue-400 border border-blue-500/35 text-[10px] font-bold hover:bg-blue-600/40 active:scale-95 transition"
-                  title="Abrir navegación GPS"
+              {/* Center: Chevrons + Vibrant Pill Badge (PARADA X DE Y) */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handlePrevJob(); }}
+                  className="p-1 text-slate-400 hover:text-white transition active:scale-90"
+                  title="Trabajo anterior"
                 >
-                  <Navigation className="h-2.5 w-2.5" />
-                  <span>GPS</span>
-                </a>
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+
+                <div 
+                  onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
+                  className="px-4 py-1 rounded-full bg-[#007AFF] text-white text-[10px] font-black tracking-wider uppercase shadow-md shadow-blue-500/25 cursor-pointer hover:bg-blue-500 transition select-none"
+                >
+                  PARADA {selectedIndex + 1} DE {orders.length}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleNextJob(); }}
+                  className="p-1 text-slate-400 hover:text-white transition active:scale-90"
+                  title="Siguiente trabajo"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Right Action: Circular Expand/Collapse Chevron Button */}
+              <div className="w-9 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
+                  className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95 shadow-sm"
+                  title={drawerState === 'expanded' ? "Colapsar tarjeta" : "Ver detalles completos"}
+                >
+                  <ChevronUp className={`h-4 w-4 transition-transform duration-300 ${drawerState === 'expanded' ? 'rotate-180' : ''}`} />
+                </button>
               </div>
             </div>
 
-            {/* ROW 3: SPECS & LINEAL PHOTOS (UNA SOLA LÍNEA COMPACTA CON CUADRADITOS AMPLIABLES) */}
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1 whitespace-nowrap">
-              {/* Technical Specifications Chips */}
-              <span className="shrink-0 bg-[#1b2533] px-1.5 py-0.5 rounded-md border border-slate-700/80 text-amber-300 font-mono text-[9.5px] font-bold">
-                {selectedOrder.drop_footage || 0} ft ({selectedOrder.cable_type || 'RG-6'})
-              </span>
-
-              {hasDrivewayBore && (
-                <span className="shrink-0 bg-cyan-950/80 text-cyan-300 px-1.5 py-0.5 rounded-md border border-cyan-800 text-[9.5px] font-bold">
-                  Bore +$30
-                </span>
-              )}
-
-              {/* Timer Badge */}
-              <button
-                type="button"
-                onClick={() => toggleJobTimer(selectedOrder.id)}
-                className={`shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-md border font-mono text-[9px] font-bold transition ${
-                  currentTimer && currentTimer.isRunning
-                    ? 'bg-rose-500/20 border-rose-500/50 text-rose-300 animate-pulse'
-                    : currentTimer && currentTimer.elapsed > 0
-                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                    : 'bg-[#1b2533] border-slate-700/80 text-slate-400 hover:text-white'
-                }`}
-                title="Temporizador de trabajo en sitio"
-              >
-                <Clock className="h-2 w-2" />
-                <span>
-                  {currentTimer && currentTimer.elapsed > 0 
-                    ? formatTimerDisplay(currentTimer.elapsed) 
-                    : 'En sitio'}
-                </span>
-                {currentTimer && currentTimer.isRunning ? (
-                  <Pause className="h-1.5 w-1.5 fill-rose-300" />
-                ) : (
-                  <Play className="h-1.5 w-1.5 fill-slate-400" />
-                )}
-              </button>
-
-              {/* Vertical divider */}
-              <span className="w-px h-5 bg-slate-700/80 shrink-0" />
-
-              {/* LINEAL PHOTO STRIP: Cuadraditos con las fotos en pequeño que se amplían al tocar */}
-              {activePhotos && activePhotos.length > 0 ? (
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {/* Botón + Foto en miniatura */}
-                  <button
-                    type="button"
-                    onClick={() => onOpenPhotos(selectedOrder)}
-                    className="w-8 h-8 rounded-lg border border-dashed border-cyan-500/50 hover:border-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-[10px] font-bold active:scale-95 transition shadow-sm cursor-pointer shrink-0"
-                    title="Añadir otra foto de evidencia"
-                  >
-                    <Plus className="h-3.5 w-3.5 text-cyan-400" />
-                  </button>
-
-                  {/* Cuadraditos de fotos pequeñas */}
-                  {activePhotos.map((photo, pIdx) => {
-                    const photoSrc = photo.photo_data || `/uploads/${photo.filename}`;
-                    return (
-                      <div
-                        key={photo.id || pIdx}
-                        onClick={() => {
-                          setFullscreenPhotoIndex(pIdx);
-                          setFullscreenPhotoUrl(photoSrc);
-                        }}
-                        className="group relative w-8 h-8 shrink-0 rounded-lg overflow-hidden border border-slate-700/80 hover:border-cyan-400 cursor-pointer shadow-sm transition active:scale-95 bg-slate-900"
-                        title={`Toca para ampliar foto #${pIdx + 1} (${photo.category || 'Evidencia'})`}
-                      >
-                        <img
-                          src={photoSrc}
-                          alt={photo.category || `Foto ${pIdx + 1}`}
-                          className="w-full h-full object-cover group-hover:scale-110 transition duration-150"
-                          loading="lazy"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                          <Maximize2 className="h-2.5 w-2.5 text-white" />
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <span className="text-[9px] text-slate-400 font-mono pl-0.5 shrink-0">
-                    {activePhotos.length} {activePhotos.length === 1 ? 'foto' : 'fotos'}
-                  </span>
-                </div>
-              ) : (
-                /* Estado sin fotos: Chip lineal ultra-compacto */
-                <button
-                  type="button"
-                  onClick={() => onOpenPhotos(selectedOrder)}
-                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-dashed border-amber-500/40 text-[9.5px] font-bold text-amber-300 transition active:scale-95 shrink-0"
-                  title="Abrir cámara y registrar fotos de evidencia"
-                >
-                  <Camera className="h-2.5 w-2.5 text-amber-400" />
-                  <span>Sin fotos de evidencia aún</span>
-                  <span className="text-[8.5px] bg-amber-500/20 px-1 rounded text-amber-300 font-black">+</span>
-                </button>
-              )}
+            {/* ROW 2: CENTERED ADDRESS + ROUTE TRAVEL SUMMARY */}
+            <div 
+              className="py-0.5 cursor-pointer group text-center"
+              onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
+            >
+              <h2 className="text-base sm:text-lg font-black text-white truncate leading-tight group-hover:text-cyan-400 transition">
+                {selectedOrder.address || 'Sin dirección asignada'}
+              </h2>
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5 truncate">
+                A {tripMiles} • {tripMinutes} ({tripSummary})
+              </p>
             </div>
 
-            {/* ROW 4: ACTION BUTTONS (COMPACT AND CONCISE) */}
-            <div className="pt-0.5">
-              {/* If CANCELLED */}
-              {isSelectedCancelled && (
-                <div className="p-1.5 rounded-xl bg-rose-950/40 border border-rose-900/60 text-xs flex items-center justify-between gap-2 shadow-sm">
-                  <div
-                    onClick={() => onOpenCancelDetail ? onOpenCancelDetail(selectedOrder) : null}
-                    className="flex items-center gap-1.5 min-w-0 cursor-pointer flex-1 group"
-                    title="Ver detalles de cancelación"
-                  >
-                    <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-                    <p className="text-[11px] font-semibold text-rose-200 truncate">
-                      {selectedOrder.cancel_reason || 'Sin motivo detallado'}
-                    </p>
-                  </div>
+            {/* ROW 3: THE 3 MAIN PUNCHY ACTION BUTTONS (FOTOS | COMPLETAR | SIGUIENTE) */}
+            <div className="grid grid-cols-3 gap-2 py-1">
+              {/* 1. Fotos (0) - Vivid Electric Blue Primary Action */}
+              <button
+                type="button"
+                onClick={() => onOpenPhotos(selectedOrder)}
+                className="py-2.5 px-2 bg-[#007AFF] hover:bg-blue-500 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/30 active:scale-95 transition cursor-pointer"
+                title="Tomar o revisar fotos de evidencia"
+              >
+                <Camera className="h-4 w-4 stroke-[2.5]" />
+                <span>Fotos ({activePhotosCount})</span>
+              </button>
 
-                  <button
-                    type="button"
-                    onClick={() => onOpenShareModal(selectedOrder)}
-                    className="px-2.5 py-1 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 text-white text-[10.5px] font-black rounded-lg transition flex items-center gap-1 active:scale-95 shrink-0"
-                  >
-                    <Share2 className="h-3 w-3 stroke-[2.5]" />
-                    <span>WhatsApp</span>
-                  </button>
+              {/* 2. Completar / Finalizar */}
+              <button
+                type="button"
+                onClick={() => isSelectedCompleted ? onOpenShareModal(selectedOrder) : onMarkCompleted(selectedOrder)}
+                className={`py-2.5 px-2 font-black text-xs rounded-2xl flex items-center justify-center gap-1.5 active:scale-95 transition shadow-sm cursor-pointer ${
+                  isSelectedCompleted
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 shadow-emerald-500/20'
+                    : 'bg-[#182332] hover:bg-[#223145] text-slate-200 hover:text-white border border-white/10'
+                }`}
+                title={isSelectedCompleted ? 'Trabajo completado' : 'Marcar trabajo como completado'}
+              >
+                <CheckCircle2 className={`h-4 w-4 ${isSelectedCompleted ? 'text-emerald-400' : 'text-cyan-400'}`} />
+                <span>{isSelectedCompleted ? 'Completado' : 'Completar'}</span>
+              </button>
+
+              {/* 3. Siguiente */}
+              <button
+                type="button"
+                onClick={handleNextJob}
+                className="py-2.5 px-2 bg-[#182332] hover:bg-[#223145] text-slate-200 hover:text-white border border-white/10 font-black text-xs rounded-2xl flex items-center justify-center gap-1.5 active:scale-95 transition shadow-sm cursor-pointer"
+                title="Avanzar a la siguiente parada"
+              >
+                <Navigation className="h-4 w-4 text-cyan-400 fill-cyan-400/20" />
+                <span>Siguiente</span>
+              </button>
+            </div>
+
+            {/* ROW 4: NOTES & WORK SPECS CARD (AVATAR + SPECS + REMARKS + EDIT) */}
+            <div className="bg-[#131b26] border border-white/8 rounded-2xl p-2.5 flex items-center justify-between gap-2.5 my-0.5">
+              {/* Circular Avatar with Initial (Matches 'J' in the reference photo) */}
+              <div className="w-8 h-8 rounded-full bg-cyan-600/25 border border-cyan-500/40 text-cyan-300 font-black flex items-center justify-center text-xs shrink-0 select-none shadow-xs">
+                {techInitial}
+              </div>
+
+              {/* Center: Specs Summary & Notes */}
+              <div 
+                className="min-w-0 flex-1 cursor-pointer"
+                onClick={() => onOpenEditModal(selectedOrder)}
+                title="Toca para ver o editar información"
+              >
+                <div className="text-xs font-bold text-white truncate leading-tight flex items-center gap-1.5">
+                  <span>{selectedOrder.drop_footage || 0} ft</span>
+                  <span className="text-slate-500">•</span>
+                  <span className="text-slate-300">{selectedOrder.cable_type || 'RG-6'}</span>
+                  {hasDrivewayBore && (
+                    <>
+                      <span className="text-slate-500">•</span>
+                      <span className="text-cyan-400 font-semibold">Driveway</span>
+                    </>
+                  )}
+                  {isCallFirst && (
+                    <>
+                      <span className="text-slate-500">•</span>
+                      <span className="text-amber-400 font-semibold">Llamar 1ro</span>
+                    </>
+                  )}
                 </div>
-              )}
+                <p className="text-[10px] text-slate-400 truncate mt-0.5 font-medium">
+                  {selectedRemark || (selectedOrder.raw_notes ? selectedOrder.raw_notes.slice(0, 45) : 'Agregar una nota o detalle...')}
+                </p>
+              </div>
 
-              {/* If PENDING */}
-              {isSelectedPending && (
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onOpenCancelModal(selectedOrder)}
-                    className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10.5px] font-bold rounded-xl transition active:scale-95"
-                  >
-                    No Realizado
-                  </button>
+              {/* Pencil Edit Icon */}
+              <button
+                type="button"
+                onClick={() => onOpenEditModal(selectedOrder)}
+                className="p-1.5 text-slate-400 hover:text-cyan-400 transition active:scale-90 shrink-0 rounded-lg hover:bg-white/5"
+                title="Editar orden"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            </div>
 
-                  <div className="flex items-center gap-1.5">
-                    {activePhotosCount > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => onMarkCompleted(selectedOrder)}
-                        className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black rounded-xl transition flex items-center gap-1 shadow-md shadow-emerald-500/25 active:scale-95"
-                        title="Confirmar trabajo completado"
-                      >
-                        <Check className="h-3.5 w-3.5 stroke-[3]" />
-                        <span>Confirmar</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => onOpenPhotos(selectedOrder)}
-                        className="px-3 py-1.5 bg-[#1b2533] hover:bg-amber-500/15 text-slate-400 hover:text-amber-300 border border-dashed border-slate-600 hover:border-amber-500/50 text-[10.5px] font-bold rounded-xl transition flex items-center gap-1.5 active:scale-95"
-                        title="Debes subir fotos de evidencia antes de poder confirmar"
-                      >
-                        <Camera className="h-3 w-3 text-amber-400" />
-                        <span>Foto Requerida</span>
-                      </button>
-                    )}
-                  </div>
+            {/* ROW 5: BOTTOM BAR (NO REALIZADO | $SALDO | CAPSULE ACTIONS) */}
+            <div className="flex items-center justify-between gap-2 pt-1 pb-0.5">
+              {/* Left: "No Realizado" pill matching reference photo */}
+              <button
+                type="button"
+                onClick={() => isSelectedCancelled ? (onOpenCancelDetail ? onOpenCancelDetail(selectedOrder) : null) : onOpenCancelModal(selectedOrder)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 active:scale-95 transition shadow-sm cursor-pointer ${
+                  isSelectedCancelled
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
+                    : 'bg-[#182332] hover:bg-[#223145] text-slate-300 hover:text-white border border-white/10'
+                }`}
+                title={isSelectedCancelled ? "Ver cancelación" : "Marcar trabajo como No Realizado"}
+              >
+                <X className="h-3.5 w-3.5 text-rose-400 stroke-[2.5]" />
+                <span>{isSelectedCancelled ? 'Cancelado' : 'No Realizado'}</span>
+              </button>
+
+              {/* Center: Saldo prominently in neon green monospace */}
+              <div 
+                className="flex items-center justify-center cursor-pointer select-none"
+                onClick={() => onOpenAdjustModal ? onOpenAdjustModal(selectedOrder) : null}
+                title="Toca para ajustar tarifa"
+              >
+                <span className={`font-mono font-black text-lg sm:text-xl tracking-tight ${
+                  isSelectedCancelled
+                    ? 'text-slate-500 line-through'
+                    : 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]'
+                }`}>
+                  ${selectedOrder.rate_calculated || 100}
+                </span>
+              </div>
+
+              {/* Right: Capsule matching reference photo with actions [ ✓ ] [ 💬 ] [ ••• ] */}
+              <div className="flex items-center gap-1 bg-[#182332] border border-white/10 rounded-full px-2 py-1 shadow-sm">
+                {/* Status / Quick check */}
+                <div 
+                  className={`p-1 rounded-full ${isSelectedCompleted ? 'text-emerald-400' : 'text-slate-400'}`}
+                  title={isSelectedCompleted ? 'Completado' : 'Pendiente'}
+                >
+                  <Check className="h-3.5 w-3.5 stroke-[3]" />
                 </div>
-              )}
 
-              {/* If COMPLETED */}
-              {isSelectedCompleted && (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1 text-emerald-400 text-[11px] font-bold bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded-xl">
-                    <Check className="h-3 w-3 stroke-[3]" />
-                    <span>Completado</span>
-                  </span>
+                {/* WhatsApp Share Action */}
+                <button
+                  type="button"
+                  onClick={() => onOpenShareModal(selectedOrder)}
+                  className="p-1 text-emerald-400 hover:text-emerald-300 transition active:scale-90"
+                  title="Compartir reporte por WhatsApp"
+                >
+                  <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => onOpenShareModal(selectedOrder)}
-                    className="px-3 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 text-slate-950 text-[11px] font-black rounded-xl transition flex items-center gap-1 shadow-sm active:scale-95"
-                  >
-                    <Share2 className="h-3 w-3 stroke-[2.5]" />
-                    <span>WhatsApp</span>
-                  </button>
-                </div>
-              )}
+                {/* More options (Adjust, Edit, Details) */}
+                <button
+                  type="button"
+                  onClick={() => setShowMoreActions(prev => !prev)}
+                  className="p-1 text-slate-400 hover:text-white transition active:scale-90"
+                  title="Más opciones de la orden"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
 
             {/* EXPANDED SECTION */}
@@ -1778,8 +1929,8 @@ export default function UberDriverView({
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
-                  <Sparkles className="h-4 w-4" />
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-cyan-500/20 text-slate-950">
+                  <Route className="h-4 w-4 stroke-[2.5]" />
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-white leading-tight">Organizar Travesía</h3>
@@ -1801,7 +1952,7 @@ export default function UberDriverView({
                 onClick={handleAutoOptimizeTrip}
                 className="w-full py-2.5 px-3 rounded-2xl bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black text-xs shadow-lg shadow-cyan-600/25 flex items-center justify-center gap-2 active:scale-95 transition"
               >
-                <Sparkles className="h-4 w-4 stroke-[2.5]" />
+                <Route className="h-4 w-4 stroke-[2.2]" />
                 <span>⚡ Optimizar Ruta Más Corta (Automático)</span>
               </button>
 
@@ -1815,11 +1966,15 @@ export default function UberDriverView({
               )}
             </div>
 
-            {/* List of stops with manual Move Up / Move Down buttons */}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-none py-1">
+            {/* List of stops with drag & drop and tactile controls */}
+            <div 
+              className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-none py-1 select-none"
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
               <div className="flex items-center justify-between px-1 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
                 <span>Orden de la jornada ({tempOrdersList.length} paradas)</span>
-                <span>Subir / Bajar</span>
+                <span>Arrastrar o Subir / Bajar</span>
               </div>
 
               {tempOrdersList.map((ord, idx) => {
@@ -1827,28 +1982,55 @@ export default function UberDriverView({
                 const isLast = idx === tempOrdersList.length - 1;
                 const isDone = ord.status === 'Completado';
                 const isCancel = ord.status === 'No Realizado';
+                const isBeingDragged = dragIndex === idx || touchDragIndex === idx;
+                const isDropTarget = (dragOverIndex === idx && dragIndex !== idx) || (touchOverIndex === idx && touchDragIndex !== idx);
 
                 return (
                   <div
                     key={ord.id || idx}
-                    className="p-2.5 rounded-2xl bg-[#1b2533] border border-slate-700/60 flex items-center justify-between gap-2 shadow-xs"
+                    data-stop-idx={idx}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, idx)}
+                    onDragOver={(e) => handleDragOver(e, idx)}
+                    onDrop={(e) => handleDrop(e, idx)}
+                    onDragEnd={handleDragEnd}
+                    className={`p-2.5 rounded-2xl border transition-all duration-150 flex items-center justify-between gap-2 shadow-xs ${
+                      isBeingDragged
+                        ? 'opacity-40 bg-cyan-950/40 border-cyan-500 scale-[0.98]'
+                        : isDropTarget
+                        ? 'bg-[#1e2d40] border-cyan-400 ring-2 ring-cyan-400/50 scale-[1.02]'
+                        : 'bg-[#1b2533] border-slate-700/60 hover:border-slate-600'
+                    }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {/* Step Number in circle */}
-                      <span className={`w-6 h-6 rounded-full text-white font-black text-xs flex items-center justify-center shrink-0 shadow-sm ${
-                        isDone ? 'bg-emerald-500' : isCancel ? 'bg-rose-500' : 'bg-cyan-500'
+                    <div className="flex items-center gap-2 min-w-0">
+                      {/* Touch / Drag Grip Handle */}
+                      <div
+                        onTouchStart={(e) => handleTouchStart(e, idx)}
+                        className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-slate-500 hover:text-cyan-400 touch-none flex items-center justify-center rounded-lg"
+                        title="Mantén presionado para mover"
+                      >
+                        <GripVertical className="h-4 w-4 stroke-[2.5]" />
+                      </div>
+
+                      {/* Number in circle (only the pure number, no #, no Parada text) */}
+                      <span className={`w-6 h-6 rounded-full font-black text-xs flex items-center justify-center shrink-0 shadow-sm ${
+                        isDone 
+                          ? 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/40 ring-1 ring-emerald-500/20' 
+                          : isCancel 
+                          ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' 
+                          : 'bg-[#007AFF]/25 text-[#007AFF] border border-[#007AFF]/40 ring-1 ring-[#007AFF]/20'
                       }`}>
-                        {isDone ? '✓' : isCancel ? '✕' : idx + 1}
+                        {idx + 1}
                       </span>
 
                       <div className="min-w-0">
                         <div className="text-xs font-bold text-white truncate leading-tight">
                           {ord.address}
                         </div>
-                        <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                          <span>Job #{ord.job_id}</span>
+                        <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5 font-mono">
+                          <span className="text-cyan-400 font-bold">{ord.job_id}</span>
                           <span>•</span>
-                          <span>${ord.rate_calculated || 100}</span>
+                          <span className="text-emerald-400 font-bold">${ord.rate_calculated || 100}</span>
                           {ord.bore_type && ord.bore_type.includes('DW') && (
                             <span className="text-cyan-400 font-bold">• DW</span>
                           )}
@@ -1856,7 +2038,7 @@ export default function UberDriverView({
                       </div>
                     </div>
 
-                    {/* Up / Down Controls */}
+                    {/* Up / Down Controls for one-tap adjustment */}
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
@@ -1864,10 +2046,10 @@ export default function UberDriverView({
                         disabled={isFirst}
                         className={`w-7 h-7 rounded-lg flex items-center justify-center border text-xs font-bold transition ${
                           isFirst 
-                            ? 'opacity-25 border-slate-800 text-slate-600' 
+                            ? 'opacity-20 border-slate-800 text-slate-600' 
                             : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90'
                         }`}
-                        title="Mover hacia arriba"
+                        title="Subir parada"
                       >
                         <MoveUp className="h-3.5 w-3.5" />
                       </button>
@@ -1878,10 +2060,10 @@ export default function UberDriverView({
                         disabled={isLast}
                         className={`w-7 h-7 rounded-lg flex items-center justify-center border text-xs font-bold transition ${
                           isLast 
-                            ? 'opacity-25 border-slate-800 text-slate-600' 
+                            ? 'opacity-20 border-slate-800 text-slate-600' 
                             : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90'
                         }`}
-                        title="Mover hacia abajo"
+                        title="Bajar parada"
                       >
                         <MoveDown className="h-3.5 w-3.5" />
                       </button>

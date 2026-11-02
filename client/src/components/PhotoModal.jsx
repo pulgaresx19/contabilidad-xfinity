@@ -102,7 +102,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
 
   const handleConfirmCompletion = async () => {
     if (workPhotosCount === 0) {
-      setError('Debes tener al menos 1 foto de la instalación realizada antes de confirmar.');
+      setError('Debes tener al menos 1 foto de evidencia antes de finalizar el trabajo.');
       return;
     }
 
@@ -117,14 +117,16 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
       });
 
       if (res.ok) {
+        order.status = 'Completado';
         if (onPhotoUpdated) onPhotoUpdated();
-        onClose();
+        // Abrir inmediatamente el modal de WhatsApp para compartir el reporte
+        setIsShareModalOpen(true);
       } else {
         const data = await res.json();
-        setError(data.error || 'Error al confirmar trabajo');
+        setError(data.error || 'Error al finalizar trabajo');
       }
     } catch (err) {
-      setError('Error al confirmar: ' + err.message);
+      setError('Error al finalizar: ' + err.message);
     } finally {
       setConfirming(false);
     }
@@ -465,17 +467,17 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               onClick={handleConfirmCompletion}
               className={`flex-1 h-10 px-4 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 shadow-md transition active:scale-95 ${
                 workPhotosCount > 0
-                  ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/25'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 text-slate-950 shadow-emerald-500/25'
                   : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-dashed border-slate-300 dark:border-slate-700'
               }`}
             >
               <Check className="h-4 w-4 stroke-[3]" />
               <span>
                 {confirming 
-                  ? 'Confirmando...' 
+                  ? 'Finalizando...' 
                   : workPhotosCount > 0 
-                  ? 'Confirmar Trabajo' 
-                  : 'Falta Foto de Trabajo'}
+                  ? 'Finalizar Trabajo' 
+                  : 'Foto Requerida para Finalizar'}
               </span>
             </button>
           ) : (

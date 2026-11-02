@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Camera, Check, X, Phone, MapPin, Share2, Clock, Copy,
   CheckCircle2, AlertCircle, Plus, Sparkles, AlertTriangle, Shield,
@@ -13,7 +13,7 @@ import UberDriverView from './UberDriverView';
 import { stampPhotoWithWatermark } from '../utils/watermark';
 import { getLocalDateStr, normalizeDateStr, formatDateFriendly } from '../utils/dateUtils';
 
-export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhotos, onOrderUpdated }) {
+export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhotos, onOrderUpdated, onUpdateOrders }) {
   // Uses local device time (ET/CT/MT/PT) - never jumps to tomorrow in late evening hours
   const todayReal = getLocalDateStr();
   
@@ -63,8 +63,17 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   const [adjustReason, setAdjustReason] = useState('');
   const [savingAdjust, setSavingAdjust] = useState(false);
 
-  // 1. FILTER ORDERS EXCLUSIVELY FOR THE ACTIVE DAY
-  const dayOrders = orders.filter(o => normalizeDateStr(o.work_date) === activeDate);
+  // 1. FILTER ORDERS EXCLUSIVELY FOR THE ACTIVE DAY & SORT BY ROUTE_ORDER
+  const dayOrders = useMemo(() => {
+    return orders
+      .filter(o => normalizeDateStr(o.work_date) === activeDate)
+      .sort((a, b) => {
+        const orderA = a.route_order != null && a.route_order > 0 ? a.route_order : 9999;
+        const orderB = b.route_order != null && b.route_order > 0 ? b.route_order : 9999;
+        if (orderA !== orderB) return orderA - orderB;
+        return (a.id || 0) - (b.id || 0);
+      });
+  }, [orders, activeDate]);
   const dayPending = dayOrders.filter(o => o.status === 'Pendiente');
   const dayCompleted = dayOrders.filter(o => o.status === 'Completado');
   const dayCancelled = dayOrders.filter(o => o.status === 'No Realizado');
@@ -215,6 +224,8 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
       });
       if (res.ok) {
         onOrderUpdated();
+        // Siguiente paso automático: abrir compartir por WhatsApp
+        openShareModal({ ...order, status: 'Completado' });
       }
     } catch (err) {
       alert('Error: ' + err.message);
@@ -547,7 +558,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
   const isViewingToday = activeDate === todayReal;
 
   return (
-    <div className="w-full">
+    <div className="w-full h-full flex flex-col min-h-0">
       {viewMode === 'uber' ? (
         <UberDriverView
           orders={dayOrders}
@@ -557,6 +568,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           onClearTargetFocus={() => setTargetFocusOrderId(null)}
           onShiftDay={shiftDay}
           onGoToToday={() => setActiveDate(todayReal)}
+          onSelectDate={(newDate) => setActiveDate(newDate)}
           onOpenScan={onOpenScan}
           onOpenAddJob={() => setIsAddJobOpen(true)}
           onOpenPhotos={onOpenPhotos}
@@ -568,6 +580,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           onOpenShareModal={openShareModal}
           localSharedMap={localSharedMap}
           onOrderUpdated={onOrderUpdated}
+          onUpdateOrders={onUpdateOrders}
           onSwitchToClassic={() => setViewMode('classic')}
         />
       ) : (
