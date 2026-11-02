@@ -13,7 +13,16 @@ import UberDriverView from './UberDriverView';
 import { stampPhotoWithWatermark } from '../utils/watermark';
 import { getLocalDateStr, normalizeDateStr, formatDateFriendly } from '../utils/dateUtils';
 
-export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhotos, onOrderUpdated, onUpdateOrders }) {
+export default function TodayView({ 
+  orders, 
+  summaryData, 
+  onOpenScan, 
+  onOpenPhotos, 
+  onOrderUpdated, 
+  onUpdateOrders,
+  viewMode: propViewMode,
+  hideModeToggle = false
+}) {
   // Uses local device time (ET/CT/MT/PT) - never jumps to tomorrow in late evening hours
   const todayReal = getLocalDateStr();
   
@@ -32,7 +41,9 @@ export default function TodayView({ orders, summaryData, onOpenScan, onOpenPhoto
   });
 
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'Pendiente' | 'Completado' | 'No Realizado'
-  const [viewMode, setViewMode] = useState('uber'); // 'uber' (Default Uber Driver View) | 'classic' (Traditional List)
+  const [internalViewMode, setInternalViewMode] = useState(propViewMode || 'uber');
+  const viewMode = propViewMode || internalViewMode;
+  const setViewMode = setInternalViewMode;
   const [sharingId, setSharingId] = useState(null);
   const [localSharedMap, setLocalSharedMap] = useState({});
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
@@ -586,14 +597,16 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
       ) : (
         <div className="space-y-3.5 max-w-md mx-auto">
           {/* Botón flotante para regresar al Modo Uber */}
-          <button
-            type="button"
-            onClick={() => setViewMode('uber')}
-            className="w-full py-2.5 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-2xl shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 transition active:scale-[0.98]"
-          >
-            <Map className="h-4 w-4 stroke-[2.5]" />
-            <span>Volver al Modo Mapa Uber (Interactivo)</span>
-          </button>
+          {!hideModeToggle && (
+            <button
+              type="button"
+              onClick={() => setViewMode('uber')}
+              className="w-full py-2.5 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-2xl shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 transition active:scale-[0.98]"
+            >
+              <Map className="h-4 w-4 stroke-[2.5]" />
+              <span>Volver al Modo Mapa Uber (Interactivo)</span>
+            </button>
+          )}
 
           {/* 1. NAVEGADOR DE FECHA & HERO CARD DE LA JORNADA */}
           <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3">

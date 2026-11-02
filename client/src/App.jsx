@@ -241,6 +241,8 @@ export default function App() {
                 onOpenPhotos={handleOpenPhotos}
                 onOrderUpdated={refreshAll}
                 onUpdateOrders={setOrders}
+                viewMode="uber"
+                hideModeToggle={true}
               />
             )}
 
@@ -250,13 +252,9 @@ export default function App() {
                 summaryData={summaryData}
                 onRefresh={refreshAll}
                 onOpenPhotos={handleOpenPhotos}
-              />
-            )}
-
-            {activeTab === 'monthly' && (
-              <MonthlyView
-                orders={orders}
-                onRefresh={refreshAll}
+                onOpenScan={() => setIsScanModalOpen(true)}
+                onOrderUpdated={refreshAll}
+                onUpdateOrders={setOrders}
               />
             )}
 

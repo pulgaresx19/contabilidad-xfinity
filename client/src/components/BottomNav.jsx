@@ -5,7 +5,6 @@ export default function BottomNav({ activeTab, setActiveTab, pendingCount }) {
   const tabs = [
     { id: 'today', label: 'Jornada', icon: Home, badge: pendingCount },
     { id: 'history', label: 'Cierres', icon: CalendarDays },
-    { id: 'monthly', label: 'Mensual', icon: BarChart3 },
     { id: 'profile', label: 'Perfil', icon: User },
   ];
 

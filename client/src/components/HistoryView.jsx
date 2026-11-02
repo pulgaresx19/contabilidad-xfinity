@@ -3,12 +3,23 @@ import {
   Calendar, CheckCircle2, Clock, Share2, Check, 
   Trash2, ExternalLink, Image as ImageIcon, X, DollarSign, 
   Ruler, ChevronRight, Copy, Camera, AlertCircle, FileText, 
-  ShieldAlert, CheckCircle, Search, Filter, Sparkles, MapPin, Phone, ShieldCheck, AlertTriangle
+  ShieldAlert, CheckCircle, Search, Filter, Sparkles, MapPin, Phone, ShieldCheck, AlertTriangle,
+  BarChart3, Sun
 } from 'lucide-react';
 import ShareReportModal from './ShareReportModal';
+import TodayView from './TodayView';
+import MonthlyView from './MonthlyView';
 
-export default function HistoryView({ orders = [], summaryData, onRefresh, onOpenPhotos }) {
-  const [subTab, setSubTab] = useState('weeks'); // 'weeks' | 'all_orders' | 'sheets'
+export default function HistoryView({ 
+  orders = [], 
+  summaryData, 
+  onRefresh, 
+  onOpenPhotos, 
+  onOpenScan, 
+  onOrderUpdated, 
+  onUpdateOrders 
+}) {
+  const [subTab, setSubTab] = useState('today'); // 'today' | 'weeks' | 'monthly' | 'all_orders'
   const [selectedWeekModal, setSelectedWeekModal] = useState(null); // Week object for overlay modal
   const [copiedWeekKey, setCopiedWeekKey] = useState(null);
   const [copiedJobId, setCopiedJobId] = useState(null);
@@ -19,37 +30,11 @@ export default function HistoryView({ orders = [], summaryData, onRefresh, onOpe
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
 
-  // Sheets state
-  const [sheets, setSheets] = useState([]);
-  const [loadingSheets, setLoadingSheets] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
-
   const weeks = summaryData?.weeks || [];
   const totalPaidWeeks = weeks.filter(w => w.isPaid).reduce((sum, w) => sum + (w.totalEarnings || 0), 0);
   const totalPendingWeeks = weeks.filter(w => !w.isPaid).reduce((sum, w) => sum + (w.totalEarnings || 0), 0);
   const paidWeeksCount = weeks.filter(w => w.isPaid).length;
   const pendingWeeksCount = weeks.filter(w => !w.isPaid).length;
-
-  const fetchSheets = async () => {
-    try {
-      setLoadingSheets(true);
-      const res = await fetch('/api/dispatch-sheets');
-      if (res.ok) {
-        const data = await res.json();
-        setSheets(data);
-      }
-    } catch (err) {
-      console.error('Error fetching sheets:', err);
-    } finally {
-      setLoadingSheets(false);
-    }
-  };
-
-  useEffect(() => {
-    if (subTab === 'sheets') {
-      fetchSheets();
-    }
-  }, [subTab]);
 
   // Keep selectedWeekModal updated if summaryData refreshes
   useEffect(() => {
@@ -175,64 +160,82 @@ ${jobLines}
     setTimeout(() => setCopiedJobId(null), 2500);
   };
 
-  const handleDeleteSheet = async (id) => {
-    if (!confirm('¿Eliminar esta foto del historial?')) return;
-    try {
-      const res = await fetch(`/api/dispatch-sheets/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        fetchSheets();
-      }
-    } catch (err) {
-      alert('Error eliminando: ' + err.message);
-    }
-  };
-
   return (
     <div className="space-y-4 max-w-md mx-auto">
-      {/* 1. SELECTOR SUPERIOR DE 3 SUBPESTAÑAS (FORMATO: ÍCONO ARRIBA Y TEXTO ABAJO) */}
-      <div className="bg-slate-900 p-1.5 rounded-2xl border border-slate-800 grid grid-cols-3 gap-1 shadow-sm">
+      {/* 1. SELECTOR SUPERIOR DE 4 SUBPESTAÑAS (FORMATO: ÍCONO ARRIBA Y TEXTO ABAJO) */}
+      <div className="bg-slate-900 p-1.5 rounded-2xl border border-slate-800 grid grid-cols-4 gap-1 shadow-sm">
+        <button
+          onClick={() => setSubTab('today')}
+          className={`flex flex-col items-center justify-center py-2 px-1 text-center rounded-xl transition select-none ${
+            subTab === 'today'
+              ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/40 font-medium'
+          }`}
+        >
+          <Clock className={`w-4 h-4 mb-1 ${subTab === 'today' ? 'stroke-[2.5]' : 'stroke-2'}`} />
+          <span className="text-[10.5px] leading-tight font-bold">
+            Hoy
+          </span>
+        </button>
+
         <button
           onClick={() => setSubTab('weeks')}
-          className={`flex flex-col items-center justify-center py-2 px-2 text-center rounded-xl transition select-none ${
+          className={`flex flex-col items-center justify-center py-2 px-1 text-center rounded-xl transition select-none ${
             subTab === 'weeks'
               ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/40 font-medium'
           }`}
         >
           <Calendar className={`w-4 h-4 mb-1 ${subTab === 'weeks' ? 'stroke-[2.5]' : 'stroke-2'}`} />
-          <span className="text-[11px] leading-tight">
-            Cierres ({weeks.length})
+          <span className="text-[10.5px] leading-tight font-bold">
+            Semanal
+          </span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('monthly')}
+          className={`flex flex-col items-center justify-center py-2 px-1 text-center rounded-xl transition select-none ${
+            subTab === 'monthly'
+              ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/40 font-medium'
+          }`}
+        >
+          <BarChart3 className={`w-4 h-4 mb-1 ${subTab === 'monthly' ? 'stroke-[2.5]' : 'stroke-2'}`} />
+          <span className="text-[10.5px] leading-tight font-bold">
+            Mensual
           </span>
         </button>
 
         <button
           onClick={() => setSubTab('all_orders')}
-          className={`flex flex-col items-center justify-center py-2 px-2 text-center rounded-xl transition select-none ${
+          className={`flex flex-col items-center justify-center py-2 px-1 text-center rounded-xl transition select-none ${
             subTab === 'all_orders'
               ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/40 font-medium'
           }`}
         >
           <Search className={`w-4 h-4 mb-1 ${subTab === 'all_orders' ? 'stroke-[2.5]' : 'stroke-2'}`} />
-          <span className="text-[11px] leading-tight">
-            Historial ({orders.length})
-          </span>
-        </button>
-
-        <button
-          onClick={() => setSubTab('sheets')}
-          className={`flex flex-col items-center justify-center py-2 px-2 text-center rounded-xl transition select-none ${
-            subTab === 'sheets'
-              ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/40 font-medium'
-          }`}
-        >
-          <Camera className={`w-4 h-4 mb-1 ${subTab === 'sheets' ? 'stroke-[2.5]' : 'stroke-2'}`} />
-          <span className="text-[11px] leading-tight">
-            Hojas ({sheets.length})
+          <span className="text-[10.5px] leading-tight font-bold">
+            Historial
           </span>
         </button>
       </div>
+
+      {/* SUBTAB 1: REPORTE DIARIO DE HOY (VISTA COMPLETA DE TRABAJOS DEL DÍA) */}
+      {subTab === 'today' && (
+        <div className="animate-fade-in">
+          <TodayView
+            orders={orders}
+            summaryData={summaryData}
+            onOpenScan={onOpenScan}
+            onOpenPhotos={onOpenPhotos}
+            onOrderUpdated={onOrderUpdated || onRefresh}
+            onUpdateOrders={onUpdateOrders}
+            viewMode="classic"
+            hideModeToggle={true}
+          />
+        </div>
+      )}
 
       {/* SUBTAB 1: LISTADO DE CIERRES SEMANALES */}
       {subTab === 'weeks' && (
@@ -603,55 +606,13 @@ ${jobLines}
         </div>
       )}
 
-      {/* SUBTAB 3: HOJAS DE RUTA (FOTOS DE DESPACHO) */}
-      {subTab === 'sheets' && (
-        <div className="space-y-3">
-          {loadingSheets ? (
-            <div className="text-center py-8 text-slate-500 text-xs">Cargando fotos de despacho...</div>
-          ) : sheets.length === 0 ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center space-y-1">
-              <ImageIcon className="h-8 w-8 text-slate-600 mx-auto mb-1" />
-              <p className="text-xs text-slate-300 font-semibold">Sin fotos de hojas todavía.</p>
-              <p className="text-[10px] text-slate-500">Usa "Escanear Foto" en Jornada para registrar una.</p>
-            </div>
-          ) : (
-            sheets.map((s) => (
-              <div
-                key={s.id}
-                className="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex items-center gap-3 shadow-sm"
-              >
-                <div
-                  onClick={() => setSelectedPhoto(s.photo_data || `/uploads/${s.filename}`)}
-                  className="h-16 w-20 rounded-xl overflow-hidden bg-slate-950 flex-shrink-0 cursor-pointer border border-slate-800 relative group"
-                >
-                  <img src={s.photo_data || `/uploads/${s.filename}`} alt="" className="w-full h-full object-cover group-hover:scale-105 transition" />
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-70 group-hover:opacity-100">
-                    <ExternalLink className="h-4 w-4 text-white" />
-                  </div>
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 text-xs text-cyan-400 font-mono font-bold">
-                    <Calendar className="h-3 w-3" />
-                    <span>{s.sheet_date}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 font-semibold truncate">
-                    {s.original_name || 'Hoja de Ruta'}
-                  </p>
-                  <span className="text-[10px] text-emerald-400 font-mono">
-                    {s.orders_count || 0} órdenes registradas
-                  </span>
-                </div>
-
-                <button
-                  onClick={() => handleDeleteSheet(s.id)}
-                  className="p-1.5 text-slate-500 hover:text-rose-400"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))
-          )}
+      {/* SUBTAB 3: REPORTE MENSUAL (INGRESOS, GASTOS & BALANCES) */}
+      {subTab === 'monthly' && (
+        <div className="animate-fade-in">
+          <MonthlyView
+            orders={orders}
+            onRefresh={onRefresh || onOrderUpdated}
+          />
         </div>
       )}
 
