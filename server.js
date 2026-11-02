@@ -843,17 +843,26 @@ app.patch('/api/orders/:id/note', (req, res) => {
 // 4c. Reorder route order for the day
 app.post('/api/orders/reorder-route', (req, res) => {
   try {
-    const { orderedIds } = req.body;
-    console.log('⚡ [reorder-route] Received orderedIds:', orderedIds);
-    if (Array.isArray(orderedIds) && orderedIds.length > 0) {
-      const updateStmt = db.prepare('UPDATE work_orders SET route_order = ? WHERE id = ?');
+    const { orderedIds, orders } = req.body;
+    console.log('⚡ [reorder-route] Received request:', { orderedIds, ordersCount: orders?.length });
+    const items = orders || orderedIds || [];
+    if (Array.isArray(items) && items.length > 0) {
+      const updateStmt = db.prepare(`
+        UPDATE work_orders 
+        SET route_order = ?, updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ? OR (job_id IS NOT NULL AND job_id != '' AND job_id = ?)
+      `);
       const tx = db.transaction(() => {
-        orderedIds.forEach((id, idx) => {
-          updateStmt.run(idx + 1, Number(id));
+        items.forEach((item, idx) => {
+          const id = typeof item === 'object' ? item.id : item;
+          const jobId = typeof item === 'object' ? String(item.job_id || '') : String(item || '');
+          const numId = Number(id);
+          const safeNumId = isNaN(numId) ? -1 : numId;
+          updateStmt.run(idx + 1, safeNumId, jobId);
         });
       });
       tx();
-      console.log('✅ [reorder-route] Updated DB route_order for', orderedIds.length, 'orders');
+      console.log('✅ [reorder-route] Updated DB route_order for', items.length, 'orders');
     }
     res.json({ success: true });
   } catch (err) {

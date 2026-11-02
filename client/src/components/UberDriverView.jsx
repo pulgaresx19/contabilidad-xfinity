@@ -259,6 +259,12 @@ export default function UberDriverView({
   const [selectedRouteIdx, setSelectedRouteIdx] = useState(0);
   const [showMoreActions, setShowMoreActions] = useState(false);
 
+  // Multi-stop Travesía State (full day sequence route in light blue #38bdf8 + inter-stop times)
+  const [travesiaLegs, setTravesiaLegs] = useState([]);
+  const [travesiaSummary, setTravesiaSummary] = useState({ totalMiles: 0, totalMinutes: 0 });
+  const travesiaAbortControllerRef = useRef(null);
+  const travesiaGeometryRef = useRef(null);
+
   // Job On-Site Timers
   const [jobTimers, setJobTimers] = useState(() => {
     try {
@@ -506,6 +512,189 @@ export default function UberDriverView({
       clearTimeout(timer);
     };
   }, [activeOrders, userLocation?.lat, userLocation?.lng]);
+
+  // Compute multi-stop sequence route for the whole day in light sky blue (#38bdf8)
+  const updateTravesiaRoute = async (sequenceList) => {
+    const list = sequenceList || activeOrders;
+    if (!list || list.length === 0) {
+      setTravesiaLegs([]);
+      setTravesiaSummary({ totalMiles: 0, totalMinutes: 0 });
+      travesiaGeometryRef.current = [];
+      const map = mapInstanceRef.current;
+      if (map && map.getSource('route-travesia')) {
+        map.getSource('route-travesia').setData({
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: [] }
+        });
+      }
+      return;
+    }
+
+    const validStops = list.filter(o => o.latitude && o.longitude);
+    if (validStops.length < 2) {
+      setTravesiaLegs([]);
+      setTravesiaSummary({ totalMiles: 0, totalMinutes: 0 });
+      travesiaGeometryRef.current = [];
+      const map = mapInstanceRef.current;
+      if (map && map.getSource('route-travesia')) {
+        map.getSource('route-travesia').setData({
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: [] }
+        });
+      }
+      return;
+    }
+
+    const coordsStr = validStops.map(o => `${Number(o.longitude).toFixed(5)},${Number(o.latitude).toFixed(5)}`).join(';');
+    const cacheKey = `travesia:${coordsStr}`;
+
+    if (routeCacheRef.current.has(cacheKey)) {
+      const cached = routeCacheRef.current.get(cacheKey);
+      setTravesiaLegs(cached.legs);
+      setTravesiaSummary(cached.summary);
+      travesiaGeometryRef.current = cached.coordinates;
+      const map = mapInstanceRef.current;
+      if (map && map.getSource('route-travesia')) {
+        map.getSource('route-travesia').setData({
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: cached.coordinates }
+        });
+      }
+      return;
+    }
+
+    if (travesiaAbortControllerRef.current) {
+      travesiaAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    travesiaAbortControllerRef.current = controller;
+
+    try {
+      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsStr}?overview=full&geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`;
+      const res = await fetch(url, { signal: controller.signal });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.routes && data.routes[0]) {
+          const r = data.routes[0];
+          const coordinates = r.geometry.coordinates;
+          const totalMiles = r.distance / 1609.34;
+          const totalMinutes = Math.max(1, Math.round(r.duration / 60));
+          const legs = (r.legs || []).map((leg, idx) => ({
+            fromOrder: validStops[idx],
+            toOrder: validStops[idx + 1],
+            fromIndex: idx,
+            toIndex: idx + 1,
+            miles: leg.distance / 1609.34,
+            minutes: Math.max(1, Math.round(leg.duration / 60))
+          }));
+
+          const result = {
+            coordinates,
+            legs,
+            summary: { totalMiles, totalMinutes }
+          };
+
+          routeCacheRef.current.set(cacheKey, result);
+          setTravesiaLegs(legs);
+          setTravesiaSummary({ totalMiles, totalMinutes });
+          travesiaGeometryRef.current = coordinates;
+
+          const map = mapInstanceRef.current;
+          if (map && map.getSource('route-travesia')) {
+            map.getSource('route-travesia').setData({
+              type: 'Feature',
+              properties: {},
+              geometry: { type: 'LineString', coordinates }
+            });
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.warn('Travesia directions note:', e.message);
+      }
+    }
+
+    // Fallback: calculate estimated straight/road distance per leg
+    let totalMilesFallback = 0;
+    const fallbackCoordinates = validStops.map(o => [o.longitude, o.latitude]);
+    const fallbackLegs = [];
+    for (let i = 0; i < validStops.length - 1; i++) {
+      const s1 = validStops[i];
+      const s2 = validStops[i + 1];
+      const miles = getEstimatedDrivingMiles(s1.latitude, s1.longitude, s2.latitude, s2.longitude) || 1.0;
+      const minutes = Math.max(1, Math.round(miles * 2.2));
+      totalMilesFallback += miles;
+      fallbackLegs.push({
+        fromOrder: s1,
+        toOrder: s2,
+        fromIndex: i,
+        toIndex: i + 1,
+        miles,
+        minutes
+      });
+    }
+    const fallbackSummary = {
+      totalMiles: totalMilesFallback,
+      totalMinutes: Math.max(1, Math.round(totalMilesFallback * 2.2))
+    };
+    setTravesiaLegs(fallbackLegs);
+    setTravesiaSummary(fallbackSummary);
+    travesiaGeometryRef.current = fallbackCoordinates;
+    const map = mapInstanceRef.current;
+    if (map && map.getSource('route-travesia')) {
+      map.getSource('route-travesia').setData({
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'LineString', coordinates: fallbackCoordinates }
+      });
+    }
+  };
+
+  // Keep travesia route updated whenever activeOrders changes
+  useEffect(() => {
+    updateTravesiaRoute(activeOrders);
+  }, [activeOrders]);
+
+  // Helper to get driving time and distance for each stop in sequence
+  const getLegInfoForOrder = (order, indexInList) => {
+    if (!order) return null;
+    if (indexInList === 0) {
+      if (activeRouteInfo && String(selectedOrder?.id) === String(order.id)) {
+        return {
+          minutes: activeRouteInfo.minutes,
+          miles: activeRouteInfo.miles,
+          text: `A ${activeRouteInfo.minutes} min (~${activeRouteInfo.miles.toFixed(1)} mi) desde tu punto`,
+          shortText: `A ${activeRouteInfo.minutes} min`,
+          isFirst: true
+        };
+      }
+      return {
+        text: 'Punto de partida del día',
+        shortText: 'Punto 1',
+        isFirst: true
+      };
+    }
+
+    const leg = travesiaLegs.find(l => String(l.toOrder?.id) === String(order.id)) || travesiaLegs[indexInList - 1];
+    if (leg) {
+      const prevStopNum = indexInList; // 1-based previous stop number
+      return {
+        minutes: leg.minutes,
+        miles: leg.miles,
+        prevStopNum,
+        text: `🚗 +${leg.minutes} min (~${leg.miles.toFixed(1)} mi) de #${prevStopNum}`,
+        shortText: `+${leg.minutes} min de #${prevStopNum}`,
+        isFirst: false
+      };
+    }
+
+    return null;
+  };
 
   // 4. SELECT A JOB: INSTANTLY DRAWS ROUTE (NO BLANK TIME)
   const handleSelectJob = async (order) => {
@@ -759,7 +948,51 @@ export default function UberDriverView({
   const setupRouteLayers = (map) => {
     if (!map) return;
 
-    // Active Primary Route Source & Layers (Apple Electric Blue)
+    // 1. Multi-stop Travesía Route Source & Layers (Light Sky Blue / Alternative Route connecting all stops in sequence)
+    if (!map.getSource('route-travesia')) {
+      map.addSource('route-travesia', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: travesiaGeometryRef.current || []
+          }
+        }
+      });
+    }
+
+    if (!map.getLayer('travesia-glow-layer')) {
+      map.addLayer({
+        id: 'travesia-glow-layer',
+        type: 'line',
+        source: 'route-travesia',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': '#38bdf8',
+          'line-width': 10,
+          'line-opacity': 0.38,
+          'line-blur': 2.5
+        }
+      });
+    }
+
+    if (!map.getLayer('travesia-core-layer')) {
+      map.addLayer({
+        id: 'travesia-core-layer',
+        type: 'line',
+        source: 'route-travesia',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': '#38bdf8',
+          'line-width': 4.5,
+          'line-opacity': 0.9
+        }
+      });
+    }
+
+    // 2. Active Primary Route Source & Layers (Apple Electric Blue)
     if (!map.getSource('route-nav')) {
       map.addSource('route-nav', {
         type: 'geojson',
@@ -797,6 +1030,15 @@ export default function UberDriverView({
           'line-width': 6.5,
           'line-opacity': 0.98
         }
+      });
+    }
+
+    // Re-feed saved travesia geometry if available
+    if (travesiaGeometryRef.current && map.getSource('route-travesia')) {
+      map.getSource('route-travesia').setData({
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'LineString', coordinates: travesiaGeometryRef.current }
       });
     }
 
@@ -1140,12 +1382,18 @@ export default function UberDriverView({
     // 4. Invalidate directions route cache so polyline re-draws for new sequence
     routeCacheRef.current.clear();
 
-    // 5. Persist to server and await so backend SQLite writes before any refresh
+    // 5. Instantly recalculate & draw the new travesía line and leg times!
+    updateTravesiaRoute(newSequenceList);
+
+    // 6. Persist to server and await so backend SQLite writes before any refresh
     try {
       const res = await fetch('/api/orders/reorder-route', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderedIds: orderedIds.map(Number) })
+        body: JSON.stringify({ 
+          orderedIds: orderedIds.map(Number),
+          orders: newSequenceList.map(o => ({ id: o.id, job_id: o.job_id }))
+        })
       });
       if (!res.ok) {
         console.warn('reorder-route returned status:', res.status);
@@ -1177,20 +1425,48 @@ export default function UberDriverView({
     await applyOrdersSequenceLive(updatedSequence);
   };
 
-  // MOVE STOP UP IN TRAVESÍA
+  // MOVE STOP UP IN TRAVESÍA (Callable from overlay or map drawer)
   const handleMoveStopUp = async (orderIdOrIndex) => {
-    let fromIndex = tempOrdersList.findIndex(o => String(o.id) === String(orderIdOrIndex));
+    const list = tempOrdersList.length > 0 ? tempOrdersList : activeOrders;
+    let fromIndex = list.findIndex(o => String(o.id) === String(orderIdOrIndex));
     if (fromIndex === -1 && typeof orderIdOrIndex === 'number') fromIndex = orderIdOrIndex;
-    if (fromIndex <= 0 || fromIndex >= tempOrdersList.length) return;
-    await reorderTripList(fromIndex, fromIndex - 1);
+    if (fromIndex <= 0 || fromIndex >= list.length) return;
+
+    const next = [...list];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(fromIndex - 1, 0, moved);
+    const updatedSequence = next.map((ord, idx) => ({
+      ...ord,
+      route_order: idx + 1
+    }));
+
+    setTempOrdersList(updatedSequence);
+    setLiveOrders(updatedSequence);
+    setHasOrderChanged(true);
+    setOptimizedNotice(null);
+    await applyOrdersSequenceLive(updatedSequence);
   };
 
-  // MOVE STOP DOWN IN TRAVESÍA
+  // MOVE STOP DOWN IN TRAVESÍA (Callable from overlay or map drawer)
   const handleMoveStopDown = async (orderIdOrIndex) => {
-    let fromIndex = tempOrdersList.findIndex(o => String(o.id) === String(orderIdOrIndex));
+    const list = tempOrdersList.length > 0 ? tempOrdersList : activeOrders;
+    let fromIndex = list.findIndex(o => String(o.id) === String(orderIdOrIndex));
     if (fromIndex === -1 && typeof orderIdOrIndex === 'number') fromIndex = orderIdOrIndex;
-    if (fromIndex < 0 || fromIndex >= tempOrdersList.length - 1) return;
-    await reorderTripList(fromIndex, fromIndex + 1);
+    if (fromIndex < 0 || fromIndex >= list.length - 1) return;
+
+    const next = [...list];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(fromIndex + 1, 0, moved);
+    const updatedSequence = next.map((ord, idx) => ({
+      ...ord,
+      route_order: idx + 1
+    }));
+
+    setTempOrdersList(updatedSequence);
+    setLiveOrders(updatedSequence);
+    setHasOrderChanged(true);
+    setOptimizedNotice(null);
+    await applyOrdersSequenceLive(updatedSequence);
   };
 
   // MOVE DIRECTLY TO TARGET POSITION (1-based, e.g. picking "1" or "4")
@@ -1697,9 +1973,17 @@ export default function UberDriverView({
               <h2 className="text-base sm:text-lg font-black text-white truncate leading-tight group-hover:text-cyan-400 transition">
                 {selectedOrder.address || 'Sin dirección asignada'}
               </h2>
-              <p className="text-[11px] text-slate-400 font-medium mt-0.5 truncate">
-                A {tripMiles} • {tripMinutes} ({tripSummary})
-              </p>
+              <div className="flex items-center justify-center gap-1.5 mt-0.5 text-[11px] text-slate-400 font-medium truncate">
+                <span>A {tripMiles} • {tripMinutes} ({tripSummary})</span>
+                {travesiaSummary.totalMiles > 0 && (
+                  <>
+                    <span className="text-slate-600">•</span>
+                    <span className="text-sky-400 font-bold">
+                      Travesía: {travesiaSummary.totalMiles.toFixed(1)} mi
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* ROW 3: NOTES & WORK SPECS CARD (STATUS ICON + SPECS + REMARKS + EDIT) */}
@@ -2048,53 +2332,105 @@ export default function UberDriverView({
                         const isCompleted = ord.status === 'Completado';
                         const isCancelled = ord.status === 'No Realizado';
                         const realStopNumber = Number(ord.route_order) > 0 ? Number(ord.route_order) : (activeOrders.findIndex(o => String(o.id) === String(ord.id)) + 1);
+                        const stopIndex = activeOrders.findIndex(o => String(o.id) === String(ord.id));
+                        const isFirstStop = stopIndex <= 0;
+                        const isLastStop = stopIndex >= activeOrders.length - 1;
+                        const legInfo = getLegInfoForOrder(ord, stopIndex >= 0 ? stopIndex : idx);
 
                         return (
                           <div
                             key={ord.id || idx}
                             onClick={() => handleSelectJob(ord)}
-                            className={`p-3 rounded-2xl border cursor-pointer transition select-none flex items-center justify-between gap-2 ${
+                            className={`p-3 rounded-2xl border cursor-pointer transition select-none flex items-center justify-between gap-2.5 ${
                               isTarget 
                                 ? 'bg-[#007AFF]/20 border-[#007AFF]/80 shadow-md ring-1 ring-[#007AFF]/50'
                                 : 'bg-[#1b2533] border-white/5 hover:border-white/15'
                             }`}
                           >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <span className={`w-6 h-6 rounded-full text-white font-black text-xs flex items-center justify-center font-sans shrink-0 ${
-                                isCompleted ? 'bg-[#34C759]' : isCancelled ? 'bg-[#FF3B30]' : 'bg-[#FF9500]'
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <span className={`w-6 h-6 rounded-full text-white font-black text-xs flex items-center justify-center font-mono shrink-0 ${
+                                isCompleted ? 'bg-[#34C759]' : isCancelled ? 'bg-[#FF3B30]' : 'bg-[#007AFF]'
                               }`}>
                                 {isCompleted ? '✓' : isCancelled ? '✕' : (realStopNumber > 0 ? realStopNumber : idx + 1)}
                               </span>
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-bold text-white truncate">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-xs font-bold text-white truncate leading-tight">
                                     {ord.address}
                                   </span>
                                   {ord.bore_type && ord.bore_type.includes('DW') && (
-                                    <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md">
+                                    <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md shrink-0">
                                       DW
                                     </span>
                                   )}
                                 </div>
-                                <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                                <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5 font-mono truncate">
                                   <span>{ord.city || 'Skokie'}</span>
                                   <span>•</span>
-                                  <span>Job #{ord.job_id}</span>
+                                  <span className="text-cyan-300 font-semibold">#{ord.job_id}</span>
                                   <span>•</span>
                                   <span>{ord.drop_footage || 0} ft</span>
                                 </div>
+
+                                {legInfo && !legInfo.isFirst && (
+                                  <div className="mt-1 inline-flex items-center gap-1 text-[9.5px] font-bold text-sky-300 bg-sky-500/15 border border-sky-400/30 px-1.5 py-0.2 rounded-md">
+                                    <Car className="h-2.5 w-2.5 text-sky-400 shrink-0" />
+                                    <span>{legInfo.shortText}</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
 
-                            <div className="text-right shrink-0">
-                              <div className="text-xs font-mono font-black text-[#34C759]">
-                                ${ord.rate_calculated || 100}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="text-right shrink-0">
+                                <div className="text-xs font-mono font-black text-[#34C759]">
+                                  ${ord.rate_calculated || 100}
+                                </div>
+                                <span className={`text-[9px] font-bold uppercase ${
+                                  isCompleted ? 'text-emerald-400' : isCancelled ? 'text-rose-400' : 'text-amber-400'
+                                }`}>
+                                  {ord.status}
+                                </span>
                               </div>
-                              <span className={`text-[9px] font-bold uppercase ${
-                                isCompleted ? 'text-emerald-400' : isCancelled ? 'text-rose-400' : 'text-amber-400'
-                              }`}>
-                                {ord.status}
-                              </span>
+
+                              {/* Tactile Up/Down Buttons directly in Drawer */}
+                              <div 
+                                className="flex flex-col gap-0.5 shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  disabled={isFirstStop}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMoveStopUp(ord.id);
+                                  }}
+                                  className={`w-6 h-5 rounded-md flex items-center justify-center border text-[10px] font-bold transition ${
+                                    isFirstStop
+                                      ? 'opacity-20 border-slate-800 text-slate-600'
+                                      : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90 cursor-pointer'
+                                  }`}
+                                  title="Subir parada en la ruta"
+                                >
+                                  <MoveUp className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isLastStop}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMoveStopDown(ord.id);
+                                  }}
+                                  className={`w-6 h-5 rounded-md flex items-center justify-center border text-[10px] font-bold transition ${
+                                    isLastStop
+                                      ? 'opacity-20 border-slate-800 text-slate-600'
+                                      : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90 cursor-pointer'
+                                  }`}
+                                  title="Bajar parada en la ruta"
+                                >
+                                  <MoveDown className="h-3 w-3" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         );
@@ -2156,7 +2492,7 @@ export default function UberDriverView({
               </button>
             </div>
 
-            {/* Quick KPI Bar */}
+            {/* Quick KPI Bar with Travesía Summary */}
             <div className="grid grid-cols-3 gap-2 px-4 py-2.5 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
               <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
                 <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
@@ -2167,19 +2503,19 @@ export default function UberDriverView({
                 </span>
               </div>
               <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
+                <span className="text-[9px] uppercase tracking-wider text-sky-400 font-bold block">
+                  Travesía Total
+                </span>
+                <span className="text-xs sm:text-[13px] font-black text-sky-300 font-mono truncate">
+                  {travesiaSummary.totalMiles > 0 ? `${travesiaSummary.totalMiles.toFixed(1)} mi` : 'Calculando...'}
+                </span>
+              </div>
+              <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
                 <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
                   Completados
                 </span>
                 <span className="text-sm font-black text-white font-mono">
                   {tempOrdersList.filter(o => o.status === 'Completado').length} / {tempOrdersList.length}
-                </span>
-              </div>
-              <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
-                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
-                  Metraje
-                </span>
-                <span className="text-sm font-black text-cyan-400 font-mono">
-                  {Math.round(tempOrdersList.reduce((sum, o) => sum + (parseFloat(o.drop_footage) || 0), 0))} ft
                 </span>
               </div>
             </div>
@@ -2234,9 +2570,9 @@ export default function UberDriverView({
               <span>Toca un trabajo para ver en mapa</span>
             </div>
 
-            {/* Jobs List (Scrollable with Drag & Drop & Direct Click) */}
+            {/* Jobs List (Scrollable with Drag & Drop & Direct Tactile Position Control) */}
             <div 
-              className="p-2.5 sm:p-3 space-y-2 overflow-y-auto flex-1 min-h-0 select-none scrollbar-none"
+              className="p-2.5 sm:p-3 space-y-2.5 overflow-y-auto flex-1 min-h-0 select-none scrollbar-none"
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
             >
@@ -2259,6 +2595,7 @@ export default function UberDriverView({
 
                   const isBeingDragged = dragIndex === fullIdx || touchDragIndex === fullIdx;
                   const isDropTarget = (dragOverIndex === fullIdx && dragIndex !== fullIdx) || (touchOverIndex === fullIdx && touchDragIndex !== fullIdx);
+                  const legInfo = getLegInfoForOrder(ord, fullIdx >= 0 ? fullIdx : idx);
 
                   return (
                     <div
@@ -2267,11 +2604,7 @@ export default function UberDriverView({
                       onDragOver={(e) => handleDragOver(e, fullIdx)}
                       onDrop={(e) => handleDrop(e, fullIdx)}
                       onDragEnd={handleDragEnd}
-                      onClick={() => {
-                        handleSelectJob(ord);
-                        setShowDayJobsOverlay(false);
-                      }}
-                      className={`p-2.5 sm:p-3 rounded-2xl border cursor-pointer transition-all duration-150 select-none flex items-center justify-between gap-2.5 ${
+                      className={`p-3 rounded-2xl border transition-all duration-150 select-none flex flex-col gap-2 ${
                         isBeingDragged
                           ? 'opacity-40 bg-cyan-950/40 border-cyan-500 scale-[0.98]'
                           : isDropTarget
@@ -2281,140 +2614,160 @@ export default function UberDriverView({
                           : 'bg-[#16202c]/90 border-white/5 hover:border-white/20 hover:bg-[#1a2634]'
                       }`}
                     >
-                      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
-                        {/* Tactile Drag Handle (esos punticos) */}
-                        <div
-                          draggable={overlayStatusFilter === 'ALL'}
-                          onDragStart={(e) => handleDragStart(e, fullIdx)}
-                          onTouchStart={(e) => {
-                            e.stopPropagation();
-                            handleTouchStart(e, fullIdx);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-slate-500 hover:text-cyan-400 touch-none flex items-center justify-center rounded-lg hover:bg-white/5 transition shrink-0"
-                          title="Mantén presionado para mover parada"
-                        >
-                          <GripVertical className="h-4 w-4 stroke-[2.5]" />
-                        </div>
-
-                        {/* Stop Number Badge with Direct Position Selector */}
-                        <div
-                          className="relative shrink-0 flex items-center justify-center"
-                          onClick={(e) => e.stopPropagation()}
-                          title="Toca para cambiar la posición o número de esta parada directamente"
-                        >
-                          <select
-                            value={stopNumber}
-                            onChange={(e) => {
+                      {/* Top Row: Reorder Handle + Position Dropdown + Address Info + Rate & Move Buttons */}
+                      <div className="flex items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+                          {/* Tactile Drag Handle (Punticos para mover) */}
+                          <div
+                            draggable={overlayStatusFilter === 'ALL'}
+                            onDragStart={(e) => handleDragStart(e, fullIdx)}
+                            onTouchStart={(e) => {
                               e.stopPropagation();
-                              handleMoveToPosition(ord.id, e.target.value);
+                              handleTouchStart(e, fullIdx);
                             }}
-                            onClick={(e) => e.stopPropagation()}
-                            className={`w-8 h-8 rounded-full font-black text-xs cursor-pointer transition shadow-sm font-mono flex items-center justify-center text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-cyan-400 ${
-                              isCompleted
-                                ? 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/40 ring-1 ring-emerald-500/20'
-                                : isCancelled
-                                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
-                                : isTarget
-                                ? 'bg-[#007AFF] text-white border border-blue-400 ring-2 ring-blue-400/30'
-                                : 'bg-[#007AFF]/25 text-[#007AFF] border border-[#007AFF]/40 ring-1 ring-[#007AFF]/20'
-                            }`}
+                            className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-slate-500 hover:text-cyan-400 touch-none flex items-center justify-center rounded-lg hover:bg-white/5 transition shrink-0"
+                            title="Mantén presionado para mover parada"
                           >
-                            {tempOrdersList.map((_, pIdx) => (
-                              <option key={pIdx + 1} value={pIdx + 1} className="bg-slate-900 text-white font-bold">
-                                {pIdx + 1}
-                              </option>
-                            ))}
-                          </select>
+                            <GripVertical className="h-4 w-4 stroke-[2.5]" />
+                          </div>
+
+                          {/* Direct Position Selector Dropdown (Toca para elegir posición 1..N directamente) */}
+                          <div
+                            className="relative shrink-0 flex items-center justify-center"
+                            title="Cambiar posición o número de parada directamente"
+                          >
+                            <select
+                              value={stopNumber}
+                              onChange={(e) => {
+                                handleMoveToPosition(ord.id, e.target.value);
+                              }}
+                              className={`w-8 h-8 rounded-full font-black text-xs cursor-pointer transition shadow-sm font-mono flex items-center justify-center text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-cyan-400 ${
+                                isCompleted
+                                  ? 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/40 ring-1 ring-emerald-500/20'
+                                  : isCancelled
+                                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                                  : isTarget
+                                  ? 'bg-[#007AFF] text-white border border-blue-400 ring-2 ring-blue-400/30'
+                                  : 'bg-[#007AFF]/25 text-[#007AFF] border border-[#007AFF]/40 ring-1 ring-[#007AFF]/20'
+                              }`}
+                            >
+                              {tempOrdersList.map((_, pIdx) => (
+                                <option key={pIdx + 1} value={pIdx + 1} className="bg-slate-900 text-white font-bold">
+                                  {pIdx + 1}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Job Details */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs font-bold text-white truncate leading-tight">
+                                {ord.address}
+                              </span>
+                              {ord.bore_type && ord.bore_type.includes('DW') && (
+                                <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md shrink-0">
+                                  DW
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] sm:text-[10.5px] text-slate-400 flex items-center gap-1.5 mt-0.5 truncate font-mono">
+                              <span>{ord.city || 'Skokie'}</span>
+                              <span>•</span>
+                              <span className="text-cyan-300 font-semibold">#{ord.job_id}</span>
+                              <span>•</span>
+                              <span>{ord.drop_footage || 0} ft</span>
+                              {ord.cable_type && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-slate-300">{ord.cable_type}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Job Details */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs font-bold text-white truncate leading-tight">
-                              {ord.address}
+                        {/* Right: Rate, Status Chip & Up/Down Move Controls */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="text-right flex flex-col items-end">
+                            <div className="text-xs font-mono font-black text-emerald-400">
+                              ${ord.rate_calculated || 100}
+                            </div>
+                            <span className={`text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-0.5 ${
+                              isReported
+                                ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                                : isCompleted
+                                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                : isCancelled
+                                ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                                : 'bg-slate-800 text-slate-300 border border-slate-700'
+                            }`}>
+                              {isReported ? 'Reportado' : (ord.status || 'Pendiente')}
                             </span>
-                            {ord.bore_type && ord.bore_type.includes('DW') && (
-                              <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md shrink-0">
-                                DW
-                              </span>
-                            )}
                           </div>
-                          <div className="text-[10px] sm:text-[10.5px] text-slate-400 flex items-center gap-1.5 mt-0.5 truncate font-mono">
-                            <span>{ord.city || 'Skokie'}</span>
-                            <span>•</span>
-                            <span className="text-cyan-300 font-semibold">#{ord.job_id}</span>
-                            <span>•</span>
-                            <span>{ord.drop_footage || 0} ft</span>
-                            {ord.cable_type && (
-                              <>
-                                <span>•</span>
-                                <span className="text-slate-300">{ord.cable_type}</span>
-                              </>
-                            )}
+
+                          {/* Direct Tactile Up / Down Buttons */}
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveStopUp(ord.id)}
+                              disabled={isFirst}
+                              className={`w-6 h-5 rounded-md flex items-center justify-center border text-[10px] font-bold transition ${
+                                isFirst
+                                  ? 'opacity-20 border-slate-800 text-slate-600'
+                                  : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90 cursor-pointer'
+                              }`}
+                              title="Subir parada"
+                            >
+                              <MoveUp className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveStopDown(ord.id)}
+                              disabled={isLast}
+                              className={`w-6 h-5 rounded-md flex items-center justify-center border text-[10px] font-bold transition ${
+                                isLast
+                                  ? 'opacity-20 border-slate-800 text-slate-600'
+                                  : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90 cursor-pointer'
+                              }`}
+                              title="Bajar parada"
+                            >
+                              <MoveDown className="h-3 w-3" />
+                            </button>
                           </div>
                         </div>
                       </div>
 
-                      {/* Right side: Rate, Status Chip & Up/Down Move Controls */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className="text-right flex flex-col items-end">
-                          <div className="text-xs font-mono font-black text-emerald-400">
-                            ${ord.rate_calculated || 100}
-                          </div>
-                          <span className={`text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-0.5 ${
-                            isReported
-                              ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
-                              : isCompleted
-                              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                              : isCancelled
-                              ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                              : 'bg-slate-800 text-slate-300 border border-slate-700'
-                          }`}>
-                            {isReported ? 'Reportado' : (ord.status || 'Pendiente')}
-                          </span>
+                      {/* Bottom Sub-row: Inter-Stop Travel Time & Distance + "Ver en Mapa" Button */}
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/5">
+                        <div className="min-w-0 flex-1">
+                          {legInfo ? (
+                            <div className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-lg truncate ${
+                              legInfo.isFirst 
+                                ? 'text-cyan-300 bg-cyan-500/10 border border-cyan-500/20' 
+                                : 'text-sky-300 bg-sky-500/15 border border-sky-400/30'
+                            }`}>
+                              <Car className="h-3 w-3 text-sky-400 shrink-0" />
+                              <span className="truncate">{legInfo.text}</span>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-500">Calculando tiempo...</span>
+                          )}
                         </div>
 
-                        {/* Up / Down Buttons for quick tactile reordering */}
-                        <div 
-                          className="flex flex-col gap-0.5" 
-                          onClick={(e) => e.stopPropagation()}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onTouchStart={(e) => e.stopPropagation()}
+                        {/* Explicit button to view on map and close modal */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectJob(ord);
+                            setShowDayJobsOverlay(false);
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-400/30 text-[10.5px] font-bold transition active:scale-95 cursor-pointer shrink-0 shadow-xs"
+                          title="Ver y centrar esta parada en el mapa"
                         >
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMoveStopUp(ord.id);
-                            }}
-                            disabled={isFirst}
-                            className={`w-6 h-5 rounded-md flex items-center justify-center border text-[10px] font-bold transition ${
-                              isFirst
-                                ? 'opacity-20 border-slate-800 text-slate-600'
-                                : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90 cursor-pointer'
-                            }`}
-                            title="Subir parada"
-                          >
-                            <MoveUp className="h-3 w-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMoveStopDown(ord.id);
-                            }}
-                            disabled={isLast}
-                            className={`w-6 h-5 rounded-md flex items-center justify-center border text-[10px] font-bold transition ${
-                              isLast
-                                ? 'opacity-20 border-slate-800 text-slate-600'
-                                : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90 cursor-pointer'
-                            }`}
-                            title="Bajar parada"
-                          >
-                            <MoveDown className="h-3 w-3" />
-                          </button>
-                        </div>
+                          <Navigation className="h-3 w-3 fill-cyan-400/20 text-cyan-400" />
+                          <span>Ver en Mapa</span>
+                        </button>
                       </div>
                     </div>
                   );
