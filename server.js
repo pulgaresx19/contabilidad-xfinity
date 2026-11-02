@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const Tesseract = require('tesseract.js');
+const sharp = require('sharp');
 const { db, parseDispatchLine } = require('./database');
 
 const app = express();
@@ -333,162 +334,109 @@ const uploadExpense = multer({ storage: expenseStorage });
 
 // Helper to extract candidate orders from OCR text
 function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
+  if (!text) return [];
   const lines = text.split('\n').map((l) => l.trim()).filter((l) => l.length > 8);
   const candidates = [];
+  const seenJobs = new Set();
+  const seenAddrs = new Set();
 
-  for (let line of lines) {
-    // Normalize common OCR artifacts
-    line = line.replace(/V\/OLF/gi, 'WOLF')
-               .replace(/\bVi\s+WOLF\b/gi, 'W WOLF')
-               .replace(/\\W\s+/gi, 'W ')
-               .replace(/\bWW\s+WOLF\b/gi, 'W WOLF')
-               .replace(/['"]OSD/gi, 'OSD');
-
-    // Look for Job ID (specifically 6 digits starting with 6 or 7)
-    let jobMatch = line.match(/\b([67]\d{5})\b/);
-    if (!jobMatch) {
-      // Fallback: look for 6-digit number that isn't a date (doesn't contain year 2024-2027)
-      const all6 = [...line.matchAll(/\b(\d{6})\b/g)];
-      for (const m of all6) {
-        if (!/202[4-7]/.test(m[1])) {
-          jobMatch = m;
-          break;
-        }
+  for (const line of lines) {
+    const parsed = parseDispatchLine(line, defaultDate, defaultTech);
+    if (parsed) {
+      const addrKey = (parsed.address || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (addrKey && addrKey !== 'DIRECCIONPORVERIFICAR') {
+        if (seenAddrs.has(addrKey)) continue;
+        seenAddrs.add(addrKey);
       }
+      if (seenJobs.has(parsed.job_id)) continue;
+      seenJobs.add(parsed.job_id);
+      candidates.push(parsed);
     }
-    if (!jobMatch) continue;
+  }
+  return candidates;
+}
 
-    const jobId = jobMatch[1];
-    const postJobText = line.substring(line.indexOf(jobId) + jobId.length).trim();
+// Helper to normalize address for deduplication
+function normalizeAddrKey(addr) {
+  return (addr || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
 
-    // Work Date: always respect defaultDate selected by user, with fallback
-    const workDate = defaultDate || new Date().toISOString().split('T')[0];
+// High-accuracy Smart Scanner with Sharp image preprocessing and row-level Tesseract OCR
+async function smartScanDispatchSheet(imagePath, defaultDate, defaultTech) {
+  const meta = await sharp(imagePath).metadata();
+  const worker = await Tesseract.createWorker('eng');
 
-    // Drop footage: handles DROP, DR0P, DR0, JR0, etc.
-    let dropFootage = 100;
-    const dropMatch = postJobText.match(/(?:DROP|DR0P|DR0|JR0)[:\s->]*([0-9\s.,¢]+?)(?:\/|Type|BORE|TEMP|$)/i);
-    if (dropMatch) {
-      let clean = dropMatch[1].trim()
-        .replace(/¢/g, '0')
-        .replace(/^[->\s:]+/, '')
-        .replace(/\s+/g, '.');
-      const parts = clean.split('.');
-      if (parts.length === 3 && parts[0].length <= 2 && parts[1].length >= 2) {
-        clean = parts[1] + '.' + parts[2];
-      } else if (parts.length > 2) {
-        clean = parts[0] + '.' + parts.slice(1).join('');
-      }
-      const val = parseFloat(clean);
-      if (!isNaN(val) && val > 0 && val < 2000) dropFootage = val;
+  const ordersList = [];
+  const allLines = [];
+
+  // Pass 1: Row-Sliced Pass for table strips or low height images (< 450px)
+  if (meta.height < 450) {
+    const estRows = Math.round(meta.height / 15.1);
+    const rowCount = Math.max(1, estRows);
+    const rowH = meta.height / rowCount;
+
+    await worker.setParameters({ tessedit_pageseg_mode: 7 }); // Single text line mode
+
+    for (let r = 0; r < rowCount; r++) {
+      const top = Math.round(r * rowH);
+      const h = Math.round(rowH);
+
+      const rowBuf = await sharp(imagePath)
+        .extract({ left: 0, top, width: meta.width, height: h })
+        .resize({ width: meta.width * 4, height: h * 4, kernel: 'lanczos3' })
+        .grayscale()
+        .threshold(180)
+        .toBuffer();
+
+      const rowRes = await worker.recognize(rowBuf);
+      const rowLine = rowRes.data.text.trim();
+      if (rowLine) allLines.push(rowLine);
+      const parsed = parseDispatchLine(rowLine, defaultDate, defaultTech);
+      if (parsed) ordersList.push(parsed);
     }
-
-    // Cable type
-    let cableType = 'RG-6';
-    if (/RG-?11/i.test(postJobText)) cableType = 'RG-11';
-
-    // Bore: DW:1 (+30) or SW:1 (+$0)
-    let boreType = 'N';
-    if (/BORE[:\s]*(?:DW|DV)[-:\s/]*1/i.test(postJobText) || /\b(?:DW|DV)[-:\s/]*1\b/i.test(postJobText)) {
-      boreType = 'DW:1';
-    } else if (/BORE[:\s]*(?:SW|SV)[-:\s/]*1/i.test(postJobText) || /\b(?:SW|SV)[-:\s/]*1\b/i.test(postJobText) || /BORE[:\s]*(?:SW|SV)\b/i.test(postJobText)) {
-      boreType = 'SW:1';
-    }
-
-    // Temp
-    const isTemp = /TEMP[:\s-]*Y/i.test(postJobText);
-
-    // Obstacles
-    let obstacles = 'N';
-    const obstMatch = postJobText.match(/Obstacl(?:es|ias)?[:\s]*([A-Za-z, ]+?)(?:\/|Premise|NBR|$)/i);
-    if (obstMatch) obstacles = obstMatch[1].trim();
-
-    // Phone
-    let phone = '';
-    const p10 = postJobText.match(/P#[:\s]*(\d{10})/i) || postJobText.match(/\b(\d{10})\b/);
-    if (p10) {
-      phone = p10[1];
-    } else {
-      const pIndiana = postJobText.match(/(?:#|P#|2#|2%)\s*57[:. -]?(\d{7})/i);
-      if (pIndiana) {
-        phone = '574' + pIndiana[1];
-      } else {
-        const pGen = postJobText.match(/(?:#|P#)[:\s]*(\d{2,3})[:. -]?(\d{7})/i);
-        if (pGen) {
-          const area = pGen[1].length === 2 ? pGen[1] + pGen[1].slice(-1) : pGen[1];
-          phone = (area + pGen[2]).padStart(10, '0');
-        }
-      }
-    }
-
-    // Zip code
-    let zipCode = '46516';
-    const zipMatch = postJobText.match(/\b(46\d{3}(?:-\d{4})?)\b/);
-    if (zipMatch) zipCode = zipMatch[1];
-
-    // City detection
-    let city = 'ELKHART';
-    const cityMatch = postJobText.match(/\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW)\b/i);
-    if (cityMatch) {
-      city = cityMatch[1].toUpperCase();
-    }
-
-    // Address: search in postJobText
-    let address = 'Dirección por verificar';
-    const streetTypes = 'AVE|DR|ST|RD|CIR|BLVD|WAY|LN|CT|LANE|COURT|CIRCLE|BOULEVARD|ROAD|STREET|DRIVE|EDGE|TER|TERRACE|LOOP|TRL|TRAIL|PL|PLACE|RUN|PATH';
-    const addrRegex = new RegExp(`(\\d{1,5}\\s+.*?\\b(?:${streetTypes})\\b[.,]?)`, 'i');
-    const addrMatch = postJobText.match(addrRegex);
-    if (addrMatch) {
-      address = addrMatch[1]
-        .replace(/,\s*$/, '')
-        .replace(/^[:\s,]+/, '')
-        .replace(/\bWW\s+/i, 'W ')
-        .replace(/\bVi\s+/i, 'W ')
-        .replace(/\\W\s+/i, 'W ')
-        .trim();
-    }
-
-    // Rate calculation: $100 base + $30 for Driveway Bore (DW) + $25 por cada 100 ft > 300 ft
-    let rate = 100;
-    if (boreType === 'DW:1' || boreType.includes('DW')) rate += 30;
-    if (dropFootage > 300) {
-      const extraBlocks = Math.floor((dropFootage - 300) / 100);
-      if (extraBlocks > 0) rate += extraBlocks * 25;
-    }
-
-    let detectedNotes = '';
-    if (/urgent[e]?/i.test(line)) {
-      detectedNotes = 'URGENTE';
-    } else if (obstacles && obstacles !== 'N') {
-      detectedNotes = obstacles;
-    }
-
-    candidates.push({
-      work_date: workDate,
-      tech_id: defaultTech || 'Javier (P0G1)',
-      job_id: jobId,
-      address,
-      city,
-      zip_code: zipCode,
-      phone,
-      call_first: /CALLFIRST/i.test(postJobText) ? 1 : 0,
-      drop_footage: dropFootage,
-      cable_type: cableType,
-      bore_type: boreType,
-      is_temp: isTemp ? 1 : 0,
-      obstacles,
-      premise_access: /RQHM/i.test(postJobText) ? 'RQHM' : 'N',
-      neighbor_notice: /NBR[:\s]*2/i.test(postJobText) ? '2' : 'N',
-      raw_notes: detectedNotes,
-      rate_calculated: rate,
-      manual_adjustment: 0,
-      adjustment_reason: '',
-      status: 'Pendiente',
-      payment_status: 'Pendiente',
-      cancel_reason: ''
-    });
   }
 
-  return candidates;
+  // Pass 2: Whole-image High-Resolution Pass (for general camera photos or fallback)
+  if (ordersList.length === 0 || meta.height >= 400) {
+    const fullBuf = await sharp(imagePath)
+      .resize({ width: Math.max(2500, meta.width * 2.5), kernel: 'lanczos3' })
+      .grayscale()
+      .threshold(175)
+      .toBuffer();
+
+    await worker.setParameters({ tessedit_pageseg_mode: 6 }); // Single uniform block of text
+    const fullRes = await worker.recognize(fullBuf);
+    const fullLines = (fullRes.data.text || '').split('\n').map(l => l.trim()).filter(Boolean);
+    allLines.push(...fullLines);
+
+    for (const l of fullLines) {
+      const parsed = parseDispatchLine(l, defaultDate, defaultTech);
+      if (parsed) ordersList.push(parsed);
+    }
+  }
+
+  await worker.terminate();
+
+  // Deduplicate orders by normalized address or job_id
+  const finalOrders = [];
+  const seenAddresses = new Set();
+  const seenJobs = new Set();
+
+  for (const o of ordersList) {
+    const addrKey = normalizeAddrKey(o.address);
+    if (addrKey && addrKey !== 'DIRECCIONPORVERIFICAR') {
+      if (seenAddresses.has(addrKey)) continue;
+      seenAddresses.add(addrKey);
+    }
+    if (seenJobs.has(o.job_id)) continue;
+    seenJobs.add(o.job_id);
+    finalOrders.push(o);
+  }
+
+  return {
+    rawText: allLines.join('\n'),
+    orders: finalOrders
+  };
 }
 
 // -----------------------------------------------------------------------------
@@ -1036,15 +984,26 @@ app.delete('/api/photos/:id', (req, res) => {
 // 8. Smart parser: parse raw dispatch text (multiple lines)
 app.post('/api/parse-dispatch', (req, res) => {
   try {
-    const { rawText } = req.body;
+    const { rawText, defaultDate, defaultTech } = req.body;
     if (!rawText) return res.json({ parsed: [] });
 
     const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
     const parsed = [];
+    const seenJobs = new Set();
+    const seenAddrs = new Set();
 
     for (const line of lines) {
-      const item = parseDispatchLine(line);
-      if (item) parsed.push(item);
+      const item = parseDispatchLine(line, defaultDate, defaultTech);
+      if (item) {
+        const addrKey = normalizeAddrKey(item.address);
+        if (addrKey && addrKey !== 'DIRECCIONPORVERIFICAR') {
+          if (seenAddrs.has(addrKey)) continue;
+          seenAddrs.add(addrKey);
+        }
+        if (seenJobs.has(item.job_id)) continue;
+        seenJobs.add(item.job_id);
+        parsed.push(item);
+      }
     }
 
     res.json({ parsed });
@@ -1584,8 +1543,8 @@ app.post('/api/dispatch-sheets/scan', (req, res, next) => {
     const sheetDate = req.body.sheetDate || req.body.sheet_date || new Date().toISOString().split('T')[0];
     const techId = req.body.techId || req.body.tech_id || 'Javier (P0G1)';
 
-    // Run OCR with Tesseract
-    const { data: { text } } = await Tesseract.recognize(ocrPath, 'eng');
+    // Run smart preprocessed OCR
+    const { rawText, orders: parsedOrders } = await smartScanDispatchSheet(ocrPath, sheetDate, techId);
 
     // Clean up temporary OCR file if distinct from main file
     if (ocrFile && ocrFile.path !== mainFile.path) {
@@ -1596,21 +1555,18 @@ app.post('/api/dispatch-sheets/scan', (req, res, next) => {
       }
     }
 
-    // Extract candidate orders
-    const parsedOrders = extractOrdersFromOcrText(text, sheetDate, techId);
-
     // Save record to dispatch_sheets table
     const relPath = path.join('sheets', mainFile.filename).replace(/\\/g, '/');
     const stmt = db.prepare(`
       INSERT INTO dispatch_sheets (sheet_date, filename, original_name, extracted_text, orders_count)
       VALUES (?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(sheetDate, relPath, mainFile.originalname, text, parsedOrders.length);
+    const result = stmt.run(sheetDate, relPath, mainFile.originalname, rawText, parsedOrders.length);
 
     res.json({
       sheetId: result.lastInsertRowid,
       filename: relPath,
-      extractedText: text,
+      extractedText: rawText,
       ordersCount: parsedOrders.length,
       parsedOrders
     });

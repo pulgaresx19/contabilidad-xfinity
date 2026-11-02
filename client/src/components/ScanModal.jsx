@@ -91,11 +91,15 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
             }
           ]);
         } else {
-          // Guarantee that detected orders default to the selected date and status 'Pendiente'
+          // If sheet date was detected in the sheet, update sheetDate state
+          const detectedDate = (data.parsedOrders && data.parsedOrders[0] && data.parsedOrders[0].work_date) || sheetDate;
+          if (detectedDate && detectedDate !== sheetDate) {
+            setSheetDate(detectedDate);
+          }
           setExtractedOrders(
             (data.parsedOrders || []).map((o) => ({
               ...o,
-              work_date: sheetDate,
+              work_date: o.work_date || detectedDate,
               status: 'Pendiente',
               payment_status: 'Pendiente'
             }))
@@ -189,10 +193,14 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
       const res = await fetch('/api/parse-dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawText: pasteText })
+        body: JSON.stringify({ rawText: pasteText, defaultDate: sheetDate, defaultTech: techId })
       });
       const data = await res.json();
-      if (res.ok && data.parsed.length > 0) {
+      if (res.ok && data.parsed && data.parsed.length > 0) {
+        const detectedDate = data.parsed[0]?.work_date || sheetDate;
+        if (detectedDate && detectedDate !== sheetDate) {
+          setSheetDate(detectedDate);
+        }
         setExtractedOrders(data.parsed);
         setMessage({ type: 'success', text: `¡${data.parsed.length} orden(es) interpretada(s) del texto!` });
       } else {
