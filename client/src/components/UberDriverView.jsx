@@ -1528,25 +1528,9 @@ export default function UberDriverView({
         </div>
       </div>
 
-      {/* 4. RIGHT FLOATING CONTROLS: 3D/2D (TOP) + THEME (BELOW) + CENTRAR EN RUTA + CENTRAR EN GPS */}
+      {/* 4. RIGHT FLOATING CONTROLS: THEME (TOP) + 3D/2D (BELOW) + CENTRAR EN RUTA + CENTRAR EN GPS */}
       <div className="absolute right-3 top-20 z-20 flex flex-col gap-2 pointer-events-auto">
-        {/* 1. Toggle 3D / 2D Perspective (Top) */}
-        <button
-          type="button"
-          onClick={toggle3DView}
-          className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer select-none"
-          title={is3DMode ? 'Modo 3D Activo (Toca para vista 2D)' : 'Modo 2D Activo (Toca para perspectiva 3D)'}
-        >
-          <span className={`text-[11px] transition-colors ${
-            is3DMode 
-              ? 'text-cyan-400 font-black drop-shadow-[0_0_8px_rgba(34,211,238,0.7)]' 
-              : 'text-slate-300 font-bold'
-          }`}>
-            {is3DMode ? '3D' : '2D'}
-          </span>
-        </button>
-
-        {/* 2. Toggle Theme Popover (Below 3D) */}
+        {/* 1. Toggle Theme Popover (Top) */}
         <div className="relative">
           <button
             type="button"
@@ -1587,6 +1571,22 @@ export default function UberDriverView({
             </div>
           )}
         </div>
+
+        {/* 2. Toggle 3D / 2D Perspective (Below Theme) */}
+        <button
+          type="button"
+          onClick={toggle3DView}
+          className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer select-none"
+          title={is3DMode ? 'Modo 3D Activo (Toca para vista 2D)' : 'Modo 2D Activo (Toca para perspectiva 3D)'}
+        >
+          <span className={`text-[11px] transition-colors ${
+            is3DMode 
+              ? 'text-cyan-400 font-black drop-shadow-[0_0_8px_rgba(34,211,238,0.7)]' 
+              : 'text-slate-300 font-bold'
+          }`}>
+            {is3DMode ? '3D' : '2D'}
+          </span>
+        </button>
 
         {/* Recenter on Route Overview */}
         <button

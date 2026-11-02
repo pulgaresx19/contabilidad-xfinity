@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, Upload, Trash2, Camera, Image as ImageIcon, 
   CheckCircle2, AlertCircle, Check, 
@@ -39,6 +39,15 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
 
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
+  const cancelPromptRef = useRef(null);
+
+  useEffect(() => {
+    if (showCancelPrompt && cancelPromptRef.current) {
+      setTimeout(() => {
+        cancelPromptRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 60);
+    }
+  }, [showCancelPrompt]);
 
   if (!isOpen || !order) return null;
 
@@ -240,74 +249,6 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
             <div className="p-2.5 bg-rose-500/15 border border-rose-500/35 rounded-xl text-rose-300 text-xs flex items-center gap-2">
               <AlertCircle className="h-4 w-4 flex-shrink-0 text-rose-400" />
               <span>{error}</span>
-            </div>
-          )}
-
-          {/* Sección Expandible para Declarar Trabajo No Realizado */}
-          {showCancelPrompt && (
-            <div className="p-3.5 bg-rose-950/20 border border-rose-500/30 rounded-2xl space-y-2.5 animate-in fade-in">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-black text-rose-400">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>Declarar Trabajo No Realizado</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowCancelPrompt(false)}
-                  className="text-slate-400 hover:text-white p-1 rounded-lg"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              <p className="text-[11px] text-slate-300">
-                Selecciona o escribe el motivo por el cual no se pudo completar el trabajo en la propiedad:
-              </p>
-
-              {/* Quick Reason Chips */}
-              <div className="flex flex-wrap gap-1.5">
-                {QUICK_CANCEL_REASONS.map((reason) => (
-                  <button
-                    key={reason}
-                    type="button"
-                    onClick={() => setCancelReason(reason)}
-                    className={`text-[10px] px-2.5 py-1 rounded-lg border transition font-medium text-left cursor-pointer ${
-                      cancelReason === reason
-                        ? 'bg-rose-600 text-white border-rose-500 font-bold shadow-sm'
-                        : 'bg-[#131b26] text-slate-300 border-white/10 hover:border-rose-400/50'
-                    }`}
-                  >
-                    {reason}
-                  </button>
-                ))}
-              </div>
-
-              <input
-                type="text"
-                placeholder="Escribe un motivo específico (opcional)..."
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                className="w-full h-9 px-3 text-xs bg-[#0e141f] border border-white/10 focus:border-rose-500 rounded-xl text-white placeholder-slate-500 focus:outline-none"
-              />
-
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowCancelPrompt(false)}
-                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white font-bold cursor-pointer"
-                >
-                  Volver
-                </button>
-                <button
-                  type="button"
-                  disabled={savingCancel}
-                  onClick={handleConfirmCancelled}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow-lg shadow-rose-600/30 flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
-                >
-                  <X className="h-4 w-4 stroke-[3]" />
-                  <span>{savingCancel ? 'Guardando...' : 'Confirmar No Realizado'}</span>
-                </button>
-              </div>
             </div>
           )}
 
@@ -515,7 +456,75 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               </div>
             </div>
           )}
-        </div>
+        {/* Sección Expandible para Declarar Trabajo No Realizado */}
+          {showCancelPrompt && (
+            <div ref={cancelPromptRef} className="p-3.5 bg-rose-950/20 border border-rose-500/30 rounded-2xl space-y-2.5 animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-black text-rose-400">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>Declarar Trabajo No Realizado</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCancelPrompt(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-300">
+                Selecciona o escribe el motivo por el cual no se pudo completar el trabajo en la propiedad:
+              </p>
+
+              {/* Quick Reason Chips */}
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_CANCEL_REASONS.map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => setCancelReason(reason)}
+                    className={`text-[10px] px-2.5 py-1 rounded-lg border transition font-medium text-left cursor-pointer ${
+                      cancelReason === reason
+                        ? 'bg-rose-600 text-white border-rose-500 font-bold shadow-sm'
+                        : 'bg-[#131b26] text-slate-300 border-white/10 hover:border-rose-400/50'
+                    }`}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+
+              <input
+                type="text"
+                placeholder="Escribe un motivo específico (opcional)..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full h-9 px-3 text-xs bg-[#0e141f] border border-white/10 focus:border-rose-500 rounded-xl text-white placeholder-slate-500 focus:outline-none"
+              />
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowCancelPrompt(false)}
+                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white font-bold cursor-pointer"
+                >
+                  Volver
+                </button>
+                <button
+                  type="button"
+                  disabled={savingCancel}
+                  onClick={handleConfirmCancelled}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow-lg shadow-rose-600/30 flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
+                >
+                  <X className="h-4 w-4 stroke-[3]" />
+                  <span>{savingCancel ? 'Guardando...' : 'Confirmar No Realizado'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          </div>
 
         {/* Footer con Acción Directa para Confirmar el Trabajo o Reportar */}
         <div className="px-4 py-3 border-t border-white/8 bg-[#0e1522] flex items-center justify-between gap-2">
