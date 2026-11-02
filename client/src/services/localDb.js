@@ -722,7 +722,8 @@ export async function getWeeklySummary() {
       totalPaid,
       totalFeetAll,
       totalOrdersCount: allOrders.length,
-      totalCompletedCount
+      totalCompletedCount,
+      cutoffDay: cutoffSetting
     }
   };
 }

@@ -60,6 +60,15 @@ export function initApiAdapter() {
           } else if (method === 'POST') {
             const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
             const updated = await localDb.updateSettings(body);
+            try {
+              if (window.originalFetch) {
+                await window.originalFetch('/api/settings', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(body)
+                });
+              }
+            } catch (netErr) {}
             return jsonResponse({ success: true, settings: updated });
           }
         }

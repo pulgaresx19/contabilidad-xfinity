@@ -9,11 +9,13 @@ import { exportAllData, importAllData, clearAllData } from '../services/localDb'
 import { useTheme } from '../context/ThemeContext';
 
 const CUTOFF_LABELS = {
-  '0': 'Domingos (Lunes a Domingo)',
-  '5': 'Viernes (Sábado a Viernes)',
+  '0': 'Domingo (Lunes a Domingo)',
+  '1': 'Lunes (Martes a Lunes)',
+  '2': 'Martes (Miércoles a Martes)',
+  '3': 'Miércoles (Jueves a Miércoles)',
   '4': 'Jueves (Viernes a Jueves)',
-  '6': 'Sábados (Domingo a Sábado)',
-  '3': 'Miércoles (Jueves a Miércoles)'
+  '5': 'Viernes (Sábado a Viernes)',
+  '6': 'Sábado (Domingo a Sábado)',
 };
 
 export default function ProfileView({ techName, summaryData, onRefresh, onOpenSettings }) {
@@ -172,7 +174,7 @@ export default function ProfileView({ techName, summaryData, onRefresh, onOpenSe
             <div>
               <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Día de Cierre de Semana:</span>
               <span className="font-bold text-amber-800 dark:text-amber-300 font-mono text-[11px]">
-                {CUTOFF_LABELS[String(summary.cutoffDay ?? '0')] || 'Domingos (Lunes a Domingo)'}
+                {CUTOFF_LABELS[String(summaryData?.cutoffDay ?? summaryData?.summary?.cutoffDay ?? summary.cutoffDay ?? '0')] || 'Domingo (Lunes a Domingo)'}
               </span>
             </div>
           </div>
@@ -219,92 +221,6 @@ export default function ProfileView({ techName, summaryData, onRefresh, onOpenSe
                 </>
               )}
             </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. FINANCIAL BALANCE: PENDIENTE VS COBRADO */}
-      <div className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 space-y-3.5 shadow-lg">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-            Balance de Contabilidad
-          </span>
-          <span className="text-[10px] text-slate-500 font-mono">Liquidación Semanal</span>
-        </div>
-
-        {/* 2 Big Cards: Pendiente por Cobrar & Total Cobrado */}
-        <div className="grid grid-cols-2 gap-2.5">
-          {/* Pendiente por Cobrar */}
-          <div className="bg-amber-50/70 dark:bg-slate-950/90 border border-amber-200 dark:border-amber-500/30 rounded-2xl p-3.5 space-y-1.5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/5 rounded-full blur-xl pointer-events-none" />
-            <div className="flex items-center justify-between text-amber-700 dark:text-amber-400">
-              <span className="text-[10px] font-black uppercase tracking-wider">Pendiente</span>
-              <Clock className="h-4 w-4" />
-            </div>
-            <div className="text-2xl font-black text-amber-800 dark:text-amber-300 font-mono leading-none pt-0.5">
-              ${(summary.totalPending || 0).toFixed(2)}
-            </div>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
-              Aún no cobrado por confirmar
-            </p>
-          </div>
-
-          {/* Total Cobrado */}
-          <div className="bg-emerald-50/70 dark:bg-slate-950/90 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-3.5 space-y-1.5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
-            <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400">
-              <span className="text-[10px] font-black uppercase tracking-wider">Cobrado</span>
-              <CheckCircle2 className="h-4 w-4" />
-            </div>
-            <div className="text-2xl font-black text-emerald-800 dark:text-emerald-400 font-mono leading-none pt-0.5">
-              ${(summary.totalPaid || 0).toFixed(2)}
-            </div>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
-              Pago recibido y confirmado
-            </p>
-          </div>
-        </div>
-
-        {/* Producción Histórica y Metraje */}
-        <div className="bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-3.5 space-y-2.5">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-              <div className="p-1.5 bg-cyan-100 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400 rounded-lg">
-                <DollarSign className="h-4 w-4" />
-              </div>
-              <span className="font-semibold">Producción Total Histórica</span>
-            </div>
-            <span className="font-black text-slate-900 dark:text-white font-mono text-sm">
-              ${(summary.totalAllEarnings || 0).toFixed(2)}
-            </span>
-          </div>
-
-          <div className="h-px bg-slate-200 dark:bg-slate-800/80" />
-
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-              <div className="p-1.5 bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 rounded-lg">
-                <Ruler className="h-4 w-4" />
-              </div>
-              <span className="font-semibold">Metraje Total Instalado</span>
-            </div>
-            <span className="font-black text-amber-800 dark:text-amber-300 font-mono text-sm">
-              {(summary.totalFeetAll || 0).toLocaleString()} ft
-            </span>
-          </div>
-
-          <div className="h-px bg-slate-200 dark:bg-slate-800/80" />
-
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-              <div className="p-1.5 bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 rounded-lg">
-                <Briefcase className="h-4 w-4" />
-              </div>
-              <span className="font-semibold">Trabajos Completados</span>
-            </div>
-            <span className="font-black text-slate-900 dark:text-slate-200 font-mono text-sm">
-              {summary.totalCompletedCount || 0} de {summary.totalOrdersCount || 0}
-            </span>
           </div>
         </div>
       </div>

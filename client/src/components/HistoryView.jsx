@@ -4,12 +4,22 @@ import {
   Trash2, ExternalLink, Image as ImageIcon, X, DollarSign, 
   Ruler, ChevronRight, Copy, Camera, AlertCircle, FileText, 
   ShieldAlert, CheckCircle, Search, Filter, Sparkles, MapPin, Phone, ShieldCheck, AlertTriangle,
-  BarChart3, Sun, Pencil
+  BarChart3, Sun, Pencil, Briefcase
 } from 'lucide-react';
 import ShareReportModal from './ShareReportModal';
 import TodayView from './TodayView';
 import MonthlyView from './MonthlyView';
 import EditJobModal from './EditJobModal';
+
+const CUTOFF_LABELS = {
+  '0': 'Domingo (Lunes a Domingo)',
+  '1': 'Lunes (Martes a Lunes)',
+  '2': 'Martes (Miércoles a Martes)',
+  '3': 'Miércoles (Jueves a Miércoles)',
+  '4': 'Jueves (Viernes a Jueves)',
+  '5': 'Viernes (Sábado a Viernes)',
+  '6': 'Sábado (Domingo a Sábado)',
+};
 
 export default function HistoryView({ 
   orders = [], 
@@ -38,6 +48,25 @@ export default function HistoryView({
   const totalPendingWeeks = weeks.filter(w => !w.isPaid).reduce((sum, w) => sum + (w.totalEarnings || 0), 0);
   const paidWeeksCount = weeks.filter(w => w.isPaid).length;
   const pendingWeeksCount = weeks.filter(w => !w.isPaid).length;
+
+  // Active Cutoff Day & Global Balance Metrics
+  const activeCutoff = String(summaryData?.cutoffDay ?? summaryData?.summary?.cutoffDay ?? '0');
+  const summary = summaryData?.summary || {};
+  const totalAllEarnings = summary.totalAllEarnings !== undefined 
+    ? summary.totalAllEarnings 
+    : orders.filter(o => o.status === 'Completado').reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
+  const totalPaid = summary.totalPaid !== undefined 
+    ? summary.totalPaid 
+    : orders.filter(o => o.status === 'Completado' && o.payment_status === 'Cobrado').reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
+  const totalPending = summary.totalPending !== undefined 
+    ? summary.totalPending 
+    : orders.filter(o => o.status === 'Completado' && o.payment_status !== 'Cobrado').reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
+  const totalFeetAll = summary.totalFeetAll !== undefined 
+    ? summary.totalFeetAll 
+    : orders.filter(o => o.status !== 'No Realizado').reduce((sum, o) => sum + (parseFloat(o.drop_footage) || 0), 0);
+  const completedOrdersCount = summary.totalCompletedCount !== undefined 
+    ? summary.totalCompletedCount 
+    : orders.filter(o => o.status === 'Completado').length;
 
   // Keep selectedWeekModal updated if summaryData refreshes
   useEffect(() => {
@@ -213,6 +242,26 @@ ${jobLines}
       {/* SUBTAB 2: LISTADO DE CIERRES SEMANALES */}
       {subTab === 'weeks' && (
         <div className="space-y-3">
+          {/* Banner de Ciclo de Cierre Semanal Activo */}
+          <div className="bg-[#101722] border border-white/10 rounded-2xl p-2.5 px-3 flex items-center justify-between text-xs shadow-md">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0 shadow-xs">
+                <Calendar className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[9.5px] uppercase tracking-wider text-slate-400 font-bold block">
+                  Día de Cierre de Semana
+                </span>
+                <span className="text-xs font-black text-amber-300 font-mono block truncate">
+                  {CUTOFF_LABELS[activeCutoff] || 'Sábado (Domingo a Sábado)'}
+                </span>
+              </div>
+            </div>
+            <span className="text-[10px] text-cyan-400 font-mono font-bold bg-cyan-500/10 border border-cyan-500/25 px-2 py-0.5 rounded-lg shrink-0">
+              Activo
+            </span>
+          </div>
+
           {/* Resumen Superior de Cobros (KPIs Estéticos Cockpit) */}
           {weeks.length > 0 && (
             <div className="grid grid-cols-2 gap-2">
@@ -356,6 +405,95 @@ ${jobLines}
       {/* SUBTAB 4: HISTORIAL GENERAL DE TODOS LOS TRABAJOS (CON BUSCADOR Y FILTROS) */}
       {subTab === 'all_orders' && (
         <div className="space-y-3">
+          {/* BALANCE DE CONTABILIDAD GENERAL (REPORTE HISTÓRICO COMPLETO) */}
+          <div className="bg-[#0f1722]/95 border border-white/10 rounded-3xl p-4 space-y-3.5 shadow-xl backdrop-blur-xl">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 flex items-center justify-center">
+                  <DollarSign className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-xs font-black text-white uppercase tracking-wider">
+                  Balance de Contabilidad General
+                </span>
+              </div>
+              <span className="text-[10px] text-cyan-400 font-mono font-bold bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-lg">
+                Histórico
+              </span>
+            </div>
+
+            {/* 2 Big Cards: Pendiente por Cobrar & Total Cobrado */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="bg-[#131b26] border border-amber-500/30 rounded-2xl p-3 space-y-1 relative overflow-hidden shadow-md">
+                <div className="flex items-center justify-between text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+                  <span>Pendiente</span>
+                  <Clock className="h-3.5 w-3.5" />
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-amber-300 font-mono leading-none pt-0.5 drop-shadow-[0_0_8px_rgba(251,191,36,0.2)]">
+                  ${totalPending.toFixed(2)}
+                </div>
+                <p className="text-[9.5px] text-slate-400 leading-tight">
+                  Aún por liquidar
+                </p>
+              </div>
+
+              <div className="bg-[#131b26] border border-emerald-500/30 rounded-2xl p-3 space-y-1 relative overflow-hidden shadow-md">
+                <div className="flex items-center justify-between text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                  <span>Cobrado</span>
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-emerald-400 font-mono leading-none pt-0.5 drop-shadow-[0_0_8px_rgba(52,211,153,0.2)]">
+                  ${totalPaid.toFixed(2)}
+                </div>
+                <p className="text-[9.5px] text-slate-400 leading-tight">
+                  Liquidado y confirmado
+                </p>
+              </div>
+            </div>
+
+            {/* Producción Histórica, Metraje y Trabajos */}
+            <div className="bg-[#131b26] border border-white/5 rounded-2xl p-3 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-slate-300">
+                  <div className="p-1 bg-cyan-500/15 text-cyan-400 rounded-lg border border-cyan-500/30">
+                    <DollarSign className="h-3.5 w-3.5" />
+                  </div>
+                  <span className="font-bold text-[11px]">Producción Total Histórica</span>
+                </div>
+                <span className="font-black text-white font-mono text-sm">
+                  ${totalAllEarnings.toFixed(2)}
+                </span>
+              </div>
+
+              <div className="h-px bg-white/5" />
+
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-slate-300">
+                  <div className="p-1 bg-amber-500/15 text-amber-400 rounded-lg border border-amber-500/30">
+                    <Ruler className="h-3.5 w-3.5" />
+                  </div>
+                  <span className="font-bold text-[11px]">Metraje Total Instalado</span>
+                </div>
+                <span className="font-black text-amber-300 font-mono text-sm">
+                  {Math.round(totalFeetAll).toLocaleString()} ft
+                </span>
+              </div>
+
+              <div className="h-px bg-white/5" />
+
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-slate-300">
+                  <div className="p-1 bg-blue-500/15 text-blue-400 rounded-lg border border-blue-500/30">
+                    <Briefcase className="h-3.5 w-3.5" />
+                  </div>
+                  <span className="font-bold text-[11px]">Trabajos Completados</span>
+                </div>
+                <span className="font-black text-cyan-300 font-mono text-sm">
+                  {completedOrdersCount} de {orders.length}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* BUSCADOR GENERAL INTELIGENTE */}
           <div className="relative">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />

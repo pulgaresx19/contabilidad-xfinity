@@ -8,7 +8,7 @@ import {
   Car, Calendar, ArrowRight, ArrowLeft, 
   X, Plus, Play, Pause, MoreHorizontal,
   ExternalLink, Check, Sun, Moon, Globe,
-  Route, MoveUp, MoveDown, CheckCheck, Zap, Maximize2, GripVertical
+  Route, MoveUp, MoveDown, CheckCheck, Zap, Maximize2, GripVertical, ArrowUpDown
 } from 'lucide-react';
 import { formatDateFriendly, normalizeDateStr, formatRouteDuration } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
@@ -218,6 +218,8 @@ export default function UberDriverView({
   const [showDayJobsOverlay, setShowDayJobsOverlay] = useState(false);
   const [overlayStatusFilter, setOverlayStatusFilter] = useState('ALL');
   const [hasOrderChanged, setHasOrderChanged] = useState(false);
+  const [optimizationMode, setOptimizationMode] = useState('none'); // 'none' | 'nearest' | 'furthest'
+  const originalManualListRef = useRef([]);
 
   // Live responsive orders state that updates in 0 ms during reordering
   const [liveOrders, setLiveOrders] = useState(orders);
@@ -529,6 +531,8 @@ export default function UberDriverView({
           geometry: { type: 'LineString', coordinates: [] }
         });
       }
+      travesiaBadgeMarkersRef.current.forEach(m => m.remove());
+      travesiaBadgeMarkersRef.current = [];
       return;
     }
 
@@ -545,6 +549,8 @@ export default function UberDriverView({
           geometry: { type: 'LineString', coordinates: [] }
         });
       }
+      travesiaBadgeMarkersRef.current.forEach(m => m.remove());
+      travesiaBadgeMarkersRef.current = [];
       return;
     }
 
@@ -840,6 +846,33 @@ export default function UberDriverView({
   useEffect(() => {
     if (activeOrders.length === 0) {
       setSelectedOrder(null);
+      setActiveRouteInfo(null);
+      setAvailableRoutes([]);
+      setTravesiaLegs([]);
+      setTravesiaSummary({ totalMiles: 0, totalMinutes: 0 });
+
+      // Clean all map polyline sources and badges immediately
+      const map = mapInstanceRef.current;
+      if (map) {
+        if (map.getSource('route-nav')) {
+          map.getSource('route-nav').setData({
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'LineString', coordinates: [] }
+          });
+        }
+        if (map.getSource('route-travesia')) {
+          map.getSource('route-travesia').setData({
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'LineString', coordinates: [] }
+          });
+        }
+        routeBadgeMarkersRef.current.forEach(m => m.remove());
+        routeBadgeMarkersRef.current = [];
+        travesiaBadgeMarkersRef.current.forEach(m => m.remove());
+        travesiaBadgeMarkersRef.current = [];
+      }
       return;
     }
 
@@ -1308,6 +1341,26 @@ export default function UberDriverView({
           routeBadgeMarkersRef.current.push(activeMarker);
         }
       });
+    } else {
+      // Clear route lines and badges if no active destination for this date
+      if (map.getSource('route-nav')) {
+        map.getSource('route-nav').setData({
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: [] }
+        });
+      }
+      if (map.getSource('route-travesia')) {
+        map.getSource('route-travesia').setData({
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: [] }
+        });
+      }
+      setActiveRouteInfo(null);
+      setAvailableRoutes([]);
+      setTravesiaLegs([]);
+      setTravesiaSummary({ totalMiles: 0, totalMinutes: 0 });
     }
 
     // Camera Framing with 3D perspective
@@ -1321,6 +1374,13 @@ export default function UberDriverView({
         pitch: is3DMode ? 48 : 0,
         maxZoom: 15.5,
         duration: 800
+      });
+    } else if (startCoords) {
+      map.flyTo({
+        center: startCoords,
+        zoom: 13,
+        pitch: is3DMode ? 45 : 0,
+        essential: true
       });
     }
   }, [activeOrders, selectedOrder?.id, selectedOrder?.route_order, selectedOrder?.latitude, selectedOrder?.longitude, userLocation, is3DMode, mapTheme, selectedRouteIdx]);
@@ -1374,6 +1434,8 @@ export default function UberDriverView({
   // OPEN UNIFIED DAY JOBS & TRAVESÍA MODAL
   const handleOpenDayJobsModal = () => {
     setTempOrdersList([...activeOrders]);
+    originalManualListRef.current = [...activeOrders];
+    setOptimizationMode('none');
     setHasOrderChanged(false);
     setOptimizedNotice(null);
     setDragIndex(null);
@@ -1474,6 +1536,7 @@ export default function UberDriverView({
     setTempOrdersList(updatedSequence);
     setLiveOrders(updatedSequence);
     setHasOrderChanged(true);
+    setOptimizationMode('none');
     setOptimizedNotice(null);
 
     // Apply live immediately to live map and order indicators!
@@ -1498,6 +1561,7 @@ export default function UberDriverView({
     setTempOrdersList(updatedSequence);
     setLiveOrders(updatedSequence);
     setHasOrderChanged(true);
+    setOptimizationMode('none');
     setOptimizedNotice(null);
     await applyOrdersSequenceLive(updatedSequence);
   };
@@ -1520,6 +1584,7 @@ export default function UberDriverView({
     setTempOrdersList(updatedSequence);
     setLiveOrders(updatedSequence);
     setHasOrderChanged(true);
+    setOptimizationMode('none');
     setOptimizedNotice(null);
     await applyOrdersSequenceLive(updatedSequence);
   };
@@ -1598,26 +1663,59 @@ export default function UberDriverView({
     setTouchOverIndex(null);
   };
 
-  // RUN AUTO-OPTIMIZER FOR SHORTEST ROUTE (TSP NEAREST NEIGHBOR)
-  const handleAutoOptimizeTrip = async () => {
+  // TOGGLE AUTO-OPTIMIZATION: NEAREST FIRST VS FURTHEST FIRST OR RETURN TO MANUAL
+  const handleToggleOptimization = async (targetMode) => {
+    // If the clicked optimization mode is already active, DESELECT IT and revert to manual
+    if (optimizationMode === targetMode) {
+      setOptimizationMode('none');
+      setOptimizedNotice(null);
+      if (originalManualListRef.current && originalManualListRef.current.length > 0) {
+        setTempOrdersList([...originalManualListRef.current]);
+        setLiveOrders([...originalManualListRef.current]);
+        await applyOrdersSequenceLive(originalManualListRef.current);
+      }
+      return;
+    }
+
+    // Save initial manual order if switching from 'none'
+    if (optimizationMode === 'none') {
+      originalManualListRef.current = [...tempOrdersList];
+    }
+
     const origin = userLocation || { lat: DEFAULT_LNG_LAT[1], lng: DEFAULT_LNG_LAT[0] };
     const beforeMiles = calculateTotalTripMiles(tempOrdersList, origin);
-    const optimized = optimizeStopsSequence(tempOrdersList, origin);
-    const afterMiles = calculateTotalTripMiles(optimized, origin);
+
+    let newSequence;
+    if (targetMode === 'nearest') {
+      // 1. Ruta más corta / Más cercano primero (TSP Nearest-Neighbor)
+      newSequence = optimizeStopsSequence(tempOrdersList, origin);
+    } else {
+      // 2. Ruta Inversa / Más lejano primero (del más distante al más cercano)
+      const nearestSeq = optimizeStopsSequence(tempOrdersList, origin);
+      const valid = nearestSeq.filter(o => o.latitude && o.longitude);
+      const invalid = nearestSeq.filter(o => !o.latitude || !o.longitude);
+      newSequence = [...valid.reverse(), ...invalid];
+    }
+
+    const afterMiles = calculateTotalTripMiles(newSequence, origin);
     const saved = Math.max(0, beforeMiles - afterMiles);
 
-    setTempOrdersList(optimized);
-    setLiveOrders(optimized);
+    setOptimizationMode(targetMode);
+    setTempOrdersList(newSequence);
+    setLiveOrders(newSequence);
     setHasOrderChanged(true);
     setOptimizedNotice({
+      mode: targetMode,
       savedMiles: saved.toFixed(1),
       totalMiles: afterMiles.toFixed(1),
       savedMinutes: Math.round(saved * 2.2)
     });
 
     // Apply live immediately to live map and state!
-    await applyOrdersSequenceLive(optimized);
+    await applyOrdersSequenceLive(newSequence);
   };
+
+  const handleAutoOptimizeTrip = () => handleToggleOptimization('nearest');
 
   // SAVE AND APPLY REORDERED TRAVESÍA
   const handleSaveTripOrder = async () => {
@@ -2571,22 +2669,64 @@ export default function UberDriverView({
               </div>
             </div>
 
-            {/* Auto Optimize Shortest Route Action Bar */}
-            <div className="px-4 py-2.5 bg-[#0e1622] border-b border-white/5 shrink-0 space-y-1.5">
-              <button
-                type="button"
-                onClick={handleAutoOptimizeTrip}
-                className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black text-xs shadow-md shadow-cyan-600/20 flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer"
-              >
-                <Route className="h-3.5 w-3.5 stroke-[2.2]" />
-                <span>⚡ Optimizar Ruta Más Corta (Automático)</span>
-              </button>
+            {/* Auto Optimize Shortest / Furthest Route Action Bar */}
+            <div className="px-4 py-2.5 bg-[#0e1622] border-b border-white/5 shrink-0 space-y-2">
+              <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold px-0.5">
+                <span className="uppercase tracking-wider">Modo de Organización</span>
+                <span className="font-mono text-cyan-400 font-bold">
+                  {optimizationMode === 'nearest'
+                    ? '⚡ Más cercano primero'
+                    : optimizationMode === 'furthest'
+                    ? '📍 Más lejano primero'
+                    : '🖐️ Manual (Flechas o arrastrar)'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {/* Botón 1: Más cercano primero (Ruta más corta) */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleOptimization('nearest')}
+                  className={`py-2 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-sm select-none ${
+                    optimizationMode === 'nearest'
+                      ? 'bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 text-white border border-cyan-400/50 shadow-cyan-500/25 ring-1 ring-cyan-400/40'
+                      : 'bg-[#16202c] hover:bg-[#1e2a3a] text-slate-300 hover:text-white border border-white/10'
+                  }`}
+                  title="Organizar por la ruta más corta (del más cercano en adelante). Toca otra vez para deseleccionar y dejar manual."
+                >
+                  <Route className="h-3.5 w-3.5 stroke-[2.2] shrink-0 text-cyan-300" />
+                  <span className="truncate">⚡ Más cercano</span>
+                  {optimizationMode === 'nearest' && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 ml-auto animate-pulse" />
+                  )}
+                </button>
+
+                {/* Botón 2: Más lejano primero (Inversa / De largo a corto) */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleOptimization('furthest')}
+                  className={`py-2 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-sm select-none ${
+                    optimizationMode === 'furthest'
+                      ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white border border-purple-400/50 shadow-purple-500/25 ring-1 ring-purple-400/40'
+                      : 'bg-[#16202c] hover:bg-[#1e2a3a] text-slate-300 hover:text-white border border-white/10'
+                  }`}
+                  title="Organizar del más lejano/largo al más corto. Toca otra vez para deseleccionar y dejar manual."
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5 stroke-[2.2] shrink-0 text-purple-300" />
+                  <span className="truncate">📍 Más lejano</span>
+                  {optimizationMode === 'furthest' && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-300 shrink-0 ml-auto animate-pulse" />
+                  )}
+                </button>
+              </div>
 
               {optimizedNotice && (
                 <div className="p-2 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-[10.5px] text-emerald-300 font-bold flex items-center gap-2">
                   <CheckCheck className="h-4 w-4 text-emerald-400 shrink-0" />
                   <span>
-                    ¡Ruta optimizada! Ahorras ~{optimizedNotice.savedMiles} mi ({formatRouteDuration(optimizedNotice.savedMinutes, true)}). Total estimado: {optimizedNotice.totalMiles} mi.
+                    {optimizedNotice.mode === 'nearest'
+                      ? `¡Ruta más corta organizada! Ahorras ~${optimizedNotice.savedMiles} mi (${formatRouteDuration(optimizedNotice.savedMinutes, true)}). Total: ${optimizedNotice.totalMiles} mi.`
+                      : `¡Ruta inversa organizada! Comienzas por el punto más distante y terminas cerca de casa. Total: ${optimizedNotice.totalMiles} mi.`}
                   </span>
                 </div>
               )}
