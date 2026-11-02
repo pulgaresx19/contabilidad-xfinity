@@ -1227,8 +1227,7 @@ export default function UberDriverView({
             ${stopNumber}
           </div>
           <div class="apple-dest-pointer"></div>
-          <div class="apple-dest-label flex items-center gap-1 font-bold">
-            <span class="text-cyan-400 font-black font-mono">#${stopNumber}</span>
+          <div class="apple-dest-label font-bold text-center">
             <span>${order.address || 'Destino'}</span>
           </div>
         `;
