@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { 
   X, Upload, Trash2, Camera, Image as ImageIcon, 
-  CheckCircle2, AlertCircle, Sparkles, Check, ArrowRight, ShieldCheck, Plus,
-  ExternalLink, Share2, Copy, MapPin
+  CheckCircle2, AlertCircle, Check, 
+  ExternalLink, Share2, Copy
 } from 'lucide-react';
 import ShareReportModal from './ShareReportModal';
 import { stampPhotoWithWatermark } from '../utils/watermark';
@@ -199,67 +199,68 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
       <div 
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors mx-auto"
+        className="bg-[#0c121c] text-white border border-white/10 ring-1 ring-white/5 w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl shadow-black/90 overflow-hidden flex flex-col max-h-[90vh] mx-auto transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         
-        {/* Header Compacto y Directo */}
-        <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/70">
+        {/* Header Compacto y Directo al estilo Cockpit */}
+        <div className="px-4.5 py-3.5 border-b border-white/8 flex items-center justify-between bg-[#0e1522]">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="p-2 rounded-xl bg-cyan-500/10 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 flex-shrink-0">
-              <Camera className="h-5 w-5 stroke-[2.5]" />
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-500/25 to-blue-600/25 text-cyan-300 border border-cyan-400/40 flex items-center justify-center shrink-0 shadow-xs">
+              <Camera className="h-4 w-4 stroke-[2.2]" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="font-black text-slate-900 dark:text-white text-sm sm:text-base tracking-tight truncate">
-                  Evidencias Fotográficas
+                <h3 className="font-black text-white text-sm sm:text-base tracking-tight truncate">
+                  Evidencias del Trabajo
                 </h3>
-                <span className="text-[11px] font-mono font-bold bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-800 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-400/30 px-2 py-0.5 rounded-full shrink-0">
                   #{order.job_id}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                {order.address} {order.city ? `• ${order.city}` : ''}
+              <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">
+                {order.address}{order.city ? ` • ${order.city}` : ''}
               </p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-xl bg-slate-200/70 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition flex-shrink-0"
+            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10 flex items-center justify-center transition active:scale-90 cursor-pointer shrink-0"
             title="Cerrar"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Cuerpo del Modal */}
-        <div className="p-4 overflow-y-auto space-y-4 flex-1">
+        <div className="p-4 overflow-y-auto space-y-3.5 flex-1 scrollbar-none">
           {error && (
-            <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-600 dark:text-rose-300 text-xs flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <div className="p-2.5 bg-rose-500/15 border border-rose-500/35 rounded-xl text-rose-300 text-xs flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 flex-shrink-0 text-rose-400" />
               <span>{error}</span>
             </div>
           )}
 
           {/* Sección Expandible para Declarar Trabajo No Realizado */}
           {showCancelPrompt && (
-            <div className="p-3.5 bg-rose-500/10 dark:bg-rose-950/40 border border-rose-500/40 rounded-2xl space-y-2.5 animate-in fade-in">
+            <div className="p-3.5 bg-rose-950/20 border border-rose-500/30 rounded-2xl space-y-2.5 animate-in fade-in">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-black text-rose-600 dark:text-rose-400">
+                <div className="flex items-center gap-1.5 text-xs font-black text-rose-400">
                   <AlertCircle className="h-4 w-4" />
                   <span>Declarar Trabajo No Realizado</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowCancelPrompt(false)}
-                  className="text-slate-400 hover:text-slate-200 p-1 rounded-lg"
+                  className="text-slate-400 hover:text-white p-1 rounded-lg"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <p className="text-[11px] text-slate-600 dark:text-slate-300">
+              <p className="text-[11px] text-slate-300">
                 Selecciona o escribe el motivo por el cual no se pudo completar el trabajo en la propiedad:
               </p>
 
@@ -273,7 +274,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                     className={`text-[10px] px-2.5 py-1 rounded-lg border transition font-medium text-left cursor-pointer ${
                       cancelReason === reason
                         ? 'bg-rose-600 text-white border-rose-500 font-bold shadow-sm'
-                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-rose-400'
+                        : 'bg-[#131b26] text-slate-300 border-white/10 hover:border-rose-400/50'
                     }`}
                   >
                     {reason}
@@ -286,14 +287,14 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                 placeholder="Escribe un motivo específico (opcional)..."
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
-                className="w-full h-9 px-3 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:border-rose-500 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                className="w-full h-9 px-3 text-xs bg-[#0e141f] border border-white/10 focus:border-rose-500 rounded-xl text-white placeholder-slate-500 focus:outline-none"
               />
 
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => setShowCancelPrompt(false)}
-                  className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white font-bold cursor-pointer"
+                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white font-bold cursor-pointer"
                 >
                   Volver
                 </button>
@@ -311,19 +312,19 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
           )}
 
           {/* Selector de Pasos Rápido (Chips Horizontales con Iconos) */}
-          <div className="bg-slate-50 dark:bg-slate-950/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-800/80 space-y-2">
+          <div className="bg-[#131b26] p-3 rounded-2xl border border-white/8 space-y-2">
             <div className="flex items-center justify-between text-[11px]">
-              <span className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px]">
+              <span className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">
                 Paso actual de la foto:
               </span>
-              <label className="flex items-center gap-1.5 cursor-pointer text-slate-500 dark:text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 select-none">
+              <label className="flex items-center gap-1.5 cursor-pointer text-slate-400 hover:text-cyan-300 select-none text-[10px]">
                 <input
                   type="checkbox"
                   checked={autoAdvance}
                   onChange={(e) => setAutoAdvance(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 dark:border-slate-700 text-cyan-500 focus:ring-0"
+                  className="h-3.5 w-3.5 rounded border-white/20 bg-[#0e141f] text-cyan-500 focus:ring-0"
                 />
-                <span className="text-[10px]">Auto-avanzar paso</span>
+                <span>Auto-avanzar paso</span>
               </label>
             </div>
 
@@ -337,12 +338,12 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                     type="button"
                     key={step.id}
                     onClick={() => setCategory(step.id)}
-                    className={`py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border text-center ${
+                    className={`py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border text-center cursor-pointer ${
                       isSelected
-                        ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md shadow-cyan-500/20'
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/60 shadow-xs shadow-cyan-500/15'
                         : hasPhotosInStep
-                        ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30'
-                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        : 'bg-[#0e1522] text-slate-400 border-white/5 hover:border-white/10 hover:text-slate-200'
                     }`}
                   >
                     <span>{step.icon}</span>
@@ -353,8 +354,8 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
             </div>
           </div>
 
-          {/* Botones de Captura Rápida (Cámara de Móvil directa y Galería) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-1">
+          {/* Botones de Captura Rápida: Estéticos, Ergonómicos y Discretos */}
+          <div className="grid grid-cols-2 gap-2 my-0.5">
             {/* Input oculto para cámara directa (capture="environment") */}
             <input
               ref={cameraInputRef}
@@ -366,7 +367,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               className="hidden"
             />
 
-            {/* Input oculto para galería directa (especificando formatos de imagen para evitar menú de cámara) */}
+            {/* Input oculto para galería directa */}
             <input
               ref={galleryInputRef}
               type="file"
@@ -377,73 +378,33 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               className="hidden"
             />
 
-            {/* Botón Principal: Abrir Cámara al instante */}
+            {/* Botón Tomar Foto */}
             <button
               type="button"
               onClick={() => cameraInputRef.current?.click()}
               disabled={uploading}
-              className="py-3.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-95 text-slate-950 font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 transition cursor-pointer"
+              className="h-11 px-3 bg-gradient-to-r from-cyan-500/20 to-blue-600/20 hover:from-cyan-500/30 hover:to-blue-600/30 active:scale-95 text-cyan-300 border border-cyan-400/40 hover:border-cyan-300 font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-xs shadow-cyan-500/10 transition cursor-pointer disabled:opacity-50"
             >
-              <Camera className="h-5 w-5 stroke-[2.5]" />
-              <span>{uploading ? 'Estampando GPS...' : 'Abrir Cámara'}</span>
+              <Camera className="h-4 w-4 stroke-[2.2] text-cyan-400" />
+              <span>{uploading ? 'Estampando GPS...' : 'Tomar Foto'}</span>
             </button>
 
-            {/* Botón Secundario: Seleccionar de Galería directamente */}
+            {/* Botón Desde Galería */}
             <button
               type="button"
               onClick={() => galleryInputRef.current?.click()}
               disabled={uploading}
-              className="py-3.5 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 text-slate-800 dark:text-slate-200 font-bold text-sm rounded-2xl border border-slate-300 dark:border-slate-700/80 flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
+              className="h-11 px-3 bg-[#131b26] hover:bg-[#182332] active:scale-95 text-slate-300 hover:text-white border border-white/10 hover:border-white/20 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer shadow-xs disabled:opacity-50"
             >
-              <Upload className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
-              <span>{uploading ? 'Procesando...' : 'Subir de Galería'}</span>
+              <Upload className="h-4 w-4 stroke-[2] text-slate-400" />
+              <span>{uploading ? 'Procesando...' : 'Desde Galería'}</span>
             </button>
           </div>
 
-          {/* Sello GPS y Timestamp Activo */}
-          <div className="flex items-center justify-between text-[11px] bg-slate-900/60 dark:bg-slate-950/80 border border-cyan-500/30 rounded-xl px-3 py-1.5 text-slate-300">
-            <div className="flex items-center gap-1.5 font-medium">
-              <MapPin className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
-              <span>Sello Automático GPS & Timestamp</span>
-            </div>
-            <span className="text-[10px] font-bold text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded-full border border-cyan-800">
-              Activo ✓
-            </span>
-          </div>
-
-          {/* Estado de Requisito de Fotos de Trabajo */}
-          <div className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
-            workPhotosCount > 0
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
-              : 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300'
-          }`}>
-            <div className="flex items-center gap-2 min-w-0">
-              {workPhotosCount > 0 ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-              ) : (
-                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-              )}
-              <span className="font-semibold truncate">
-                {workPhotosCount > 0 
-                  ? `Requisito de instalación cumplido: ${workPhotosCount} ${workPhotosCount === 1 ? 'foto subida' : 'fotos subidas'}`
-                  : 'Falta foto de instalación para poder confirmar'}
-              </span>
-            </div>
-            <span className={`font-mono font-bold text-xs shrink-0 px-2 py-0.5 rounded-lg border ${
-              workPhotosCount > 0
-                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
-            }`}>
-              {workPhotosCount > 0 
-                ? `${workPhotosCount} ${workPhotosCount === 1 ? 'foto' : 'fotos'}`
-                : 'Mínimo 1'}
-            </span>
-          </div>
-
           {/* Galería Compacta de Fotos de Instalación */}
-          <div className="space-y-2">
+          <div className="space-y-2 pt-0.5">
             <div className="flex items-center justify-between gap-1 flex-wrap">
-              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Fotos de Instalación ({workPhotosCount})
               </span>
 
@@ -452,42 +413,42 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                 <button
                   type="button"
                   onClick={handleCopyReportDirect}
-                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-2xs"
+                  className="px-2.5 py-1 bg-[#131b26] hover:bg-[#182332] text-slate-300 border border-white/10 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
                   title="Copiar texto del reporte para pegar en WhatsApp"
                 >
-                  {copiedReportText ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-cyan-500" />}
+                  {copiedReportText ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3 text-cyan-400" />}
                   <span>{copiedReportText ? '¡Copiado!' : 'Copiar Reporte'}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setIsShareModalOpen(true)}
-                  className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-2xs"
+                  className="px-2.5 py-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
                   title="Abrir ventana para enviar reporte y fotos por WhatsApp"
                 >
-                  <Share2 className="h-3 w-3 text-emerald-500" />
+                  <Share2 className="h-3 w-3 text-emerald-400" />
                   <span>Reportar WhatsApp</span>
                 </button>
               </div>
             </div>
 
             {workPhotosCount === 0 ? (
-              <div className="text-center py-6 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-950/40">
-                <ImageIcon className="h-8 w-8 text-slate-400 dark:text-slate-600 mx-auto mb-1.5" />
-                <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold">
+              <div className="text-center py-7 border border-dashed border-white/10 rounded-2xl bg-[#101722]/60">
+                <ImageIcon className="h-7 w-7 text-slate-600 mx-auto mb-1.5" />
+                <p className="text-xs text-slate-400 font-medium">
                   Aún no hay fotos de la instalación
                 </p>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-                  Toca "Abrir Cámara" para tirar la foto de la vivienda o zanja
+                <p className="text-[10.5px] text-slate-500 mt-0.5">
+                  Toca "Tomar Foto" para registrar la evidencia con sello GPS
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {workPhotos.map((photo) => (
                   <div
                     key={photo.id}
                     onClick={() => setPreviewPhoto(photo.photo_data || `/uploads/${photo.filename}`)}
-                    className="group relative bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl overflow-hidden aspect-video shadow-sm transition cursor-pointer hover:border-cyan-400/60"
+                    className="group relative bg-[#131b26] border border-white/10 hover:border-cyan-400/50 rounded-xl overflow-hidden aspect-video shadow-xs transition cursor-pointer"
                   >
                     <img
                       src={photo.photo_data || `/uploads/${photo.filename}`}
@@ -496,14 +457,14 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-between p-1.5">
                       <div className="flex justify-between items-center" onClick={(e) => e.stopPropagation()}>
-                        <span className="text-[9px] bg-black/70 text-cyan-300 px-1.5 py-0.5 rounded font-semibold truncate max-w-[85%]">
+                        <span className="text-[9px] bg-black/80 backdrop-blur-xs text-cyan-300 border border-cyan-400/20 px-1.5 py-0.5 rounded font-bold truncate max-w-[85%]">
                           {photo.category}
                         </span>
                         <button
                           type="button"
                           onClick={() => handleDeletePhoto(photo.id)}
                           title="Eliminar foto"
-                          className="p-1 bg-rose-600 hover:bg-rose-500 text-white rounded transition shadow active:scale-90"
+                          className="p-1 bg-black/70 hover:bg-rose-600 text-slate-300 hover:text-white rounded-md transition shadow active:scale-90 cursor-pointer"
                         >
                           <Trash2 className="h-3 w-3" />
                         </button>
@@ -511,7 +472,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                       <button
                         type="button"
                         onClick={() => setPreviewPhoto(photo.photo_data || `/uploads/${photo.filename}`)}
-                        className="text-[10px] text-slate-200 truncate hover:text-cyan-300 hover:underline flex items-center gap-1 self-start"
+                        className="text-[10px] text-slate-300 truncate hover:text-cyan-300 hover:underline flex items-center gap-1 self-start font-medium cursor-pointer"
                       >
                         <span>Ver completa</span>
                         <ExternalLink className="h-2.5 w-2.5" />
@@ -527,16 +488,16 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
           {cancelPhotos.length > 0 && (
             <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300">
-                  <AlertCircle className="h-4 w-4 text-amber-500" />
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                  <AlertCircle className="h-4 w-4 text-amber-400" />
                   <span>Constancia de Cancelación Previa ({cancelPhotos.length})</span>
                 </div>
-                <span className="text-[10px] bg-amber-500/20 text-amber-800 dark:text-amber-300 font-bold px-2 py-0.5 rounded-full">
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
                   Histórico
                 </span>
               </div>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                Evidencias de cuando el trabajo estuvo No Realizado. Quedan como constancia de seguridad y no interfieren con la instalación.
+              <p className="text-[10px] text-slate-400">
+                Evidencias de cuando el trabajo estuvo No Realizado. Quedan como constancia de seguridad.
               </p>
               <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
                 {cancelPhotos.map((photo) => (
@@ -557,12 +518,12 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
         </div>
 
         {/* Footer con Acción Directa para Confirmar el Trabajo o Reportar */}
-        <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 flex items-center justify-between gap-2">
+        <div className="px-4 py-3 border-t border-white/8 bg-[#0e1522] flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="h-10 px-3.5 bg-slate-200/80 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition shrink-0 cursor-pointer"
+              className="h-10 px-3.5 bg-[#141b24] hover:bg-[#1a2330] text-slate-300 text-xs font-bold rounded-xl border border-white/10 transition shrink-0 cursor-pointer active:scale-95"
             >
               Cerrar
             </button>
@@ -573,8 +534,8 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                 onClick={() => setShowCancelPrompt(prev => !prev)}
                 className={`h-10 px-3 text-xs font-bold rounded-xl transition flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer ${
                   showCancelPrompt
-                    ? 'bg-rose-600 text-white shadow-md'
-                    : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                    ? 'bg-rose-600 text-white border border-rose-500 shadow-md'
+                    : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30'
                 }`}
                 title="Marcar trabajo como No Realizado (inconveniente en la propiedad)"
               >
@@ -589,10 +550,10 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               type="button"
               disabled={workPhotosCount === 0 || confirming || uploading}
               onClick={handleConfirmCompletion}
-              className={`flex-1 h-10 px-4 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 shadow-md transition active:scale-95 ${
+              className={`flex-1 h-10 px-4 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 ${
                 workPhotosCount > 0
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 text-slate-950 shadow-emerald-500/25'
-                  : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-dashed border-slate-300 dark:border-slate-700'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-md shadow-emerald-500/20 cursor-pointer'
+                  : 'bg-[#141b24] text-slate-500 border border-white/5 cursor-not-allowed'
               }`}
             >
               <Check className="h-4 w-4 stroke-[3]" />
@@ -601,7 +562,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                   ? 'Finalizando...' 
                   : workPhotosCount > 0 
                   ? 'Finalizar Trabajo' 
-                  : 'Foto Requerida para Finalizar'}
+                  : 'Foto Requerida'}
               </span>
             </button>
           ) : (
@@ -609,14 +570,14 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               <button
                 type="button"
                 onClick={() => setIsShareModalOpen(true)}
-                className="h-10 px-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition active:scale-95"
+                className="h-10 px-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
               >
                 <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
                 <span>Enviar Reporte</span>
               </button>
 
-              <div className="hidden sm:flex items-center gap-1.5 h-10 px-3 bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-bold">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <div className="hidden sm:flex items-center gap-1.5 h-10 px-3 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs font-bold">
+                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
                 <span>Completado</span>
               </div>
             </div>
@@ -624,11 +585,11 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
         </div>
       </div>
 
-      {/* FULLSCREEN PHOTO PREVIEW MODAL (IN-APP - NUNCA REDIRIGE A OTRA PESTAÑA NI A JORNADA) */}
+      {/* FULLSCREEN PHOTO PREVIEW MODAL */}
       {previewPhoto && (
         <div
           onClick={() => setPreviewPhoto(null)}
-          className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-md flex items-center justify-center p-3 animate-fade-in"
+          className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-3 animate-fade-in"
         >
           <div 
             className="relative max-w-lg w-full flex flex-col items-center"
@@ -637,7 +598,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
             <button
               type="button"
               onClick={() => setPreviewPhoto(null)}
-              className="absolute -top-11 right-0 p-2 text-white hover:text-cyan-400 bg-slate-800/80 rounded-full transition shadow-lg"
+              className="absolute -top-11 right-0 p-2 text-white hover:text-cyan-400 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full transition shadow-lg cursor-pointer"
               title="Cerrar foto"
             >
               <X className="h-5 w-5" />
@@ -646,13 +607,13 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
             <img
               src={previewPhoto}
               alt="Evidencia Completa"
-              className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain border border-slate-700 shadow-2xl"
+              className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain border border-white/10 shadow-2xl"
             />
 
             <button
               type="button"
               onClick={() => setPreviewPhoto(null)}
-              className="mt-3 px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition shadow"
+              className="mt-3 px-5 py-2 bg-[#131b26] hover:bg-[#182332] text-white border border-white/10 rounded-xl text-xs font-bold transition shadow cursor-pointer active:scale-95"
             >
               Cerrar Foto
             </button>
