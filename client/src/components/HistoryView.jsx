@@ -162,64 +162,34 @@ ${jobLines}
   };
 
   return (
-    <div className="space-y-4 max-w-md sm:max-w-lg mx-auto w-full">
-      {/* 1. SELECTOR SUPERIOR DE 4 SUBPESTAÑAS (FORMATO: ÍCONO ARRIBA Y TEXTO ABAJO) */}
-      <div className="bg-slate-900 p-1.5 rounded-2xl border border-slate-800 grid grid-cols-4 gap-1 shadow-sm">
-        <button
-          onClick={() => setSubTab('daily')}
-          className={`flex flex-col items-center justify-center py-2 px-1 text-center rounded-xl transition select-none ${
-            subTab === 'daily'
-              ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/40 font-medium'
-          }`}
-        >
-          <Clock className={`w-4 h-4 mb-1 ${subTab === 'daily' ? 'stroke-[2.5]' : 'stroke-2'}`} />
-          <span className="text-[10.5px] leading-tight font-bold">
-            Diario
-          </span>
-        </button>
-
-        <button
-          onClick={() => setSubTab('weeks')}
-          className={`flex flex-col items-center justify-center py-2 px-1 text-center rounded-xl transition select-none ${
-            subTab === 'weeks'
-              ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/40 font-medium'
-          }`}
-        >
-          <Calendar className={`w-4 h-4 mb-1 ${subTab === 'weeks' ? 'stroke-[2.5]' : 'stroke-2'}`} />
-          <span className="text-[10.5px] leading-tight font-bold">
-            Semanal
-          </span>
-        </button>
-
-        <button
-          onClick={() => setSubTab('monthly')}
-          className={`flex flex-col items-center justify-center py-2 px-1 text-center rounded-xl transition select-none ${
-            subTab === 'monthly'
-              ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/40 font-medium'
-          }`}
-        >
-          <BarChart3 className={`w-4 h-4 mb-1 ${subTab === 'monthly' ? 'stroke-[2.5]' : 'stroke-2'}`} />
-          <span className="text-[10.5px] leading-tight font-bold">
-            Mensual
-          </span>
-        </button>
-
-        <button
-          onClick={() => setSubTab('all_orders')}
-          className={`flex flex-col items-center justify-center py-2 px-1 text-center rounded-xl transition select-none ${
-            subTab === 'all_orders'
-              ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/40 font-medium'
-          }`}
-        >
-          <Search className={`w-4 h-4 mb-1 ${subTab === 'all_orders' ? 'stroke-[2.5]' : 'stroke-2'}`} />
-          <span className="text-[10.5px] leading-tight font-bold">
-            Historial
-          </span>
-        </button>
+    <div className="space-y-4 max-w-md sm:max-w-lg mx-auto w-full pb-8">
+      {/* 1. SELECTOR SUPERIOR DE 4 SUBPESTAÑAS (COCKPIT HIGH-TECH STYLE) */}
+      <div className="bg-[#0f1722]/95 backdrop-blur-xl border border-white/10 p-1.5 rounded-2xl grid grid-cols-4 gap-1.5 shadow-xl">
+        {[
+          { id: 'daily', label: 'Diario', icon: Clock },
+          { id: 'weeks', label: 'Semanal', icon: Calendar },
+          { id: 'monthly', label: 'Mensual', icon: BarChart3 },
+          { id: 'all_orders', label: 'Historial', icon: Search },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = subTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setSubTab(tab.id)}
+              className={`flex flex-col items-center justify-center py-2 px-1 text-center rounded-xl transition-all duration-200 select-none ${
+                isActive
+                  ? 'bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-cyan-500/10 text-cyan-400 border border-cyan-500/40 shadow-sm shadow-cyan-500/20 font-bold'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5 font-medium border border-transparent'
+              }`}
+            >
+              <Icon className={`w-4 h-4 mb-1 ${isActive ? 'stroke-[2.5] text-cyan-400 drop-shadow-[0_0_6px_rgba(34,211,238,0.4)]' : 'stroke-2 text-slate-400'}`} />
+              <span className={`text-[10.5px] leading-tight ${isActive ? 'font-black text-cyan-300' : 'font-medium text-slate-400'}`}>
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* SUBTAB 1: REPORTE DIARIO (VISTA COMPLETA DE TRABAJOS DEL DÍA CON ANCHO COMPLETO) */}
@@ -238,34 +208,34 @@ ${jobLines}
         </div>
       )}
 
-      {/* SUBTAB 1: LISTADO DE CIERRES SEMANALES */}
+      {/* SUBTAB 2: LISTADO DE CIERRES SEMANALES */}
       {subTab === 'weeks' && (
         <div className="space-y-3">
-          {/* Resumen Superior de Cobros (KPIs Estéticos) */}
+          {/* Resumen Superior de Cobros (KPIs Estéticos Cockpit) */}
           {weeks.length > 0 && (
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900 border border-amber-500/30 rounded-2xl p-3 shadow-xs space-y-1">
-                <div className="flex items-center justify-between text-amber-700 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+              <div className="bg-[#131b26] border border-amber-500/30 rounded-2xl p-3 shadow-lg space-y-1">
+                <div className="flex items-center justify-between text-amber-400 text-[10px] font-bold uppercase tracking-wider">
                   <span>Pendiente</span>
                   <Clock className="h-3.5 w-3.5" />
                 </div>
-                <div className="text-lg sm:text-xl font-black text-amber-800 dark:text-amber-300 font-mono leading-none">
+                <div className="text-xl sm:text-2xl font-black text-amber-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]">
                   ${totalPendingWeeks.toFixed(2)}
                 </div>
-                <p className="text-[9px] text-slate-500 dark:text-slate-400 truncate font-medium">
+                <p className="text-[10px] text-slate-400 truncate font-medium">
                   {pendingWeeksCount} semana{pendingWeeksCount !== 1 ? 's' : ''} pendiente{pendingWeeksCount !== 1 ? 's' : ''}
                 </p>
               </div>
 
-              <div className="bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent dark:from-emerald-950/40 dark:via-slate-900 dark:to-slate-900 border border-emerald-500/30 rounded-2xl p-3 shadow-xs space-y-1">
-                <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+              <div className="bg-[#131b26] border border-emerald-500/30 rounded-2xl p-3 shadow-lg space-y-1">
+                <div className="flex items-center justify-between text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
                   <span>Cobrado</span>
                   <ShieldCheck className="h-3.5 w-3.5" />
                 </div>
-                <div className="text-lg sm:text-xl font-black text-emerald-800 dark:text-emerald-400 font-mono leading-none">
+                <div className="text-xl sm:text-2xl font-black text-emerald-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]">
                   ${totalPaidWeeks.toFixed(2)}
                 </div>
-                <p className="text-[9px] text-slate-500 dark:text-slate-400 truncate font-medium">
+                <p className="text-[10px] text-slate-400 truncate font-medium">
                   {paidWeeksCount} semana{paidWeeksCount !== 1 ? 's' : ''} liquidada{paidWeeksCount !== 1 ? 's' : ''}
                 </p>
               </div>
@@ -295,50 +265,54 @@ ${jobLines}
                 <div
                   key={w.key}
                   onClick={() => setSelectedWeekModal(w)}
-                  className={`border rounded-2xl p-3.5 cursor-pointer transition select-none space-y-2.5 shadow-sm active:scale-[0.99] group relative overflow-hidden ${
+                  className={`bg-[#131b26] border rounded-2xl p-3.5 cursor-pointer transition select-none space-y-2.5 shadow-lg active:scale-[0.99] group relative overflow-hidden ${
                     w.isPaid
-                      ? 'bg-gradient-to-br from-emerald-50/70 via-white to-white dark:from-emerald-950/20 dark:via-slate-900/90 dark:to-slate-900 border-emerald-300/80 dark:border-emerald-500/35 hover:border-emerald-400 dark:hover:border-emerald-500'
-                      : 'bg-gradient-to-br from-amber-50/70 via-white to-white dark:from-amber-950/20 dark:via-slate-900/90 dark:to-slate-900 border-amber-300/80 dark:border-amber-500/35 hover:border-amber-400 dark:hover:border-amber-500'
+                      ? 'border-emerald-500/30 hover:border-emerald-500/60 shadow-emerald-500/5'
+                      : 'border-amber-500/30 hover:border-amber-500/60 shadow-amber-500/5'
                   }`}
                 >
                   {/* Fila Superior */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="space-y-0.5">
-                      <span className="text-sm font-black text-slate-900 dark:text-white font-mono group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition block">
-                        Semana {w.displayLabel || w.key}
-                      </span>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-white font-mono group-hover:text-cyan-400 transition">
+                          Semana {w.displayLabel || w.key}
+                        </span>
+                        {w.isPaid ? (
+                          <span className="inline-flex items-center gap-1 text-[9px] text-emerald-400 font-bold bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            Cobrado
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[9px] text-amber-400 font-bold bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                            Pendiente
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 font-medium">
                         {w.startDate} al {w.endDate} • {completedCount} de {w.totalJobs} hechos
                       </p>
                     </div>
 
                     <div className="text-right">
-                      <span className={`text-base font-black font-mono block ${
-                        w.isPaid ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'
+                      <span className={`text-base sm:text-lg font-black font-mono block ${
+                        w.isPaid ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]' : 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]'
                       }`}>
                         ${w.totalEarnings.toFixed(2)}
                       </span>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono font-bold">
+                      <span className="text-[10px] text-slate-400 font-mono font-bold">
                         {Math.round(w.totalFootage)} ft
                       </span>
                     </div>
                   </div>
 
                   {/* Fila Inferior con Espacio de Confirmación Estético */}
-                  <div className={`flex items-center justify-between pt-2 border-t ${
-                    w.isPaid ? 'border-emerald-100 dark:border-slate-800/80' : 'border-amber-100 dark:border-slate-800/80'
-                  }`}>
-                    {w.isPaid ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
-                        <Check className="h-3 w-3 stroke-[3]" />
-                        <span>Cobrado</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">
-                        <Clock className="h-3 w-3" />
-                        <span>Pendiente</span>
-                      </span>
-                    )}
+                  <div className="flex items-center justify-between pt-2 border-t border-white/8">
+                    <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                      <FileText className="h-3 w-3 text-cyan-400" />
+                      <span>{w.orders.length} órdenes registradas</span>
+                    </span>
 
                     <div className="flex items-center gap-2">
                       {w.isPaid ? (
@@ -346,7 +320,7 @@ ${jobLines}
                           type="button"
                           disabled={isUpdating}
                           onClick={(e) => handleTogglePayment(w, 'Pendiente', e)}
-                          className="px-2.5 py-1 bg-emerald-500/10 hover:bg-rose-500/10 text-emerald-700 hover:text-rose-600 dark:text-emerald-300 dark:hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30 rounded-xl text-[10px] font-black flex items-center gap-1 shadow-2xs transition active:scale-95"
+                          className="px-2.5 py-1 bg-emerald-500/15 hover:bg-rose-500/15 text-emerald-400 hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30 rounded-xl text-[10px] font-black flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-xs"
                           title="Toca para cambiar a Pendiente si hubo algún error"
                         >
                           <CheckCircle className="h-3 w-3" />
@@ -357,19 +331,15 @@ ${jobLines}
                           type="button"
                           disabled={isUpdating}
                           onClick={(e) => handleTogglePayment(w, 'Cobrado', e)}
-                          className="px-2.5 py-1 bg-amber-500/15 hover:bg-emerald-500/15 text-amber-800 hover:text-emerald-700 dark:text-amber-300 dark:hover:text-emerald-300 border border-amber-500/30 hover:border-emerald-500/30 rounded-xl text-[10px] font-black flex items-center gap-1 shadow-2xs transition active:scale-95"
+                          className="px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-[10px] rounded-xl flex items-center gap-1 shadow-md shadow-emerald-500/20 transition active:scale-95 cursor-pointer"
                           title="Confirmar que recibiste el pago de esta semana"
                         >
                           <DollarSign className="h-3 w-3 stroke-[2.5]" />
-                          <span>Confirmar</span>
+                          <span>Confirmar Cobro</span>
                         </button>
                       )}
 
-                      <div className={`h-6 w-6 rounded-full bg-white dark:bg-slate-950 border flex items-center justify-center text-slate-400 transition flex-shrink-0 ${
-                        w.isPaid
-                          ? 'border-emerald-200 dark:border-slate-800 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-hover:border-emerald-500/40'
-                          : 'border-amber-200 dark:border-slate-800 group-hover:text-amber-600 dark:group-hover:text-amber-400 group-hover:border-amber-500/40'
-                      }`}>
+                      <div className="h-7 w-7 rounded-full bg-slate-800/80 border border-white/10 flex items-center justify-center text-slate-300 group-hover:text-cyan-400 group-hover:border-cyan-500/30 transition flex-shrink-0">
                         <ChevronRight className="h-3.5 w-3.5" />
                       </div>
                     </div>
@@ -381,10 +351,10 @@ ${jobLines}
         </div>
       )}
 
-      {/* SUBTAB 2: HISTORIAL GENERAL DE TODOS LOS TRABAJOS (CON BUSCADOR Y FILTROS) */}
+      {/* SUBTAB 4: HISTORIAL GENERAL DE TODOS LOS TRABAJOS (CON BUSCADOR Y FILTROS) */}
       {subTab === 'all_orders' && (
         <div className="space-y-3">
-          {/* BUSCADOR GENERAL INTELIGENTE (INCLUYE CABLES RG6 Y RG11) */}
+          {/* BUSCADOR GENERAL INTELIGENTE */}
           <div className="relative">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
@@ -392,7 +362,7 @@ ${jobLines}
               placeholder="Buscar por Job #, dirección, cable (RG6/RG11), ciudad..."
               value={orderSearch}
               onChange={(e) => setOrderSearch(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-9 pr-8 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition shadow-sm"
+              className="w-full bg-[#131b26] border border-white/10 rounded-2xl pl-9 pr-8 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition shadow-md"
             />
             {orderSearch && (
               <button
@@ -406,61 +376,45 @@ ${jobLines}
             )}
           </div>
 
-          {/* Filtros de Estado Exclusivos: Todos, Hechos, Pendientes, Cancelados */}
+          {/* Filtros de Estado Exclusivos Cockpit */}
           <div className="grid grid-cols-4 gap-1.5 text-[11px] font-bold">
-            <button
-              type="button"
-              onClick={() => setOrderStatusFilter('ALL')}
-              className={`py-2 px-1 rounded-xl text-center transition ${
-                orderStatusFilter === 'ALL'
-                  ? 'bg-cyan-500 text-slate-950 font-black shadow-sm'
-                  : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
-              }`}
-            >
-              Todos ({orders.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setOrderStatusFilter('Completado')}
-              className={`py-2 px-1 rounded-xl text-center transition ${
-                orderStatusFilter === 'Completado'
-                  ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
-                  : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
-              }`}
-            >
-              Hechos ({orders.filter(o => o.status === 'Completado').length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setOrderStatusFilter('Pendiente')}
-              className={`py-2 px-1 rounded-xl text-center transition ${
-                orderStatusFilter === 'Pendiente'
-                  ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
-                  : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
-              }`}
-            >
-              Pendientes ({orders.filter(o => o.status === 'Pendiente').length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setOrderStatusFilter('No Realizado')}
-              className={`py-2 px-1 rounded-xl text-center transition ${
-                orderStatusFilter === 'No Realizado'
-                  ? 'bg-rose-500 text-slate-950 font-black shadow-sm'
-                  : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
-              }`}
-            >
-              Cancelados ({orders.filter(o => o.status === 'No Realizado').length})
-            </button>
+            {[
+              { id: 'ALL', label: `Todos (${orders.length})` },
+              { id: 'Completado', label: `Hechos (${orders.filter(o => o.status === 'Completado').length})`, color: 'emerald' },
+              { id: 'Pendiente', label: `Pendientes (${orders.filter(o => o.status === 'Pendiente').length})`, color: 'amber' },
+              { id: 'No Realizado', label: `Cancelados (${orders.filter(o => o.status === 'No Realizado').length})`, color: 'rose' }
+            ].map((f) => {
+              const active = orderStatusFilter === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setOrderStatusFilter(f.id)}
+                  className={`py-2 px-1 rounded-xl text-center transition font-black ${
+                    active
+                      ? f.id === 'Completado'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                        : f.id === 'Pendiente'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                        : f.id === 'No Realizado'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm'
+                        : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                      : 'bg-[#131b26] border border-white/10 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Listado de Órdenes Filtradas */}
           {filteredAllOrders.length === 0 ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-xs">
+            <div className="bg-[#131b26] border border-white/10 rounded-2xl p-8 text-center text-slate-400 text-xs shadow-md">
               No se encontraron trabajos con los filtros actuales.
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {filteredAllOrders.map((order, idx) => {
                 const isComp = order.status === 'Completado';
                 const isCanc = order.status === 'No Realizado';
@@ -469,7 +423,7 @@ ${jobLines}
                 return (
                   <div
                     key={order.id}
-                    className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 space-y-2 text-xs shadow-sm"
+                    className="bg-[#131b26] border border-white/10 hover:border-cyan-500/30 rounded-2xl p-3.5 space-y-2 text-xs shadow-md transition"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -479,7 +433,7 @@ ${jobLines}
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                             : isCanc
                             ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                            : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                         }`}>
                           {idx + 1}
                         </div>
@@ -500,39 +454,39 @@ ${jobLines}
                         }`}>
                           {order.status}
                         </span>
-                        <span className="font-mono font-black text-emerald-400">
+                        <span className="font-mono font-black text-emerald-400 text-sm drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">
                           ${order.rate_calculated}
                         </span>
                       </div>
                     </div>
 
                     {/* Dirección */}
-                    <div className="text-slate-200">
-                      <p className="font-semibold">{order.address}</p>
+                    <div className="text-white">
+                      <p className="font-bold">{order.address}</p>
                       <p className="text-[10px] text-slate-400">{order.city} {order.zip_code}</p>
                     </div>
 
                     {/* Specs */}
                     <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
-                      <span className="bg-amber-50 text-amber-900 border-amber-200 dark:bg-slate-950 dark:text-amber-300 dark:border-slate-800 px-2 py-0.5 rounded border font-bold">
+                      <span className="bg-[#0f1722] text-amber-300 border border-white/10 px-2 py-0.5 rounded font-bold">
                         {order.drop_footage} ft
                       </span>
-                      <span className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 px-2 py-0.5 rounded border">
+                      <span className="bg-[#0f1722] text-slate-300 border border-white/10 px-2 py-0.5 rounded">
                         {order.cable_type}
                       </span>
                       {hasBore && (
-                        <span className="bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800 px-2 py-0.5 rounded border font-bold">
+                        <span className="bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded font-bold">
                           DW Bore +$30
                         </span>
                       )}
                       {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
-                        <span className="bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded border font-bold">
+                        <span className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-bold">
                           Drop &gt;300ft: +${Math.floor((order.drop_footage - 300) / 100) * 25}
                         </span>
                       )}
                       {order.manual_adjustment && order.manual_adjustment !== 0 ? (
                         <span className={`px-2 py-0.5 rounded border text-[9px] font-bold ${
-                          order.manual_adjustment > 0 ? 'bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800' : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
+                          order.manual_adjustment > 0 ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                         }`}>
                           Ajuste {order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}
                         </span>
@@ -541,10 +495,10 @@ ${jobLines}
 
                     {/* Si Cancelado: Mostrar Motivo de Cancelación */}
                     {isCanc && (
-                      <div className="bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 p-2 rounded-xl text-xs text-rose-900 dark:text-rose-100 flex items-start gap-1.5">
-                        <AlertTriangle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                      <div className="bg-rose-950/25 border border-rose-500/25 p-2 rounded-xl text-xs text-rose-200 flex items-start gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0 mt-0.5" />
                         <div className="min-w-0">
-                          <span className="text-[9px] uppercase font-bold text-rose-600 dark:text-rose-400 block tracking-wider">
+                          <span className="text-[9px] uppercase font-bold text-rose-400 block tracking-wider">
                             Motivo No Realizado:
                           </span>
                           <p className="font-semibold text-xs leading-tight truncate">
@@ -555,11 +509,11 @@ ${jobLines}
                     )}
 
                     {/* Footer de la tarjeta con Fotos y Copiar Comprobante */}
-                    <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-1.5 flex-wrap">
+                    <div className="pt-2 border-t border-white/8 flex items-center justify-between gap-1.5 flex-wrap">
                       {onOpenPhotos ? (
                         <button
                           onClick={() => onOpenPhotos(order)}
-                          className="text-[10px] text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 font-bold flex items-center gap-1"
+                          className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 bg-[#182332] px-2.5 py-1 rounded-lg border border-white/10 transition active:scale-95"
                         >
                           <Camera className="h-3 w-3" />
                           <span>{order.photos_count || 0} Fotos</span>
@@ -573,28 +527,28 @@ ${jobLines}
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => copySingleJobClaim(order)}
-                          className="text-[10px] text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-2xs"
+                          className="text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-2.5 py-1 rounded-lg flex items-center gap-1 transition active:scale-95 shadow-xs"
                           title="Copiar comprobante al portapapeles"
                         >
                           {copiedJobId === order.id ? (
                             <>
-                              <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">¡Copiado!</span>
+                              <Check className="h-3 w-3 text-emerald-400" />
+                              <span className="text-emerald-400 font-bold">¡Copiado!</span>
                             </>
                           ) : (
                             <>
-                              <Copy className="h-3 w-3 text-cyan-600 dark:text-cyan-400" />
-                              <span>Copiar Comprobante</span>
+                              <Copy className="h-3 w-3 text-cyan-400" />
+                              <span>Comprobante</span>
                             </>
                           )}
                         </button>
 
                         <button
                           onClick={() => setReportOrder(order)}
-                          className="text-[10px] text-emerald-800 dark:text-emerald-300 hover:text-emerald-950 dark:hover:text-white bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-800/80 px-2.5 py-1 rounded-lg flex items-center gap-1 font-bold transition shadow-2xs"
+                          className="text-[10px] text-emerald-300 hover:text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 px-2.5 py-1 rounded-lg flex items-center gap-1 font-bold transition active:scale-95 shadow-xs"
                           title="Reportar trabajo por WhatsApp"
                         >
-                          <Share2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                          <Share2 className="h-3 w-3 text-emerald-400" />
                           <span>Reportar</span>
                         </button>
                       </div>
@@ -617,32 +571,32 @@ ${jobLines}
         </div>
       )}
 
-      {/* COMPONENTE SUPERPUESTO (MODAL DETALLADO DE LA SEMANA CON BOTÓN DE LA CRUZ) */}
+      {/* COMPONENTE SUPERPUESTO (MODAL DETALLADO DE LA SEMANA CON DISEÑO COCKPIT) */}
       {selectedWeekModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden mx-auto transition-colors">
+          <div className="bg-[#0f1722]/98 border border-white/15 w-full max-w-lg rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden mx-auto">
             {/* Header del Modal con la Cruz */}
-            <div className="px-4 sm:px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/70">
+            <div className="px-4 sm:px-5 py-3.5 border-b border-white/10 flex items-center justify-between bg-[#131b26]">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-base font-black text-slate-900 dark:text-white font-mono">
+                  <span className="text-base font-black text-white font-mono">
                     Semana {selectedWeekModal.displayLabel || selectedWeekModal.key}
                   </span>
                   {selectedWeekModal.isPaid ? (
-                    <span className="text-[10px] text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/90 border border-emerald-300 dark:border-emerald-600/50 px-2.5 py-0.5 rounded-full font-black shadow-xs flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <ShieldCheck className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-black shadow-xs flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <ShieldCheck className="h-3 w-3 text-emerald-400" />
                       <span>Cobrado</span>
                     </span>
                   ) : (
-                    <span className="text-[10px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/90 border border-amber-300 dark:border-amber-600/50 px-2.5 py-0.5 rounded-full font-black shadow-xs flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                      <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                    <span className="text-[10px] text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-black shadow-xs flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                      <Clock className="h-3 w-3 text-amber-400" />
                       <span>Pendiente</span>
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-400 mt-0.5">
                   {selectedWeekModal.startDate} al {selectedWeekModal.endDate} • {selectedWeekModal.orders.length} trabajos
                 </p>
               </div>
@@ -650,57 +604,57 @@ ${jobLines}
               {/* BOTÓN DE LA CRUZ (CERRAR) */}
               <button
                 onClick={() => setSelectedWeekModal(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 transition active:scale-95"
+                className="w-8 h-8 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95"
                 title="Cerrar ventana"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Cuerpo del Modal con Scroll */}
             <div className="p-3.5 sm:p-5 overflow-y-auto space-y-3.5 flex-1">
-              {/* Resumen Financiero y Reclamación con Toque Estético */}
-              <div className={`p-4 rounded-2xl border space-y-3 transition ${
+              {/* Resumen Financiero y Reclamación con Toque Estético Cockpit */}
+              <div className={`p-4 rounded-2xl border space-y-3 transition bg-[#131b26] ${
                 selectedWeekModal.isPaid
-                  ? 'bg-gradient-to-br from-emerald-50/70 via-white to-white dark:from-emerald-950/40 dark:via-slate-900/90 dark:to-slate-950 border-emerald-300/80 dark:border-emerald-800/60 shadow-xs'
-                  : 'bg-gradient-to-br from-amber-50/70 via-white to-white dark:from-amber-950/40 dark:via-slate-900/90 dark:to-slate-950 border-amber-300/80 dark:border-amber-800/60 shadow-xs'
+                  ? 'border-emerald-500/30 shadow-lg shadow-emerald-500/5'
+                  : 'border-amber-500/30 shadow-lg shadow-amber-500/5'
               }`}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-[10px] uppercase font-bold tracking-wider block text-slate-500 dark:text-slate-400">
+                    <span className="text-[10px] uppercase font-bold tracking-wider block text-slate-400">
                       Total a Liquidar Esta Semana
                     </span>
                     <span className={`text-2xl sm:text-3xl font-black font-mono leading-tight ${
-                      selectedWeekModal.isPaid ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'
+                      selectedWeekModal.isPaid ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]' : 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]'
                     }`}>
                       ${selectedWeekModal.totalEarnings.toFixed(2)}
                     </span>
                   </div>
 
                   <div className="text-right">
-                    <span className="text-[10px] uppercase font-bold tracking-wider block text-slate-500 dark:text-slate-400">
+                    <span className="text-[10px] uppercase font-bold tracking-wider block text-slate-400">
                       Metraje Total
                     </span>
-                    <span className="text-base sm:text-lg font-black text-slate-800 dark:text-amber-300 font-mono">
+                    <span className="text-base sm:text-lg font-black text-amber-300 font-mono">
                       {Math.round(selectedWeekModal.totalFootage)} ft
                     </span>
                   </div>
                 </div>
 
                 {/* Botones de Auditoría / Confirmación de Cobro */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-200/70 dark:border-slate-800/80">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-white/8">
                   <button
                     onClick={() => copyAuditStatement(selectedWeekModal)}
-                    className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 border border-slate-200 dark:border-slate-700 shadow-2xs"
+                    className="py-2.5 px-3 bg-[#182332] hover:bg-[#243140] text-slate-200 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 border border-white/10 shadow-xs"
                   >
                     {copiedWeekKey === selectedWeekModal.key ? (
                       <>
-                        <Check className="h-4 w-4 stroke-[3] text-emerald-500" />
-                        <span>¡Constancia Copiada!</span>
+                        <Check className="h-4 w-4 stroke-[3] text-emerald-400" />
+                        <span className="text-emerald-400">¡Constancia Copiada!</span>
                       </>
                     ) : (
                       <>
-                        <Copy className="h-4 w-4" />
+                        <Copy className="h-4 w-4 text-cyan-400" />
                         <span>Copiar Auditoría de Reclamación</span>
                       </>
                     )}
@@ -709,15 +663,15 @@ ${jobLines}
                   {selectedWeekModal.isPaid ? (
                     <button
                       onClick={() => handleTogglePayment(selectedWeekModal, 'Pendiente')}
-                      className="py-2.5 px-3 bg-emerald-500/10 hover:bg-rose-500/10 text-emerald-800 hover:text-rose-700 dark:text-emerald-300 dark:hover:text-rose-300 border border-emerald-500/30 hover:border-rose-500/30 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-2xs transition active:scale-95"
+                      className="py-2.5 px-3 bg-emerald-500/15 hover:bg-rose-500/15 text-emerald-300 hover:text-rose-300 border border-emerald-500/30 hover:border-rose-500/30 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition active:scale-95"
                     >
-                      <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      <ShieldCheck className="h-4 w-4 text-emerald-400" />
                       <span>Cobrado (Toca para Pendiente)</span>
                     </button>
                   ) : (
                     <button
                       onClick={() => handleTogglePayment(selectedWeekModal, 'Cobrado')}
-                      className="py-2.5 px-3 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/25 transition active:scale-95"
+                      className="py-2.5 px-3 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/25 transition active:scale-95 cursor-pointer"
                     >
                       <DollarSign className="h-4 w-4 stroke-[3]" />
                       <span>Confirmar Pago Recibido (${selectedWeekModal.totalEarnings.toFixed(2)})</span>
@@ -742,13 +696,7 @@ ${jobLines}
                   return (
                     <div
                       key={order.id}
-                      className={`border rounded-2xl p-3 space-y-2 text-xs transition ${
-                        isComp 
-                          ? 'bg-white dark:bg-slate-950/70 border-slate-200 dark:border-slate-800' 
-                          : isCanc 
-                          ? 'bg-rose-50/60 dark:bg-rose-950/10 border-rose-200 dark:border-rose-900/40'
-                          : 'bg-amber-50/60 dark:bg-slate-950/70 border-amber-200 dark:border-amber-900/40'
-                      }`}
+                      className="bg-[#131b26] border border-white/10 hover:border-cyan-500/30 rounded-2xl p-3.5 space-y-2 text-xs transition shadow-md"
                     >
                       {/* Job Header con Número en Círculo */}
                       <div className="flex items-center justify-between">
@@ -758,7 +706,7 @@ ${jobLines}
                               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                               : isCanc
                               ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                              : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                           }`}>
                             {idx + 1}
                           </div>
@@ -779,39 +727,39 @@ ${jobLines}
                           }`}>
                             {order.status}
                           </span>
-                          <span className="font-mono font-black text-emerald-400">
+                          <span className="font-mono font-black text-emerald-400 text-sm drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">
                             ${order.rate_calculated}
                           </span>
                         </div>
                       </div>
 
                       {/* Dirección del Cliente */}
-                      <div className="text-slate-800 dark:text-slate-200">
-                        <p className="font-semibold">{order.address}</p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400">{order.city} {order.zip_code}</p>
+                      <div className="text-white">
+                        <p className="font-bold">{order.address}</p>
+                        <p className="text-[10px] text-slate-400">{order.city} {order.zip_code}</p>
                       </div>
 
                       {/* Especificaciones */}
                       <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
-                        <span className="bg-amber-50 text-amber-900 border-amber-200 dark:bg-slate-900 dark:text-amber-300 dark:border-slate-800 px-2 py-0.5 rounded border font-bold">
+                        <span className="bg-[#0f1722] text-amber-300 border border-white/10 px-2 py-0.5 rounded font-bold">
                           {order.drop_footage} ft
                         </span>
-                        <span className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 px-2 py-0.5 rounded border">
+                        <span className="bg-[#0f1722] text-slate-300 border border-white/10 px-2 py-0.5 rounded">
                           {order.cable_type}
                         </span>
                         {hasBore && (
-                          <span className="bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800 px-2 py-0.5 rounded border font-bold">
+                          <span className="bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded font-bold">
                             DW Bore +$30
                           </span>
                         )}
                         {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
-                          <span className="bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded border font-bold">
+                          <span className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-bold">
                             Drop &gt;300ft: +${Math.floor((order.drop_footage - 300) / 100) * 25}
                           </span>
                         )}
                         {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
                           <span className={`px-2 py-0.5 rounded border text-[9px] font-bold flex items-center gap-1 ${
-                            order.manual_adjustment > 0 ? 'bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800' : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
+                            order.manual_adjustment > 0 ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                           }`}>
                             <Sparkles className="h-2.5 w-2.5" />
                             <span>{order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}</span>
@@ -822,30 +770,30 @@ ${jobLines}
                         )}
                         <span className={`px-2 py-0.5 rounded border text-[9px] font-bold ${
                           order.payment_status === 'Cobrado'
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/70 dark:border-emerald-700 dark:text-emerald-400'
-                            : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/70 dark:border-amber-700 dark:text-amber-300'
+                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                            : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
                         }`}>
                           {order.payment_status || 'Pendiente'}
                         </span>
                       </div>
 
                       {/* Galería de Fotos de Evidencia de esa Orden */}
-                      <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800/80">
+                      <div className="pt-2 border-t border-white/8">
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                            <Camera className="h-3 w-3 text-cyan-500 dark:text-cyan-400" />
+                          <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                            <Camera className="h-3 w-3 text-cyan-400" />
                             <span>Fotos de Evidencia ({photos.length})</span>
                           </span>
 
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => copySingleJobClaim(order)}
-                              className="text-[10px] text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
+                              className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold"
                             >
                               {copiedJobId === order.id ? (
                                 <>
-                                  <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">¡Copiado!</span>
+                                  <Check className="h-3 w-3 text-emerald-400" />
+                                  <span className="text-emerald-400 font-bold">¡Copiado!</span>
                                 </>
                               ) : (
                                 <>
@@ -857,7 +805,7 @@ ${jobLines}
 
                             <button
                               onClick={() => setReportOrder(order)}
-                              className="text-[10px] text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-300 hover:underline flex items-center gap-1 font-bold"
+                              className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-bold"
                             >
                               <Share2 className="h-3 w-3" />
                               <span>Reportar</span>
@@ -875,7 +823,7 @@ ${jobLines}
                               <div
                                 key={p.id}
                                 onClick={() => setSelectedPhoto(p.photo_data || `/uploads/${p.filename}`)}
-                                className="h-14 w-16 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 flex-shrink-0 cursor-pointer relative group"
+                                className="h-14 w-16 rounded-xl overflow-hidden bg-slate-950 border border-white/10 flex-shrink-0 cursor-pointer relative group"
                               >
                                 <img 
                                   src={p.photo_data || `/uploads/${p.filename}`} 
@@ -897,7 +845,7 @@ ${jobLines}
             </div>
 
             {/* Footer con Botón de Cerrar */}
-            <div className="px-5 py-3 border-t border-slate-800 bg-slate-950/70 flex justify-end">
+            <div className="px-5 py-3 border-t border-white/10 bg-[#131b26] flex justify-end">
               <button
                 onClick={() => setSelectedWeekModal(null)}
                 className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition active:scale-95"

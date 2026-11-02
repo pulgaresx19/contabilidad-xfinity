@@ -10,7 +10,7 @@ import {
   ExternalLink, Check, Sun, Moon, Globe,
   Route, MoveUp, MoveDown, CheckCheck, Zap, Maximize2, GripVertical
 } from 'lucide-react';
-import { formatDateFriendly, normalizeDateStr } from '../utils/dateUtils';
+import { formatDateFriendly, normalizeDateStr, formatRouteDuration } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
 
 const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
@@ -213,12 +213,29 @@ export default function UberDriverView({
   mapThemeRef.current = mapTheme;
   const [showThemePicker, setShowThemePicker] = useState(false);
 
-  // Overlay modal for day's full jobs list
+  // Unified Overlay modal: Day's full jobs list & Travesía reordering
   const [showDayJobsOverlay, setShowDayJobsOverlay] = useState(false);
   const [overlayStatusFilter, setOverlayStatusFilter] = useState('ALL');
+  const [hasOrderChanged, setHasOrderChanged] = useState(false);
 
-  // Travesía Organizer Modal State
-  const [showTripModal, setShowTripModal] = useState(false);
+  // Live responsive orders state that updates in 0 ms during reordering
+  const [liveOrders, setLiveOrders] = useState(orders);
+
+  useEffect(() => {
+    setLiveOrders(orders);
+  }, [orders]);
+
+  const activeOrders = useMemo(() => {
+    const list = (liveOrders && liveOrders.length > 0) ? liveOrders : (orders || []);
+    return [...list].sort((a, b) => {
+      const orderA = Number(a.route_order) > 0 ? Number(a.route_order) : 9999;
+      const orderB = Number(b.route_order) > 0 ? Number(b.route_order) : 9999;
+      if (orderA !== orderB) return orderA - orderB;
+      return (Number(a.id) || 0) - (Number(b.id) || 0);
+    });
+  }, [liveOrders, orders]);
+
+  // Travesía Organizer & Reorder State
   const [tempOrdersList, setTempOrdersList] = useState([]);
   const [isSavingTrip, setIsSavingTrip] = useState(false);
   const [optimizedNotice, setOptimizedNotice] = useState(null);
@@ -228,6 +245,13 @@ export default function UberDriverView({
   const [touchOverIndex, setTouchOverIndex] = useState(null);
   const touchStartYRef = useRef(null);
   const touchActiveIndexRef = useRef(null);
+
+  // Keep tempOrdersList updated when orders prop changes and modal is closed
+  useEffect(() => {
+    if (!showDayJobsOverlay) {
+      setTempOrdersList([...activeOrders]);
+    }
+  }, [activeOrders, showDayJobsOverlay]);
 
   // Route state
   const [activeRouteInfo, setActiveRouteInfo] = useState(null);
@@ -249,11 +273,11 @@ export default function UberDriverView({
   const DEFAULT_LNG_LAT = [-87.734557, 42.033592];
 
   // Daily statistics
-  const dayPending = orders.filter(o => o.status === 'Pendiente');
-  const dayCompleted = orders.filter(o => o.status === 'Completado');
-  const dayCancelled = orders.filter(o => o.status === 'No Realizado');
+  const dayPending = activeOrders.filter(o => o.status === 'Pendiente');
+  const dayCompleted = activeOrders.filter(o => o.status === 'Completado');
+  const dayCancelled = activeOrders.filter(o => o.status === 'No Realizado');
   const dayEarnings = dayCompleted.reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
-  const validOrders = orders.filter(o => o.latitude && o.longitude);
+  const validOrders = activeOrders.filter(o => o.latitude && o.longitude);
 
   // Active Timer Tick interval
   useEffect(() => {
@@ -341,7 +365,7 @@ export default function UberDriverView({
 
   // 2. AUTOMATIC MAPBOX GEOCODING OF MISSING ORDERS
   useEffect(() => {
-    const missing = orders.filter(o => !o.latitude || !o.longitude);
+    const missing = activeOrders.filter(o => !o.latitude || !o.longitude);
     if (missing.length === 0) return;
 
     let isCancelled = false;
@@ -387,21 +411,21 @@ export default function UberDriverView({
     runAutoGeocode();
 
     return () => { isCancelled = true; };
-  }, [orders]);
+  }, [activeOrders]);
 
   // Determine Origin Point ("Desde dónde estoy")
   const getOriginPoint = (targetOrder) => {
     if (userLocation && userLocation.lng && userLocation.lat) {
       return { coords: [userLocation.lng, userLocation.lat], label: 'GPS en vivo' };
     }
-    const targetIdx = orders.findIndex(o => o.id === targetOrder?.id);
-    if (targetIdx > 0 && orders[targetIdx - 1]?.latitude && orders[targetIdx - 1]?.longitude) {
+    const targetIdx = activeOrders.findIndex(o => o.id === targetOrder?.id);
+    if (targetIdx > 0 && activeOrders[targetIdx - 1]?.latitude && activeOrders[targetIdx - 1]?.longitude) {
       return { 
-        coords: [orders[targetIdx - 1].longitude, orders[targetIdx - 1].latitude], 
+        coords: [activeOrders[targetIdx - 1].longitude, activeOrders[targetIdx - 1].latitude], 
         label: `Parada ${targetIdx}` 
       };
     }
-    const firstValid = orders.find(o => o.latitude && o.longitude);
+    const firstValid = activeOrders.find(o => o.latitude && o.longitude);
     if (firstValid && firstValid.id !== targetOrder?.id) {
       return { coords: [firstValid.longitude, firstValid.latitude], label: 'Inicio de ruta' };
     }
@@ -460,8 +484,8 @@ export default function UberDriverView({
 
   // 3. BACKGROUND PRE-FETCH FOR INSTANT (0 MS) SWITCHING
   useEffect(() => {
-    if (!orders || orders.length === 0) return;
-    const valid = orders.filter(o => o.latitude && o.longitude);
+    if (!activeOrders || activeOrders.length === 0) return;
+    const valid = activeOrders.filter(o => o.latitude && o.longitude);
     if (valid.length === 0) return;
 
     let isCancelled = false;
@@ -481,7 +505,7 @@ export default function UberDriverView({
       isCancelled = true;
       clearTimeout(timer);
     };
-  }, [orders, userLocation?.lat, userLocation?.lng]);
+  }, [activeOrders, userLocation?.lat, userLocation?.lng]);
 
   // 4. SELECT A JOB: INSTANTLY DRAWS ROUTE (NO BLANK TIME)
   const handleSelectJob = async (order) => {
@@ -527,7 +551,18 @@ export default function UberDriverView({
           });
         }
       } else {
-        // Immediate guidance connection so map is NEVER left blank!
+        // Immediate guidance connection so map and HUD are NEVER stale or blank!
+        const estMiles = getEstimatedDrivingMiles(startCoords[1], startCoords[0], destCoords[1], destCoords[0]) || 0.8;
+        const estMinutes = Math.max(1, Math.round(estMiles * 2.2));
+        setActiveRouteInfo({
+          index: 0,
+          coordinates: [startCoords, destCoords],
+          miles: estMiles,
+          minutes: estMinutes,
+          summary: target.city || 'Calculando ruta...'
+        });
+        setAvailableRoutes([]);
+
         if (map.getSource('route-nav')) {
           map.getSource('route-nav').setData({
             type: 'Feature',
@@ -543,33 +578,36 @@ export default function UberDriverView({
         pitch: is3DMode ? 50 : 0,
         essential: true
       });
+    } else {
+      setActiveRouteInfo(null);
+      setAvailableRoutes([]);
     }
   };
 
   // NEXT / PREVIOUS STOP NAVIGATION
   const handleNextJob = () => {
-    if (!orders || orders.length === 0) return;
-    const currentIdx = selectedOrder ? orders.findIndex(o => o.id === selectedOrder.id) : -1;
-    const nextIdx = (currentIdx + 1) % orders.length;
-    handleSelectJob(orders[nextIdx]);
+    if (!activeOrders || activeOrders.length === 0) return;
+    const currentIdx = selectedOrder ? activeOrders.findIndex(o => o.id === selectedOrder.id) : -1;
+    const nextIdx = (currentIdx + 1) % activeOrders.length;
+    handleSelectJob(activeOrders[nextIdx]);
   };
 
   const handlePrevJob = () => {
-    if (!orders || orders.length === 0) return;
-    const currentIdx = selectedOrder ? orders.findIndex(o => o.id === selectedOrder.id) : 0;
-    const prevIdx = (currentIdx - 1 + orders.length) % orders.length;
-    handleSelectJob(orders[prevIdx]);
+    if (!activeOrders || activeOrders.length === 0) return;
+    const currentIdx = selectedOrder ? activeOrders.findIndex(o => o.id === selectedOrder.id) : 0;
+    const prevIdx = (currentIdx - 1 + activeOrders.length) % activeOrders.length;
+    handleSelectJob(activeOrders[prevIdx]);
   };
 
   // INITIALIZE / UPDATE SELECTION ON DAY OR TARGET CHANGE
   useEffect(() => {
-    if (orders.length === 0) {
+    if (activeOrders.length === 0) {
       setSelectedOrder(null);
       return;
     }
 
     if (targetFocusOrderId) {
-      const match = orders.find(o => o.id === targetFocusOrderId);
+      const match = activeOrders.find(o => o.id === targetFocusOrderId);
       if (match) {
         handleSelectJob(match);
         if (onClearTargetFocus) onClearTargetFocus();
@@ -577,17 +615,17 @@ export default function UberDriverView({
       }
     }
 
-    if (!selectedOrder || !orders.some(o => o.id === selectedOrder.id)) {
-      const firstPending = orders.find(o => o.status === 'Pendiente');
-      const initial = firstPending || orders[0];
+    if (!selectedOrder || !activeOrders.some(o => o.id === selectedOrder.id)) {
+      const firstPending = activeOrders.find(o => o.status === 'Pendiente');
+      const initial = firstPending || activeOrders[0];
       handleSelectJob(initial);
     } else {
-      const current = orders.find(o => o.id === selectedOrder.id);
+      const current = activeOrders.find(o => o.id === selectedOrder.id);
       if (current) {
         setSelectedOrder(current);
       }
     }
-  }, [orders, targetFocusOrderId]);
+  }, [activeOrders, targetFocusOrderId]);
 
   // Apply Professional Dark Styling (visible high-contrast streets, emerald parks and deep blue water)
   const applyCustomMapStyling = (map) => {
@@ -870,7 +908,7 @@ export default function UberDriverView({
     bounds.extend(startCoords);
 
     // Render ALL Daily Stop Markers simultaneously
-    orders.forEach((order, index) => {
+    activeOrders.forEach((order, index) => {
       if (!order.latitude || !order.longitude) return;
 
       const orderLngLat = [order.longitude, order.latitude];
@@ -878,22 +916,22 @@ export default function UberDriverView({
 
       const isCompleted = order.status === 'Completado';
       const isCancelled = order.status === 'No Realizado';
-      const isTarget = activeTarget?.id === order.id;
+      const isTarget = String(activeTarget?.id) === String(order.id);
+      const stopNumber = Number(order.route_order) > 0 ? Number(order.route_order) : (index + 1);
 
       const markerEl = document.createElement('div');
 
       if (isTarget) {
-        // Destination Marker
+        // Destination Marker (con número de parada explícito)
         markerEl.className = 'apple-dest-badge cursor-pointer';
         markerEl.innerHTML = `
-          <div class="apple-dest-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-            </svg>
+          <div class="apple-dest-icon flex items-center justify-center font-black text-sm font-mono shadow-xl">
+            ${stopNumber}
           </div>
           <div class="apple-dest-pointer"></div>
-          <div class="apple-dest-label">
-            ${order.address || 'Destino'}
+          <div class="apple-dest-label flex items-center gap-1 font-bold">
+            <span class="text-cyan-400 font-black font-mono">#${stopNumber}</span>
+            <span>${order.address || 'Destino'}</span>
           </div>
         `;
         markerEl.onclick = () => handleSelectJob(order);
@@ -911,8 +949,8 @@ export default function UberDriverView({
 
         markerEl.className = 'cursor-pointer group flex flex-col items-center';
         markerEl.innerHTML = `
-          <div class="w-7 h-7 rounded-full ${bg} border-2 border-white/90 text-white font-black text-xs flex items-center justify-center shadow-lg transition-transform group-hover:scale-125">
-            ${index + 1}
+          <div class="w-7 h-7 rounded-full ${bg} border-2 border-white/90 text-white font-black text-xs flex items-center justify-center shadow-lg transition-transform group-hover:scale-125 font-mono">
+            ${stopNumber}
           </div>
         `;
         markerEl.onclick = () => handleSelectJob(order);
@@ -960,8 +998,9 @@ export default function UberDriverView({
 
           const activeBadgeEl = document.createElement('div');
           activeBadgeEl.className = 'apple-active-route-badge';
+          const durationFormatted = formatRouteDuration(currentActive.minutes);
           activeBadgeEl.innerHTML = `
-            <div class="eta-main">${currentActive.minutes} min</div>
+            <div class="eta-main">${durationFormatted}</div>
             <div class="eta-sub">${currentActive.miles.toFixed(1)} mi • Más corta</div>
           `;
 
@@ -987,7 +1026,7 @@ export default function UberDriverView({
         duration: 800
       });
     }
-  }, [orders, selectedOrder?.id, selectedOrder?.latitude, selectedOrder?.longitude, userLocation, is3DMode, mapTheme, selectedRouteIdx]);
+  }, [activeOrders, selectedOrder?.id, selectedOrder?.route_order, selectedOrder?.latitude, selectedOrder?.longitude, userLocation, is3DMode, mapTheme, selectedRouteIdx]);
 
   // Center on current technician location
   const handleCenterOnMe = () => {
@@ -1035,39 +1074,133 @@ export default function UberDriverView({
     });
   };
 
-  // OPEN TRAVESÍA ORGANIZER MODAL
-  const handleOpenTripOrganizer = () => {
-    setTempOrdersList([...orders]);
+  // OPEN UNIFIED DAY JOBS & TRAVESÍA MODAL
+  const handleOpenDayJobsModal = () => {
+    setTempOrdersList([...activeOrders]);
+    setHasOrderChanged(false);
     setOptimizedNotice(null);
     setDragIndex(null);
     setDragOverIndex(null);
     setTouchDragIndex(null);
     setTouchOverIndex(null);
-    setShowTripModal(true);
+    setShowDayJobsOverlay(true);
+  };
+
+  // LIVE APPLY & PERSIST SEQUENCE TO LIVE APP AND BACKEND
+  const applyOrdersSequenceLive = async (newSequenceList) => {
+    if (!newSequenceList || newSequenceList.length === 0) return;
+    const orderedIds = newSequenceList.map(o => o.id);
+    const orderMap = new Map();
+    orderedIds.forEach((id, idx) => {
+      orderMap.set(String(id), idx + 1);
+      orderMap.set(Number(id), idx + 1);
+    });
+
+    // 1. Instantly update parent React state in App.jsx (0 ms instant re-sort in TodayView & map)
+    if (onUpdateOrders) {
+      onUpdateOrders(prevOrders => {
+        const updated = prevOrders.map(item => {
+          const newOrder = orderMap.get(item.id) ?? orderMap.get(String(item.id)) ?? orderMap.get(Number(item.id));
+          if (newOrder != null) {
+            return { ...item, route_order: newOrder };
+          }
+          return item;
+        });
+        return [...updated];
+      });
+    }
+
+    // 2. Instantly update localStorage cache
+    try {
+      const cachedStr = localStorage.getItem('xfinity_cached_orders');
+      if (cachedStr) {
+        const cachedOrders = JSON.parse(cachedStr);
+        const updatedCached = cachedOrders.map(item => {
+          const newOrder = orderMap.get(item.id) ?? orderMap.get(String(item.id)) ?? orderMap.get(Number(item.id));
+          if (newOrder != null) {
+            return { ...item, route_order: newOrder };
+          }
+          return item;
+        });
+        localStorage.setItem('xfinity_cached_orders', JSON.stringify(updatedCached));
+      }
+    } catch (e) {
+      console.warn('Could not update localStorage cache:', e);
+    }
+
+    // 3. Keep selected order updated with its new position
+    if (selectedOrder) {
+      const refreshed = newSequenceList.find(o => String(o.id) === String(selectedOrder.id));
+      if (refreshed) {
+        const newOrder = orderMap.get(refreshed.id) ?? orderMap.get(String(refreshed.id));
+        setSelectedOrder(prev => ({ ...prev, ...refreshed, route_order: newOrder || prev.route_order }));
+      }
+    }
+
+    // 4. Invalidate directions route cache so polyline re-draws for new sequence
+    routeCacheRef.current.clear();
+
+    // 5. Persist to server and await so backend SQLite writes before any refresh
+    try {
+      const res = await fetch('/api/orders/reorder-route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds: orderedIds.map(Number) })
+      });
+      if (!res.ok) {
+        console.warn('reorder-route returned status:', res.status);
+      }
+    } catch (e) {
+      console.warn('Fetch reorder notice:', e);
+    }
   };
 
   // REORDER HELPER FOR BOTH DRAG & DROP AND BUTTONS
-  const reorderTripList = (fromIndex, toIndex) => {
-    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
-    setTempOrdersList(prev => {
-      const next = [...prev];
-      const [moved] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, moved);
-      return next;
-    });
+  const reorderTripList = async (fromIndex, toIndex) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= tempOrdersList.length || toIndex >= tempOrdersList.length) return;
+    const next = [...tempOrdersList];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+
+    // Explicitly update route_order property on each item so all components reflect the 1-based order
+    const updatedSequence = next.map((ord, idx) => ({
+      ...ord,
+      route_order: idx + 1
+    }));
+
+    setTempOrdersList(updatedSequence);
+    setLiveOrders(updatedSequence);
+    setHasOrderChanged(true);
     setOptimizedNotice(null);
+
+    // Apply live immediately to live map and order indicators!
+    await applyOrdersSequenceLive(updatedSequence);
   };
 
   // MOVE STOP UP IN TRAVESÍA
-  const handleMoveStopUp = (index) => {
-    if (index <= 0) return;
-    reorderTripList(index, index - 1);
+  const handleMoveStopUp = async (orderIdOrIndex) => {
+    let fromIndex = tempOrdersList.findIndex(o => String(o.id) === String(orderIdOrIndex));
+    if (fromIndex === -1 && typeof orderIdOrIndex === 'number') fromIndex = orderIdOrIndex;
+    if (fromIndex <= 0 || fromIndex >= tempOrdersList.length) return;
+    await reorderTripList(fromIndex, fromIndex - 1);
   };
 
   // MOVE STOP DOWN IN TRAVESÍA
-  const handleMoveStopDown = (index) => {
-    if (index >= tempOrdersList.length - 1) return;
-    reorderTripList(index, index + 1);
+  const handleMoveStopDown = async (orderIdOrIndex) => {
+    let fromIndex = tempOrdersList.findIndex(o => String(o.id) === String(orderIdOrIndex));
+    if (fromIndex === -1 && typeof orderIdOrIndex === 'number') fromIndex = orderIdOrIndex;
+    if (fromIndex < 0 || fromIndex >= tempOrdersList.length - 1) return;
+    await reorderTripList(fromIndex, fromIndex + 1);
+  };
+
+  // MOVE DIRECTLY TO TARGET POSITION (1-based, e.g. picking "1" or "4")
+  const handleMoveToPosition = async (orderIdOrIndex, targetPosition1Based) => {
+    let fromIndex = tempOrdersList.findIndex(o => String(o.id) === String(orderIdOrIndex));
+    if (fromIndex === -1 && typeof orderIdOrIndex === 'number') fromIndex = orderIdOrIndex;
+    if (fromIndex === -1) return;
+    const toIndex = parseInt(targetPosition1Based, 10) - 1;
+    if (isNaN(toIndex) || toIndex < 0 || toIndex >= tempOrdersList.length || toIndex === fromIndex) return;
+    await reorderTripList(fromIndex, toIndex);
   };
 
   // HTML5 DESKTOP DRAG & DROP HANDLERS
@@ -1135,7 +1268,7 @@ export default function UberDriverView({
   };
 
   // RUN AUTO-OPTIMIZER FOR SHORTEST ROUTE (TSP NEAREST NEIGHBOR)
-  const handleAutoOptimizeTrip = () => {
+  const handleAutoOptimizeTrip = async () => {
     const origin = userLocation || { lat: DEFAULT_LNG_LAT[1], lng: DEFAULT_LNG_LAT[0] };
     const beforeMiles = calculateTotalTripMiles(tempOrdersList, origin);
     const optimized = optimizeStopsSequence(tempOrdersList, origin);
@@ -1143,11 +1276,16 @@ export default function UberDriverView({
     const saved = Math.max(0, beforeMiles - afterMiles);
 
     setTempOrdersList(optimized);
+    setLiveOrders(optimized);
+    setHasOrderChanged(true);
     setOptimizedNotice({
       savedMiles: saved.toFixed(1),
       totalMiles: afterMiles.toFixed(1),
       savedMinutes: Math.round(saved * 2.2)
     });
+
+    // Apply live immediately to live map and state!
+    await applyOrdersSequenceLive(optimized);
   };
 
   // SAVE AND APPLY REORDERED TRAVESÍA
@@ -1155,61 +1293,35 @@ export default function UberDriverView({
     if (tempOrdersList.length === 0) return;
     setIsSavingTrip(true);
     try {
-      const orderedIds = tempOrdersList.map(o => o.id);
-
-      // 1. Immediately update parent orders in React state (0 ms instant reorder in top selector)
-      if (onUpdateOrders) {
-        onUpdateOrders(prevOrders => {
-          const orderMap = new Map(orderedIds.map((id, i) => [id, i + 1]));
-          return prevOrders.map(item => {
-            if (orderMap.has(item.id)) {
-              return { ...item, route_order: orderMap.get(item.id) };
-            }
-            return item;
-          });
-        });
-      }
-
-      // 2. Immediately update localStorage cached orders with new route_order
-      try {
-        const cachedStr = localStorage.getItem('xfinity_cached_orders');
-        if (cachedStr) {
-          const cachedOrders = JSON.parse(cachedStr);
-          const orderMap = new Map(orderedIds.map((id, i) => [id, i + 1]));
-          const updatedCached = cachedOrders.map(item => {
-            if (orderMap.has(item.id)) {
-              return { ...item, route_order: orderMap.get(item.id) };
-            }
-            return item;
-          });
-          localStorage.setItem('xfinity_cached_orders', JSON.stringify(updatedCached));
-        }
-      } catch (e) {
-        console.warn('Could not update localStorage cache:', e);
-      }
-
-      // 2. Persist to backend database
-      const res = await fetch('/api/orders/reorder-route', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderedIds })
-      });
-
-      if (!res.ok) {
-        console.warn('Backend reorder response not OK:', res.status);
-      }
-
-      routeCacheRef.current.clear(); // Refresh route cache
+      const finalSequence = tempOrdersList.map((ord, idx) => ({
+        ...ord,
+        route_order: idx + 1
+      }));
+      setLiveOrders(finalSequence);
+      await applyOrdersSequenceLive(finalSequence);
       if (onOrderUpdated) await onOrderUpdated();
-      setShowTripModal(false);
-      const newFirst = tempOrdersList[0];
-      if (newFirst) {
-        handleSelectJob(newFirst);
+      setHasOrderChanged(false);
+      setShowDayJobsOverlay(false);
+
+      // Keep or refresh selected order with its new sequence position
+      if (selectedOrder) {
+        const matchingCurrent = finalSequence.find(o => String(o.id) === String(selectedOrder.id));
+        if (matchingCurrent) {
+          handleSelectJob(matchingCurrent);
+        } else if (finalSequence[0]) {
+          handleSelectJob(finalSequence[0]);
+        }
+      } else if (finalSequence[0]) {
+        handleSelectJob(finalSequence[0]);
       }
     } catch (err) {
       console.error('Error guardando travesía:', err);
       if (onOrderUpdated) await onOrderUpdated();
-      setShowTripModal(false);
+      setHasOrderChanged(false);
+      setShowDayJobsOverlay(false);
+      if (tempOrdersList[0]) {
+        handleSelectJob(tempOrdersList[0]);
+      }
     } finally {
       setIsSavingTrip(false);
     }
@@ -1229,7 +1341,8 @@ export default function UberDriverView({
     return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${order.address}, ${order.city || 'Elkhart'}, IN ${order.zip_code || ''}`)}`;
   };
 
-  const selectedIndex = selectedOrder ? orders.findIndex(o => o.id === selectedOrder.id) : 0;
+  const selectedIndex = selectedOrder ? activeOrders.findIndex(o => String(o.id) === String(selectedOrder.id)) : 0;
+  const currentStopNumber = (selectedOrder && Number(selectedOrder.route_order) > 0) ? Number(selectedOrder.route_order) : (selectedIndex + 1);
   const currentTimer = selectedOrder ? jobTimers[selectedOrder.id] : null;
 
   // Selected Order computed properties
@@ -1259,16 +1372,19 @@ export default function UberDriverView({
 
   const tripMiles = useMemo(() => {
     if (activeRouteInfo?.miles) return `${activeRouteInfo.miles.toFixed(1)} mi`;
-    if (selectedOrder?.latitude && userLocation?.lat) {
-      return `${getEstimatedDrivingMiles(userLocation.lat, userLocation.lng, selectedOrder.latitude, selectedOrder.longitude).toFixed(1)} mi`;
+    if (selectedOrder?.latitude && selectedOrder?.longitude) {
+      const { coords } = getOriginPoint(selectedOrder);
+      if (coords && coords[0] && coords[1]) {
+        return `${getEstimatedDrivingMiles(coords[1], coords[0], selectedOrder.latitude, selectedOrder.longitude).toFixed(1)} mi`;
+      }
     }
     return '1.4 mi';
-  }, [activeRouteInfo?.miles, selectedOrder?.latitude, selectedOrder?.longitude, userLocation?.lat, userLocation?.lng]);
+  }, [activeRouteInfo?.miles, selectedOrder, userLocation, activeOrders]);
 
   const tripMinutes = useMemo(() => {
-    if (activeRouteInfo?.minutes) return `~${activeRouteInfo.minutes} min`;
+    if (activeRouteInfo?.minutes) return formatRouteDuration(activeRouteInfo.minutes, true);
     const numMiles = parseFloat(tripMiles) || 1.4;
-    return `~${Math.max(1, Math.round(numMiles * 2.2))} min`;
+    return formatRouteDuration(Math.max(1, Math.round(numMiles * 2.2)), true);
   }, [activeRouteInfo?.minutes, tripMiles]);
 
   const tripSummary = activeRouteInfo?.summary || selectedOrder?.city || 'Skokie';
@@ -1349,7 +1465,7 @@ export default function UberDriverView({
             {/* Line 2: Orders Count on Left, [Hoy / Ir hoy] Badge on Right */}
             <div className="flex items-center justify-between w-full mt-0.5 px-0.5">
               <span className="text-[10px] text-cyan-400 font-mono font-bold truncate">
-                {orders.length} {orders.length === 1 ? 'orden' : 'órdenes'}
+                {activeOrders.length} {activeOrders.length === 1 ? 'orden' : 'órdenes'}
               </span>
 
               {isViewingToday ? (
@@ -1381,7 +1497,7 @@ export default function UberDriverView({
           </button>
         </div>
 
-        {/* Actions: [+] & [Lista] & [Saldo Diario] */}
+        {/* Actions: [+] & [Travesía / Lista de Trabajos] & [Saldo Diario] */}
         <div className="pointer-events-auto flex items-center gap-1 sm:gap-1.5 shrink-0">
           <button
             onClick={onOpenAddJob}
@@ -1393,18 +1509,18 @@ export default function UberDriverView({
 
           <button
             type="button"
-            onClick={() => setShowDayJobsOverlay(true)}
-            className="w-9 h-9 rounded-2xl bg-[#0f1722]/90 backdrop-blur-2xl hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 shadow-xl active:scale-95 transition flex items-center justify-center cursor-pointer"
-            title="Ver lista de trabajos del día"
+            onClick={handleOpenDayJobsModal}
+            className="w-9 h-9 rounded-2xl bg-[#0f1722]/95 backdrop-blur-2xl hover:bg-cyan-500/10 text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 shadow-xl active:scale-95 transition flex items-center justify-center cursor-pointer"
+            title="Organizar travesía y lista de trabajos del día"
           >
-            <List className="h-4 w-4" />
+            <Route className="h-4 w-4 stroke-[2.3]" />
           </button>
 
           {/* Saldo Diario / Ganancia del Día */}
           <div
-            onClick={() => setShowDayJobsOverlay(true)}
+            onClick={handleOpenDayJobsModal}
             className="h-9 px-2 sm:px-2.5 rounded-2xl bg-[#0f1722]/95 backdrop-blur-2xl border border-emerald-500/30 hover:border-emerald-500/60 shadow-xl active:scale-95 transition flex items-center gap-1.5 cursor-pointer select-none group"
-            title={`Saldo del día (${dayCompleted.length} completados): $${dayEarnings.toFixed(2)}. Toca para ver lista.`}
+            title={`Saldo del día (${dayCompleted.length} completados): $${dayEarnings.toFixed(2)}. Toca para ver travesía y lista.`}
           >
             <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-[10.5px] font-black shrink-0 font-mono">
               $
@@ -1421,7 +1537,7 @@ export default function UberDriverView({
         </div>
       </div>
 
-      {/* 4. RIGHT FLOATING CONTROLS: THEME + 3D/2D + CENTRAR + ORGANIZAR */}
+      {/* 4. RIGHT FLOATING CONTROLS: THEME + 3D/2D + CENTRAR EN RUTA + CENTRAR EN GPS */}
       <div className="absolute right-3 top-20 z-20 flex flex-col gap-2 pointer-events-auto">
         {/* Toggle Theme Popover */}
         <div className="relative">
@@ -1493,21 +1609,12 @@ export default function UberDriverView({
         >
           <Navigation className="h-4 w-4 fill-[#007AFF]/25" />
         </button>
-
-        {/* Open Travesía Modal */}
-        <button
-          onClick={handleOpenTripOrganizer}
-          className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#16202c]/95 to-[#1c2a3a]/95 backdrop-blur-xl border border-cyan-500/30 text-cyan-400 hover:text-cyan-300 flex items-center justify-center shadow-lg shadow-cyan-500/10 active:scale-95 transition"
-          title="Organizar travesía del día"
-        >
-          <Route className="h-4 w-4 stroke-[2.3]" />
-        </button>
       </div>
 
       {/* 5. BOTTOM SLIDING DRAWER: REFINED ACTIVE JOB CARD */}
       <div 
         className={`absolute bottom-0 left-0 right-0 z-30 bg-[#0f1722]/96 backdrop-blur-2xl rounded-t-[28px] border-t border-white/10 shadow-[0_-8px_32px_rgba(0,0,0,0.6)] transition-all duration-300 flex flex-col ${
-          drawerState === 'expanded' ? 'h-[75%]' : 'min-h-[285px] pb-2'
+          drawerState === 'expanded' ? 'h-[75%]' : 'min-h-[195px] sm:min-h-[205px] pb-2'
         }`}
       >
         {/* Grabber Handle */}
@@ -1523,9 +1630,18 @@ export default function UberDriverView({
             
             {/* ROW 1: TOP BAR WITH ACTION/PHONE + [ ← PARADA X DE Y → ] + EXPAND */}
             <div className="flex items-center justify-between gap-2 pt-0.5">
-              {/* Left Action: Circular Button (Share or Phone) */}
-              <div className="w-9 flex items-center justify-start">
-                {selectedOrder.phone ? (
+              {/* Left Action: Circular GPS Navigation Button */}
+              <div className="flex items-center gap-1.5 justify-start">
+                <a
+                  href={getNavUrl(selectedOrder)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
+                  title="Abrir navegación GPS (Google Maps / Apple Maps)"
+                >
+                  <Navigation className="h-4 w-4 fill-cyan-400/20 text-cyan-400" />
+                </a>
+                {selectedOrder.phone && (
                   <a
                     href={`tel:${selectedOrder.phone}`}
                     className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95 shadow-sm"
@@ -1533,15 +1649,6 @@ export default function UberDriverView({
                   >
                     <Phone className="h-4 w-4 text-cyan-400" />
                   </a>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onOpenShareModal(selectedOrder)}
-                    className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95 shadow-sm"
-                    title="Compartir orden"
-                  >
-                    <Share2 className="h-4 w-4" />
-                  </button>
                 )}
               </div>
 
@@ -1560,7 +1667,7 @@ export default function UberDriverView({
                   onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
                   className="px-3.5 py-1 rounded-full bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/25 text-[10px] font-black tracking-wider uppercase cursor-pointer transition select-none shadow-xs"
                 >
-                  PARADA {selectedIndex + 1} DE {orders.length}
+                  PARADA {currentStopNumber} DE {activeOrders.length}
                 </div>
 
                 <button
@@ -1599,88 +1706,38 @@ export default function UberDriverView({
               </p>
             </div>
 
-            {/* ROW 3: THE 3 MAIN ACTION BUTTONS (GPS | NO REALIZADO | COMPLETAR) */}
-            <div className="grid grid-cols-3 gap-2 py-1">
-              {/* 1. GPS - Direct phone navigation / Google Maps */}
-              <a
-                href={getNavUrl(selectedOrder)}
-                target="_blank"
-                rel="noreferrer"
-                className="py-2.5 px-2 bg-[#007AFF] hover:bg-blue-500 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/30 active:scale-95 transition cursor-pointer"
-                title="Abrir mapa de navegación normal del teléfono (Google Maps / Apple Maps)"
-              >
-                <Navigation className="h-4 w-4 fill-current" />
-                <span>GPS</span>
-              </a>
-
-              {/* 2. No Realizado */}
-              <button
-                type="button"
-                onClick={() => isSelectedCancelled ? (onOpenCancelDetail ? onOpenCancelDetail(selectedOrder) : null) : onOpenCancelModal(selectedOrder)}
-                className={`py-2.5 px-2 font-black text-xs rounded-2xl flex items-center justify-center gap-1.5 active:scale-95 transition shadow-sm cursor-pointer ${
-                  isSelectedCancelled
-                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 shadow-rose-500/20'
-                    : 'bg-[#182332] hover:bg-rose-500/20 text-slate-200 hover:text-rose-300 border border-white/10 hover:border-rose-500/30'
-                }`}
-                title={isSelectedCancelled ? "Ver cancelación" : "Marcar orden como No Realizado"}
-              >
-                <X className="h-4 w-4 text-rose-400 stroke-[2.5]" />
-                <span>{isSelectedCancelled ? 'Cancelado' : 'No Realizado'}</span>
-              </button>
-
-              {/* 3. Completar / Compartir (Parpadeante) / Reportado */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (isSelectedCompleted) {
-                    onOpenShareModal(selectedOrder);
-                  } else if (activePhotosCount === 0) {
-                    onOpenPhotos(selectedOrder);
-                  } else {
-                    onMarkCompleted(selectedOrder);
-                  }
-                }}
-                className={`py-2.5 px-2 font-black text-xs rounded-2xl flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer ${
+            {/* ROW 3: NOTES & WORK SPECS CARD (STATUS ICON + SPECS + REMARKS + EDIT) */}
+            <div className="bg-[#131b26] border border-white/8 rounded-2xl p-2.5 flex items-center justify-between gap-2.5 my-1">
+              {/* Status Icon Circle (Relojito amarillo si pendiente, 1 palomita si completado, 2 palomitas si reportado) */}
+              <div 
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs shrink-0 select-none transition-all shadow-sm ${
                   isSelectedCompleted && isSelectedShared
-                    ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/35 shadow-xs'
+                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-cyan-500/20'
                     : isSelectedCompleted
-                    ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border border-emerald-400 shadow-lg shadow-emerald-500/40 animate-pulse'
-                    : 'bg-[#182332] hover:bg-[#223145] text-slate-200 hover:text-white border border-white/10 shadow-sm'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-emerald-500/20'
+                    : isSelectedCancelled
+                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-rose-500/20'
+                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-amber-500/25 ring-1 ring-amber-500/20'
                 }`}
                 title={
                   isSelectedCompleted && isSelectedShared
-                    ? 'Reporte enviado al supervisor por WhatsApp. Toca para volver a compartir'
+                    ? 'Estado: Reportado'
                     : isSelectedCompleted
-                    ? 'Trabajo completado: Toca para enviar reporte por WhatsApp'
-                    : activePhotosCount === 0
-                    ? 'Tirar foto para completar'
-                    : 'Finalizar trabajo'
+                    ? 'Estado: Completado'
+                    : isSelectedCancelled
+                    ? 'Estado: No Realizado'
+                    : 'Estado: Pendiente'
                 }
               >
                 {isSelectedCompleted && isSelectedShared ? (
-                  <>
-                    <CheckCheck className="h-4 w-4 text-emerald-400 stroke-[2.5]" />
-                    <span>Reportado</span>
-                  </>
+                  <CheckCheck className="h-4 w-4 stroke-[2.5]" />
                 ) : isSelectedCompleted ? (
-                  <>
-                    <Share2 className="h-4 w-4 stroke-[2.5]" />
-                    <span>Compartir</span>
-                  </>
+                  <Check className="h-4 w-4 stroke-[3]" />
+                ) : isSelectedCancelled ? (
+                  <X className="h-4 w-4 stroke-[2.5]" />
                 ) : (
-                  <>
-                    <CheckCircle2 className="h-4 w-4 text-cyan-400" />
-                    <span>{activePhotosCount === 0 ? 'Completar' : 'Finalizar'}</span>
-                  </>
+                  <Clock className="h-4 w-4 stroke-[2.5]" />
                 )}
-              </button>
-            </div>
-
-            {/* ROW 4: NOTES & WORK SPECS CARD (AVATAR + SPECS + REMARKS + EDIT) */}
-            <div className="bg-[#131b26] border border-white/8 rounded-2xl p-2.5 flex items-center justify-between gap-2.5 my-0.5">
-              {/* Circular Avatar with Initial (Matches 'J' in the reference photo) */}
-              <div className="w-8 h-8 rounded-full bg-cyan-600/25 border border-cyan-500/40 text-cyan-300 font-black flex items-center justify-center text-xs shrink-0 select-none shadow-xs">
-                {techInitial}
               </div>
 
               {/* Center: Specs Summary & Notes */}
@@ -1706,7 +1763,7 @@ export default function UberDriverView({
                     </>
                   )}
                 </div>
-                <p className="text-[10px] text-slate-400 truncate mt-0.5 font-medium">
+                <p className="text-[10.5px] text-slate-400 truncate mt-0.5 font-medium">
                   {selectedRemark || (selectedOrder.raw_notes ? selectedOrder.raw_notes.slice(0, 45) : 'Agregar una nota o detalle...')}
                 </p>
               </div>
@@ -1722,76 +1779,171 @@ export default function UberDriverView({
               </button>
             </div>
 
-            {/* ROW 5: BOTTOM BAR (NO REALIZADO | $SALDO | CAPSULE ACTIONS) */}
+            {/* ROW 4: BOTTOM CONTROL BAR (NO REALIZADO | $SALDO EN MEDIO | 3 BOTONES MILESTONES) */}
             <div className="flex items-center justify-between gap-2 pt-1 pb-0.5">
-              {/* Left: Contador de fotos pill (desapercibido, misma estética que tenía No Realizado) */}
-              <button
-                type="button"
-                onClick={() => onOpenPhotos(selectedOrder)}
-                className="px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-[#182332] hover:bg-[#223145] text-slate-300 hover:text-white border border-white/10 active:scale-95 transition shadow-sm cursor-pointer"
-                title="Ver o agregar fotos de evidencia"
-              >
-                <Camera className="h-3.5 w-3.5 text-cyan-400 stroke-[2.3]" />
-                <span>Fotos ({activePhotosCount})</span>
-              </button>
+              {/* 1. Left: Botón No Realizado / Cancelado */}
+              {isSelectedCancelled ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenCancelDetail ? onOpenCancelDetail(selectedOrder) : null}
+                  className="px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 transition active:scale-95 shadow-sm cursor-pointer shrink-0"
+                  title="Ver constancia de trabajo no realizado"
+                >
+                  <X className="h-3.5 w-3.5 stroke-[2.5]" />
+                  <span>Cancelado</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onOpenCancelModal(selectedOrder)}
+                  className="px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-[#182332] hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 border border-white/10 hover:border-rose-500/30 transition active:scale-95 shadow-sm cursor-pointer shrink-0"
+                  title="Marcar trabajo como No Realizado"
+                >
+                  <X className="h-3.5 w-3.5 text-rose-400 stroke-[2.5]" />
+                  <span>No Realizado</span>
+                </button>
+              )}
 
-              {/* Center: Saldo prominently in neon green monospace */}
+              {/* 2. Center: Saldo prominently in neon green monospace */}
               <div 
                 className="flex items-center justify-center cursor-pointer select-none"
                 onClick={() => onOpenAdjustModal ? onOpenAdjustModal(selectedOrder) : null}
                 title="Toca para ajustar tarifa"
               >
-                <span className={`font-mono font-black text-lg sm:text-xl tracking-tight ${
+                <span className={`font-mono font-black text-xl sm:text-2xl tracking-tight transition hover:scale-105 ${
                   isSelectedCancelled
                     ? 'text-slate-500 line-through'
-                    : 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]'
+                    : 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.4)]'
                 }`}>
                   ${selectedOrder.rate_calculated || 100}
                 </span>
               </div>
 
-              {/* Right: Estado de la orden (Pendiente / Completado / Reportado / No Realizado) con la misma estética sobria del botón de fotos */}
+              {/* 3. Right: Cápsula con los 3 botones (1. Iniciar/Fotos -> 2. Compartir -> 3. Reportado) */}
               <div 
-                className="px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-[#182332] text-slate-300 border border-white/10 select-none shadow-sm shrink-0"
+                className={`flex items-center gap-1 rounded-full px-2 py-1 shadow-sm shrink-0 border transition-all ${
+                  isSelectedCancelled
+                    ? 'bg-rose-950/25 border-rose-500/25'
+                    : 'bg-[#182332] border-white/10'
+                }`}
                 title={
-                  isSelectedCompleted && isSelectedShared
-                    ? 'Estado: Reportado al supervisor'
+                  isSelectedCancelled
+                    ? 'Historial: Trabajo no realizado'
+                    : isSelectedCompleted && isSelectedShared
+                    ? 'Historial: Proceso completado y reportado'
                     : isSelectedCompleted
-                    ? 'Estado: Completado (Pendiente de reportar)'
-                    : isSelectedCancelled
-                    ? (isSelectedShared ? 'Estado: No Realizado (Reportado)' : 'Estado: No Realizado')
-                    : 'Estado: Pendiente'
+                    ? 'Historial: Trabajo completado (pendiente de compartir)'
+                    : 'Historial: Trabajo pendiente'
                 }
               >
-                {isSelectedCompleted ? (
-                  isSelectedShared ? (
-                    <>
-                      <CheckCheck className="h-3.5 w-3.5 text-emerald-400 stroke-[2.5]" />
-                      <span>Reportado</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                      <span>Completado</span>
-                    </>
-                  )
-                ) : isSelectedCancelled ? (
-                  isSelectedShared ? (
-                    <>
-                      <CheckCheck className="h-3.5 w-3.5 text-rose-400 stroke-[2.5]" />
-                      <span>Reportado</span>
-                    </>
-                  ) : (
-                    <>
-                      <X className="h-3.5 w-3.5 text-rose-400 stroke-[2.5]" />
-                      <span>No Realizado</span>
-                    </>
-                  )
+                {/* 1. Paso Iniciar / Tirar Fotos de Evidencia */}
+                {isSelectedCancelled ? (
+                  <div 
+                    className="p-1.5 rounded-full text-rose-400/30 select-none cursor-not-allowed"
+                    title="Paso 1: Cancelado / No realizado"
+                  >
+                    <Camera className="h-4 w-4 stroke-[2.2]" />
+                  </div>
                 ) : (
-                  <>
-                    <Clock className="h-3.5 w-3.5 text-amber-400/80 stroke-[2.3]" />
-                    <span>Pendiente</span>
-                  </>
+                  <button
+                    type="button"
+                    onClick={() => onOpenPhotos(selectedOrder)}
+                    className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer flex items-center gap-1 ${
+                      isSelectedCompleted
+                        ? 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 shadow-xs'
+                        : activePhotosCount > 0
+                        ? 'text-blue-400 bg-blue-500/15 border border-blue-500/30 shadow-xs'
+                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                    }`}
+                    title={
+                      isSelectedCompleted
+                        ? 'Trabajo finalizado con fotos'
+                        : activePhotosCount > 0
+                        ? `Fotos tomadas (${activePhotosCount}) - Toca para agregar más o finalizar`
+                        : 'Iniciar trabajo y tomar fotos de evidencia'
+                    }
+                  >
+                    {isSelectedCompleted ? (
+                      <Check className="h-4 w-4 stroke-[3]" />
+                    ) : (
+                      <>
+                        <Camera className="h-4 w-4 stroke-[2.2]" />
+                        {activePhotosCount > 0 && (
+                          <span className="text-[10px] font-mono font-bold leading-none pr-0.5">
+                            {activePhotosCount}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {/* 2. Paso Compartir por WhatsApp */}
+                {isSelectedCancelled ? (
+                  <div 
+                    className="p-1.5 rounded-full text-rose-400/30 select-none cursor-not-allowed"
+                    title="Paso 2: Cancelado / No realizado"
+                  >
+                    <Share2 className="h-4 w-4 stroke-[2.2]" />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onOpenShareModal(selectedOrder)}
+                    className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer ${
+                      isSelectedShared
+                        ? 'text-cyan-400 bg-cyan-500/20 border border-cyan-500/40 shadow-xs'
+                        : isSelectedCompleted
+                        ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 animate-pulse'
+                        : 'text-slate-500/40 hover:text-slate-300'
+                    }`}
+                    title={
+                      isSelectedShared
+                        ? 'Compartido por WhatsApp (Toca para volver a compartir)'
+                        : isSelectedCompleted
+                        ? 'Completado: Toca para compartir reporte por WhatsApp'
+                        : 'Compartir reporte con fotos por WhatsApp'
+                    }
+                  >
+                    <Share2 className="h-4 w-4 stroke-[2.2]" />
+                  </button>
+                )}
+
+                {/* 3. Paso Reportar / Confirmar Reportado (Dos palomitas) */}
+                {isSelectedCancelled ? (
+                  <div 
+                    className="p-1.5 rounded-full text-rose-400/30 select-none cursor-not-allowed"
+                    title="Paso 3: Cancelado / No realizado"
+                  >
+                    <CheckCheck className="h-4 w-4 stroke-[2.5]" />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isSelectedCompleted) {
+                        onMarkCompleted(selectedOrder);
+                      } else {
+                        onOpenShareModal(selectedOrder);
+                      }
+                    }}
+                    className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer ${
+                      isSelectedCompleted && isSelectedShared
+                        ? 'text-cyan-300 bg-cyan-500/20 border border-cyan-500/40 shadow-xs'
+                        : isSelectedCompleted
+                        ? 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/15'
+                        : 'text-slate-500/40 hover:text-slate-400'
+                    }`}
+                    title={
+                      isSelectedCompleted && isSelectedShared
+                        ? 'Paso 3: Reportado y confirmado. Toca para ver reporte'
+                        : isSelectedCompleted
+                        ? 'Completado: Pendiente de compartir'
+                        : 'Toca para completar y reportar'
+                    }
+                  >
+                    <CheckCheck className="h-4 w-4 stroke-[2.5]" />
+                  </button>
                 )}
               </div>
             </div>
@@ -1881,7 +2033,7 @@ export default function UberDriverView({
                 <div className="space-y-2 pt-1">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-black text-white uppercase tracking-wider">
-                      Cola del Día ({orders.length} trabajos)
+                      Cola del Día ({activeOrders.length} trabajos)
                     </h3>
                   </div>
 
@@ -1890,7 +2042,7 @@ export default function UberDriverView({
                       onClick={() => setStatusFilter('ALL')}
                       className={`py-1.5 rounded-xl transition ${statusFilter === 'ALL' ? 'bg-[#007AFF] text-white shadow-sm font-black' : 'text-slate-400'}`}
                     >
-                      Todos ({orders.length})
+                      Todos ({activeOrders.length})
                     </button>
                     <button
                       onClick={() => setStatusFilter('Pendiente')}
@@ -1913,12 +2065,13 @@ export default function UberDriverView({
                   </div>
 
                   <div className="space-y-2">
-                    {orders
+                    {activeOrders
                       .filter(o => statusFilter === 'ALL' || o.status === statusFilter)
                       .map((ord, idx) => {
-                        const isTarget = selectedOrder?.id === ord.id;
+                        const isTarget = String(selectedOrder?.id) === String(ord.id);
                         const isCompleted = ord.status === 'Completado';
                         const isCancelled = ord.status === 'No Realizado';
+                        const realStopNumber = Number(ord.route_order) > 0 ? Number(ord.route_order) : (activeOrders.findIndex(o => String(o.id) === String(ord.id)) + 1);
 
                         return (
                           <div
@@ -1934,7 +2087,7 @@ export default function UberDriverView({
                               <span className={`w-6 h-6 rounded-full text-white font-black text-xs flex items-center justify-center font-sans shrink-0 ${
                                 isCompleted ? 'bg-[#34C759]' : isCancelled ? 'bg-[#FF3B30]' : 'bg-[#FF9500]'
                               }`}>
-                                {isCompleted ? '✓' : isCancelled ? '✕' : idx + 1}
+                                {isCompleted ? '✓' : isCancelled ? '✕' : (realStopNumber > 0 ? realStopNumber : idx + 1)}
                               </span>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
@@ -1993,180 +2146,7 @@ export default function UberDriverView({
         )}
       </div>
 
-      {/* 6. MODAL: ORGANIZAR TRAVESÍA DEL DÍA & RUTA MÁS CORTA */}
-      {showTripModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 animate-fade-in">
-          <div className="bg-[#121922] border border-slate-700/80 rounded-3xl p-4 shadow-2xl max-w-sm w-full max-h-[90vh] flex flex-col text-slate-100">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-cyan-500/20 text-slate-950">
-                  <Route className="h-4 w-4 stroke-[2.5]" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-white leading-tight">Organizar Travesía</h3>
-                  <p className="text-[10px] text-slate-400">Orden de paradas para llegar más rápido</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowTripModal(false)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg transition"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Auto Optimize Button */}
-            <div className="py-2.5">
-              <button
-                type="button"
-                onClick={handleAutoOptimizeTrip}
-                className="w-full py-2.5 px-3 rounded-2xl bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black text-xs shadow-lg shadow-cyan-600/25 flex items-center justify-center gap-2 active:scale-95 transition"
-              >
-                <Route className="h-4 w-4 stroke-[2.2]" />
-                <span>⚡ Optimizar Ruta Más Corta (Automático)</span>
-              </button>
-
-              {optimizedNotice && (
-                <div className="mt-2 p-2 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-[11px] text-emerald-300 font-bold flex items-center gap-2">
-                  <CheckCheck className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <span>
-                    ¡Ruta optimizada! Ahorras ~{optimizedNotice.savedMiles} mi (~{optimizedNotice.savedMinutes} min). Total estimado: {optimizedNotice.totalMiles} mi.
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* List of stops with drag & drop and tactile controls */}
-            <div 
-              className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-none py-1 select-none"
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-            >
-              <div className="flex items-center justify-between px-1 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                <span>Orden de la jornada ({tempOrdersList.length} paradas)</span>
-                <span>Arrastrar o Subir / Bajar</span>
-              </div>
-
-              {tempOrdersList.map((ord, idx) => {
-                const isFirst = idx === 0;
-                const isLast = idx === tempOrdersList.length - 1;
-                const isDone = ord.status === 'Completado';
-                const isCancel = ord.status === 'No Realizado';
-                const isBeingDragged = dragIndex === idx || touchDragIndex === idx;
-                const isDropTarget = (dragOverIndex === idx && dragIndex !== idx) || (touchOverIndex === idx && touchDragIndex !== idx);
-
-                return (
-                  <div
-                    key={ord.id || idx}
-                    data-stop-idx={idx}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, idx)}
-                    onDragOver={(e) => handleDragOver(e, idx)}
-                    onDrop={(e) => handleDrop(e, idx)}
-                    onDragEnd={handleDragEnd}
-                    className={`p-2.5 rounded-2xl border transition-all duration-150 flex items-center justify-between gap-2 shadow-xs ${
-                      isBeingDragged
-                        ? 'opacity-40 bg-cyan-950/40 border-cyan-500 scale-[0.98]'
-                        : isDropTarget
-                        ? 'bg-[#1e2d40] border-cyan-400 ring-2 ring-cyan-400/50 scale-[1.02]'
-                        : 'bg-[#1b2533] border-slate-700/60 hover:border-slate-600'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {/* Touch / Drag Grip Handle */}
-                      <div
-                        onTouchStart={(e) => handleTouchStart(e, idx)}
-                        className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-slate-500 hover:text-cyan-400 touch-none flex items-center justify-center rounded-lg"
-                        title="Mantén presionado para mover"
-                      >
-                        <GripVertical className="h-4 w-4 stroke-[2.5]" />
-                      </div>
-
-                      {/* Number in circle (only the pure number, no #, no Parada text) */}
-                      <span className={`w-6 h-6 rounded-full font-black text-xs flex items-center justify-center shrink-0 shadow-sm ${
-                        isDone 
-                          ? 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/40 ring-1 ring-emerald-500/20' 
-                          : isCancel 
-                          ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' 
-                          : 'bg-[#007AFF]/25 text-[#007AFF] border border-[#007AFF]/40 ring-1 ring-[#007AFF]/20'
-                      }`}>
-                        {idx + 1}
-                      </span>
-
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-white truncate leading-tight">
-                          {ord.address}
-                        </div>
-                        <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5 font-mono">
-                          <span className="text-cyan-400 font-bold">{ord.job_id}</span>
-                          <span>•</span>
-                          <span className="text-emerald-400 font-bold">${ord.rate_calculated || 100}</span>
-                          {ord.bore_type && ord.bore_type.includes('DW') && (
-                            <span className="text-cyan-400 font-bold">• DW</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Up / Down Controls for one-tap adjustment */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleMoveStopUp(idx)}
-                        disabled={isFirst}
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center border text-xs font-bold transition ${
-                          isFirst 
-                            ? 'opacity-20 border-slate-800 text-slate-600' 
-                            : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90'
-                        }`}
-                        title="Subir parada"
-                      >
-                        <MoveUp className="h-3.5 w-3.5" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleMoveStopDown(idx)}
-                        disabled={isLast}
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center border text-xs font-bold transition ${
-                          isLast 
-                            ? 'opacity-20 border-slate-800 text-slate-600' 
-                            : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90'
-                        }`}
-                        title="Bajar parada"
-                      >
-                        <MoveDown className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Footer Buttons */}
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowTripModal(false)}
-                className="px-3 py-2 text-xs font-bold text-slate-400 hover:text-white transition"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveTripOrder}
-                disabled={isSavingTrip}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-md active:scale-95 transition"
-              >
-                {isSavingTrip ? 'Guardando...' : 'Guardar y Aplicar Travesía'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 8. COMPONENTE SUPERPUESTO: LISTA GENERAL DE TRABAJOS DEL DÍA */}
+      {/* 6. MODAL UNIFICADO: LISTA DE TRABAJOS Y ORGANIZADOR DE TRAVESÍA DEL DÍA */}
       {showDayJobsOverlay && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in"
@@ -2174,19 +2154,19 @@ export default function UberDriverView({
             if (e.target === e.currentTarget) setShowDayJobsOverlay(false);
           }}
         >
-          <div className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl text-white">
+          <div className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-white">
             {/* Header */}
-            <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between bg-slate-900/60 shrink-0">
+            <div className="px-4 sm:px-5 py-3.5 border-b border-white/10 flex items-center justify-between bg-slate-900/70 shrink-0">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
-                  <List className="h-4 w-4 stroke-[2.5]" />
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 shrink-0 shadow-md shadow-cyan-500/20">
+                  <Route className="h-4 w-4 stroke-[2.5]" />
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm font-black text-white truncate">
-                    Trabajos del Día
+                    Travesía y Trabajos del Día
                   </h3>
-                  <p className="text-[11px] text-slate-400 font-medium truncate">
-                    {formatDateFriendly(activeDate)} • {orders.length} {orders.length === 1 ? 'trabajo' : 'trabajos'}
+                  <p className="text-[10.5px] text-slate-400 font-medium truncate">
+                    {formatDateFriendly(activeDate)} • {tempOrdersList.length} {tempOrdersList.length === 1 ? 'parada' : 'paradas'}
                   </p>
                 </div>
               </div>
@@ -2201,13 +2181,13 @@ export default function UberDriverView({
             </div>
 
             {/* Quick KPI Bar */}
-            <div className="grid grid-cols-3 gap-2 px-4 py-3 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
+            <div className="grid grid-cols-3 gap-2 px-4 py-2.5 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
               <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
                 <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
                   Total Estimado
                 </span>
                 <span className="text-sm font-black text-emerald-400 font-mono">
-                  ${orders.reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0).toFixed(0)}
+                  ${tempOrdersList.reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0).toFixed(0)}
                 </span>
               </div>
               <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
@@ -2215,7 +2195,7 @@ export default function UberDriverView({
                   Completados
                 </span>
                 <span className="text-sm font-black text-white font-mono">
-                  {orders.filter(o => o.status === 'Completado').length} / {orders.length}
+                  {tempOrdersList.filter(o => o.status === 'Completado').length} / {tempOrdersList.length}
                 </span>
               </div>
               <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
@@ -2223,18 +2203,39 @@ export default function UberDriverView({
                   Metraje
                 </span>
                 <span className="text-sm font-black text-cyan-400 font-mono">
-                  {Math.round(orders.reduce((sum, o) => sum + (parseFloat(o.drop_footage) || 0), 0))} ft
+                  {Math.round(tempOrdersList.reduce((sum, o) => sum + (parseFloat(o.drop_footage) || 0), 0))} ft
                 </span>
               </div>
+            </div>
+
+            {/* Auto Optimize Shortest Route Action Bar */}
+            <div className="px-4 py-2.5 bg-[#0e1622] border-b border-white/5 shrink-0 space-y-1.5">
+              <button
+                type="button"
+                onClick={handleAutoOptimizeTrip}
+                className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black text-xs shadow-md shadow-cyan-600/20 flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer"
+              >
+                <Route className="h-3.5 w-3.5 stroke-[2.2]" />
+                <span>⚡ Optimizar Ruta Más Corta (Automático)</span>
+              </button>
+
+              {optimizedNotice && (
+                <div className="p-2 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-[10.5px] text-emerald-300 font-bold flex items-center gap-2">
+                  <CheckCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span>
+                    ¡Ruta optimizada! Ahorras ~{optimizedNotice.savedMiles} mi ({formatRouteDuration(optimizedNotice.savedMinutes, true)}). Total estimado: {optimizedNotice.totalMiles} mi.
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Status Filter Tabs */}
             <div className="flex items-center gap-1.5 px-4 py-2 border-b border-white/5 bg-[#101722] shrink-0 overflow-x-auto no-scrollbar">
               {[
-                { id: 'ALL', label: `Todos (${orders.length})` },
-                { id: 'Pendiente', label: `Pendientes (${orders.filter(o => o.status !== 'Completado' && o.status !== 'No Realizado').length})` },
-                { id: 'Completado', label: `Completados (${orders.filter(o => o.status === 'Completado').length})` },
-                { id: 'No Realizado', label: `Cancelados (${orders.filter(o => o.status === 'No Realizado').length})` },
+                { id: 'ALL', label: `Todos (${tempOrdersList.length})` },
+                { id: 'Pendiente', label: `Pendientes (${tempOrdersList.filter(o => o.status !== 'Completado' && o.status !== 'No Realizado').length})` },
+                { id: 'Completado', label: `Completados (${tempOrdersList.filter(o => o.status === 'Completado').length})` },
+                { id: 'No Realizado', label: `Cancelados (${tempOrdersList.filter(o => o.status === 'No Realizado').length})` },
               ].map(f => (
                 <button
                   key={f.id}
@@ -2251,9 +2252,19 @@ export default function UberDriverView({
               ))}
             </div>
 
-            {/* Jobs List (Scrollable) */}
-            <div className="p-3 space-y-2 overflow-y-auto flex-1 min-h-0">
-              {orders
+            {/* Drag & Reorder Instruction Tip */}
+            <div className="px-4 py-1.5 bg-[#0a0f16] border-b border-white/5 text-[9.5px] font-bold text-slate-400 flex items-center justify-between uppercase tracking-wider">
+              <span>{overlayStatusFilter === 'ALL' ? 'Arrastra (⋮⋮) o usa ↑ / ↓ para ordenar' : 'Filtrando por estado'}</span>
+              <span>Toca un trabajo para ver en mapa</span>
+            </div>
+
+            {/* Jobs List (Scrollable with Drag & Drop & Direct Click) */}
+            <div 
+              className="p-2.5 sm:p-3 space-y-2 overflow-y-auto flex-1 min-h-0 select-none scrollbar-none"
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              {tempOrdersList
                 .filter(o => {
                   if (overlayStatusFilter === 'ALL') return true;
                   if (overlayStatusFilter === 'Pendiente') return o.status !== 'Completado' && o.status !== 'No Realizado';
@@ -2264,36 +2275,87 @@ export default function UberDriverView({
                   const isCompleted = ord.status === 'Completado';
                   const isCancelled = ord.status === 'No Realizado';
                   const isReported = ord.is_reported || ord.status === 'Reportado';
-                  const originalIdx = orders.findIndex(x => x.id === ord.id);
+                  
+                  const fullIdx = tempOrdersList.findIndex(x => String(x.id) === String(ord.id));
+                  const stopNumber = (fullIdx >= 0 ? fullIdx : idx) + 1;
+                  const isFirst = fullIdx === 0;
+                  const isLast = fullIdx === tempOrdersList.length - 1;
+
+                  const isBeingDragged = dragIndex === fullIdx || touchDragIndex === fullIdx;
+                  const isDropTarget = (dragOverIndex === fullIdx && dragIndex !== fullIdx) || (touchOverIndex === fullIdx && touchDragIndex !== fullIdx);
 
                   return (
                     <div
                       key={ord.id || idx}
+                      data-stop-idx={fullIdx}
+                      onDragOver={(e) => handleDragOver(e, fullIdx)}
+                      onDrop={(e) => handleDrop(e, fullIdx)}
+                      onDragEnd={handleDragEnd}
                       onClick={() => {
                         handleSelectJob(ord);
                         setShowDayJobsOverlay(false);
                       }}
-                      className={`p-3 rounded-2xl border cursor-pointer transition select-none flex items-center justify-between gap-3 ${
-                        isTarget
+                      className={`p-2.5 sm:p-3 rounded-2xl border cursor-pointer transition-all duration-150 select-none flex items-center justify-between gap-2.5 ${
+                        isBeingDragged
+                          ? 'opacity-40 bg-cyan-950/40 border-cyan-500 scale-[0.98]'
+                          : isDropTarget
+                          ? 'bg-[#1e2d40] border-cyan-400 ring-2 ring-cyan-400/50 scale-[1.01]'
+                          : isTarget
                           ? 'bg-[#007AFF]/20 border-[#007AFF]/70 shadow-lg ring-1 ring-[#007AFF]/40'
                           : 'bg-[#16202c]/90 border-white/5 hover:border-white/20 hover:bg-[#1a2634]'
                       }`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        {/* Stop Number Circle */}
-                        <span className={`w-7 h-7 rounded-full text-white font-black text-xs flex items-center justify-center font-sans shrink-0 shadow-sm ${
-                          isCompleted
-                            ? 'bg-emerald-600/80 text-white'
-                            : isCancelled
-                            ? 'bg-rose-600/80 text-white'
-                            : 'bg-slate-700 text-slate-200'
-                        }`}>
-                          {isCompleted ? '✓' : isCancelled ? '✕' : (originalIdx >= 0 ? originalIdx + 1 : idx + 1)}
-                        </span>
+                      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+                        {/* Tactile Drag Handle (esos punticos) */}
+                        <div
+                          draggable={overlayStatusFilter === 'ALL'}
+                          onDragStart={(e) => handleDragStart(e, fullIdx)}
+                          onTouchStart={(e) => {
+                            e.stopPropagation();
+                            handleTouchStart(e, fullIdx);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-slate-500 hover:text-cyan-400 touch-none flex items-center justify-center rounded-lg hover:bg-white/5 transition shrink-0"
+                          title="Mantén presionado para mover parada"
+                        >
+                          <GripVertical className="h-4 w-4 stroke-[2.5]" />
+                        </div>
 
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold text-white truncate">
+                        {/* Stop Number Badge with Direct Position Selector */}
+                        <div
+                          className="relative shrink-0 flex items-center justify-center"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Toca para cambiar la posición o número de esta parada directamente"
+                        >
+                          <select
+                            value={stopNumber}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleMoveToPosition(ord.id, e.target.value);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className={`w-8 h-8 rounded-full font-black text-xs cursor-pointer transition shadow-sm font-mono flex items-center justify-center text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-cyan-400 ${
+                              isCompleted
+                                ? 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/40 ring-1 ring-emerald-500/20'
+                                : isCancelled
+                                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                                : isTarget
+                                ? 'bg-[#007AFF] text-white border border-blue-400 ring-2 ring-blue-400/30'
+                                : 'bg-[#007AFF]/25 text-[#007AFF] border border-[#007AFF]/40 ring-1 ring-[#007AFF]/20'
+                            }`}
+                          >
+                            {tempOrdersList.map((_, pIdx) => (
+                              <option key={pIdx + 1} value={pIdx + 1} className="bg-slate-900 text-white font-bold">
+                                {pIdx + 1}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Job Details */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold text-white truncate leading-tight">
                               {ord.address}
                             </span>
                             {ord.bore_type && ord.bore_type.includes('DW') && (
@@ -2302,63 +2364,120 @@ export default function UberDriverView({
                               </span>
                             )}
                           </div>
-                          <div className="text-[10.5px] text-slate-400 flex items-center gap-1.5 mt-0.5 truncate">
+                          <div className="text-[10px] sm:text-[10.5px] text-slate-400 flex items-center gap-1.5 mt-0.5 truncate font-mono">
                             <span>{ord.city || 'Skokie'}</span>
                             <span>•</span>
-                            <span className="font-mono text-cyan-300">#{ord.job_id}</span>
+                            <span className="text-cyan-300 font-semibold">#{ord.job_id}</span>
                             <span>•</span>
                             <span>{ord.drop_footage || 0} ft</span>
+                            {ord.cable_type && (
+                              <>
+                                <span>•</span>
+                                <span className="text-slate-300">{ord.cable_type}</span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="text-right shrink-0 flex flex-col items-end">
-                        <div className="text-xs font-mono font-black text-emerald-400">
-                          ${ord.rate_calculated || 100}
+                      {/* Right side: Rate, Status Chip & Up/Down Move Controls */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-right flex flex-col items-end">
+                          <div className="text-xs font-mono font-black text-emerald-400">
+                            ${ord.rate_calculated || 100}
+                          </div>
+                          <span className={`text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-0.5 ${
+                            isReported
+                              ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                              : isCompleted
+                              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                              : isCancelled
+                              ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                              : 'bg-slate-800 text-slate-300 border border-slate-700'
+                          }`}>
+                            {isReported ? 'Reportado' : (ord.status || 'Pendiente')}
+                          </span>
                         </div>
-                        <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-0.5 ${
-                          isReported
-                            ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
-                            : isCompleted
-                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                            : isCancelled
-                            ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                            : 'bg-slate-800 text-slate-300 border border-slate-700'
-                        }`}>
-                          {isReported ? 'Reportado' : (ord.status || 'Pendiente')}
-                        </span>
+
+                        {/* Up / Down Buttons for quick tactile reordering */}
+                        <div 
+                          className="flex flex-col gap-0.5" 
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onTouchStart={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveStopUp(ord.id);
+                            }}
+                            disabled={isFirst}
+                            className={`w-6 h-5 rounded-md flex items-center justify-center border text-[10px] font-bold transition ${
+                              isFirst
+                                ? 'opacity-20 border-slate-800 text-slate-600'
+                                : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90 cursor-pointer'
+                            }`}
+                            title="Subir parada"
+                          >
+                            <MoveUp className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveStopDown(ord.id);
+                            }}
+                            disabled={isLast}
+                            className={`w-6 h-5 rounded-md flex items-center justify-center border text-[10px] font-bold transition ${
+                              isLast
+                                ? 'opacity-20 border-slate-800 text-slate-600'
+                                : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90 cursor-pointer'
+                            }`}
+                            title="Bajar parada"
+                          >
+                            <MoveDown className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
                 })}
 
-              {orders.length === 0 && (
+              {tempOrdersList.length === 0 && (
                 <div className="py-12 text-center text-slate-400 text-xs">
                   No hay trabajos registrados para esta jornada.
                 </div>
               )}
             </div>
 
-            {/* Footer */}
-            <div className="px-4 py-3 border-t border-white/10 bg-slate-900/60 flex items-center justify-between shrink-0">
+            {/* Footer: Añadir a la izquierda, Guardar Orden a la derecha (Cerrar se retiró pues ya está la X arriba) */}
+            <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => {
                   setShowDayJobsOverlay(false);
                   if (onOpenAddJob) onOpenAddJob();
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#007AFF] to-cyan-500 hover:from-blue-600 hover:to-cyan-400 text-white text-xs font-bold shadow-sm transition active:scale-95 cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white text-xs font-bold transition active:scale-95 cursor-pointer border border-white/10 shadow-sm"
               >
-                <Plus className="h-3.5 w-3.5 stroke-[3]" />
-                <span>Añadir Trabajo</span>
+                <Plus className="h-4 w-4 stroke-[3]" />
+                <span>Añadir</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setShowDayJobsOverlay(false)}
-                className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition active:scale-95 cursor-pointer"
+                onClick={handleSaveTripOrder}
+                disabled={isSavingTrip}
+                className={`px-4 py-2 text-xs font-black rounded-xl shadow-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer ${
+                  hasOrderChanged
+                    ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/25 ring-2 ring-emerald-400/30'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700'
+                }`}
+                title="Guardar orden de paradas"
               >
-                Cerrar
+                <Check className="h-4 w-4 stroke-[3]" />
+                <span>{isSavingTrip ? 'Guardando...' : 'Guardar Orden'}</span>
               </button>
             </div>
           </div>

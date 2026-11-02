@@ -72,3 +72,27 @@ export function getNextMonth(monthStr) {
   const dt = new Date(y, m, 1);
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
 }
+
+/**
+ * Formats a driving route duration in minutes to natural human text.
+ * When under 60 minutes: "25 min" (or "~25 min")
+ * When 60 minutes or more: "1 h", "1 h 15 min", "2 hrs", "2 h 38 min"
+ */
+export function formatRouteDuration(minutes, includeTilde = false) {
+  if (minutes == null || isNaN(minutes) || minutes <= 0) return '—';
+  const totalMins = Math.max(1, Math.round(Number(minutes)));
+  const prefix = includeTilde ? '~' : '';
+
+  if (totalMins < 60) {
+    return `${prefix}${totalMins} min`;
+  }
+
+  const hours = Math.floor(totalMins / 60);
+  const remainingMins = totalMins % 60;
+
+  if (remainingMins === 0) {
+    return `${prefix}${hours} ${hours === 1 ? 'h' : 'hrs'}`;
+  }
+
+  return `${prefix}${hours} h ${remainingMins} min`;
+}

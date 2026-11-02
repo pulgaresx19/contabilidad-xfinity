@@ -111,6 +111,12 @@ function initDb() {
 
   // Cache for geocoding coordinates so we never re-request the same address
   db.exec(`
+    CREATE TABLE IF NOT EXISTS reverse_geocache (
+      coord_key TEXT PRIMARY KEY,
+      result_json TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS geocache (
       address_key TEXT PRIMARY KEY,
       lat REAL,

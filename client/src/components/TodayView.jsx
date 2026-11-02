@@ -79,10 +79,10 @@ export default function TodayView({
     return orders
       .filter(o => normalizeDateStr(o.work_date) === activeDate)
       .sort((a, b) => {
-        const orderA = a.route_order != null && a.route_order > 0 ? a.route_order : 9999;
-        const orderB = b.route_order != null && b.route_order > 0 ? b.route_order : 9999;
+        const orderA = Number(a.route_order) > 0 ? Number(a.route_order) : 9999;
+        const orderB = Number(b.route_order) > 0 ? Number(b.route_order) : 9999;
         if (orderA !== orderB) return orderA - orderB;
-        return (a.id || 0) - (b.id || 0);
+        return (Number(a.id) || 0) - (Number(b.id) || 0);
       });
   }, [orders, activeDate]);
   const dayPending = dayOrders.filter(o => o.status === 'Pendiente');
@@ -256,11 +256,11 @@ export default function TodayView({
     if (rawFiles.length === 0) return;
     const files = await Promise.all(
       rawFiles.map(f => stampPhotoWithWatermark(f, {
-        address: cancelModalOrder?.address,
-        city: cancelModalOrder?.city,
-        zipCode: cancelModalOrder?.zip_code,
-        lat: cancelModalOrder?.latitude,
-        lng: cancelModalOrder?.longitude
+        fallbackAddress: cancelModalOrder?.address,
+        fallbackCity: cancelModalOrder?.city,
+        fallbackZip: cancelModalOrder?.zip_code,
+        fallbackLat: cancelModalOrder?.latitude,
+        fallbackLng: cancelModalOrder?.longitude
       }))
     );
     const newPreviews = files.map(f => URL.createObjectURL(f));
@@ -351,12 +351,21 @@ export default function TodayView({
   };
 
   const handleAddPhotoToCancelled = async (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0 || !cancelDetailOrder) return;
+    const rawFiles = Array.from(e.target.files || []);
+    if (rawFiles.length === 0 || !cancelDetailOrder) return;
     try {
+      const stampedFiles = await Promise.all(
+        rawFiles.map(f => stampPhotoWithWatermark(f, {
+          fallbackAddress: cancelDetailOrder?.address,
+          fallbackCity: cancelDetailOrder?.city,
+          fallbackZip: cancelDetailOrder?.zip_code,
+          fallbackLat: cancelDetailOrder?.latitude,
+          fallbackLng: cancelDetailOrder?.longitude
+        }))
+      );
       const formData = new FormData();
       formData.append('category', 'Constancia No Realizado');
-      files.forEach(f => formData.append('photos', f));
+      stampedFiles.forEach(f => formData.append('photos', f));
       const res = await fetch(`/api/orders/${cancelDetailOrder.id}/photos`, {
         method: 'POST',
         body: formData
@@ -608,123 +617,123 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             </button>
           )}
 
-          {/* 1. NAVEGADOR DE FECHA & HERO CARD DE LA JORNADA */}
-          <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3">
-        {/* Barra superior de Fecha de la Jornada */}
-        <div className="flex items-center justify-between bg-slate-950/70 px-3 py-2 rounded-2xl border border-slate-800/80">
-          <button
-            type="button"
-            onClick={() => shiftDay(-1)}
-            className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
-            title="Día anterior"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-
-          <div className="flex items-center gap-2">
-            <Calendar className="h-3.5 w-3.5 text-cyan-400" />
-            <span className="text-xs font-black text-white font-mono">
-              {isViewingToday ? `Hoy (${formatDateFriendly(activeDate)})` : formatDateFriendly(activeDate)}
-            </span>
-            {!isViewingToday && (
+          {/* 1. NAVEGADOR DE FECHA & HERO CARD DE LA JORNADA (COCKPIT HUD) */}
+          <div className="bg-[#0f1722]/95 border border-white/10 rounded-3xl p-4 shadow-xl space-y-3">
+            {/* Barra superior de Fecha de la Jornada */}
+            <div className="flex items-center justify-between bg-[#131b26] px-3 py-2 rounded-2xl border border-white/8">
               <button
                 type="button"
-                onClick={() => setActiveDate(todayReal)}
-                className="text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-1.5 py-0.2 rounded-md font-bold hover:bg-cyan-900"
+                onClick={() => shiftDay(-1)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition"
+                title="Día anterior"
               >
-                Ir a Hoy
+                <ChevronLeft className="h-4 w-4" />
               </button>
-            )}
+
+              <div className="flex items-center gap-2">
+                <Calendar className="h-3.5 w-3.5 text-cyan-400" />
+                <span className="text-xs font-black text-white font-mono">
+                  {isViewingToday ? `Hoy (${formatDateFriendly(activeDate)})` : formatDateFriendly(activeDate)}
+                </span>
+                {!isViewingToday && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveDate(todayReal)}
+                    className="text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-1.5 py-0.2 rounded-md font-bold hover:bg-cyan-900"
+                  >
+                    Ir a Hoy
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => shiftDay(1)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition"
+                title="Día siguiente"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Métricas de la Jornada de ese día */}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">
+                  {isViewingToday ? 'Jornada de Hoy' : 'Producción del Día'}
+                </span>
+                <h2 className="text-3xl font-black text-white font-mono mt-0.5 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">
+                  ${dayEarnings.toFixed(2)}
+                </h2>
+                <span className="text-[11px] font-bold text-amber-300 font-mono block mt-0.5">
+                  {Math.round(dayFeet)} ft instalados
+                </span>
+              </div>
+
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 block font-semibold">Progreso del Día</span>
+                <span className="text-xs font-bold text-slate-200">
+                  <strong className="text-emerald-400 text-sm font-black">{dayCompleted.length}</strong> de {dayOrders.length} hechos
+                </span>
+                {dayPending.length > 0 && (
+                  <span className="text-[10px] text-amber-400 block font-bold mt-0.5">
+                    {dayPending.length} pendientes
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Barra de Progreso del Día */}
+            <div className="w-full bg-[#0a0f18] h-2 rounded-full overflow-hidden border border-white/8">
+              <div 
+                className="bg-gradient-to-r from-cyan-500 to-emerald-400 h-full rounded-full transition-all duration-500 shadow-sm shadow-emerald-500/20"
+                style={{ width: `${dayOrders.length > 0 ? (dayCompleted.length / dayOrders.length) * 100 : 0}%` }}
+              />
+            </div>
+
+            {/* Botones de Acción: Escanear Foto & Añadir Trabajo */}
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <button
+                onClick={onOpenScan}
+                className="py-2.5 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-xs rounded-2xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
+              >
+                <Camera className="h-4 w-4 stroke-[2.5]" />
+                <span>Escanear Foto</span>
+              </button>
+
+              <button
+                onClick={() => setIsAddJobOpen(true)}
+                className="py-2.5 px-3 bg-[#182332] hover:bg-[#243140] text-slate-100 border border-white/10 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-1.5 transition active:scale-[0.98] shadow-sm"
+              >
+                <Plus className="h-4 w-4 stroke-[3] text-cyan-400" />
+                <span>Añadir Trabajo</span>
+              </button>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => shiftDay(1)}
-            className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
-            title="Día siguiente"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Métricas de la Jornada de ese día */}
-        <div className="flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-wider block">
-              {isViewingToday ? 'Jornada de Hoy' : 'Producción del Día'}
-            </span>
-            <h2 className="text-3xl font-black text-slate-900 dark:text-white font-mono mt-0.5">
-              ${dayEarnings.toFixed(2)}
-            </h2>
-            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 font-mono block mt-0.5">
-              {Math.round(dayFeet)} ft instalados
-            </span>
-          </div>
-
-          <div className="text-right">
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-semibold">Progreso del Día</span>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-              <strong className="text-emerald-600 dark:text-emerald-400 text-sm font-black">{dayCompleted.length}</strong> de {dayOrders.length} hechos
-            </span>
-            {dayPending.length > 0 && (
-              <span className="text-[10px] text-amber-600 dark:text-amber-400 block font-bold mt-0.5">
-                {dayPending.length} pendientes
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Barra de Progreso del Día */}
-        <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
-          <div 
-            className="bg-gradient-to-r from-cyan-500 to-emerald-400 h-full rounded-full transition-all duration-500"
-            style={{ width: `${dayOrders.length > 0 ? (dayCompleted.length / dayOrders.length) * 100 : 0}%` }}
-          />
-        </div>
-
-        {/* Botones de Acción: Escanear Foto & Añadir Trabajo */}
-        <div className="grid grid-cols-2 gap-2 pt-0.5">
-          <button
-            onClick={onOpenScan}
-            className="py-2.5 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-xs rounded-2xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
-          >
-            <Camera className="h-4 w-4 stroke-[2.5]" />
-            <span>Escanear Foto</span>
-          </button>
-
-          <button
-            onClick={() => setIsAddJobOpen(true)}
-            className="py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 shadow-sm dark:bg-slate-800/90 dark:hover:bg-slate-700 dark:text-slate-100 dark:border-slate-700/80 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
-          >
-            <Plus className="h-4 w-4 stroke-[3] text-cyan-600 dark:text-cyan-400" />
-            <span>Añadir Trabajo</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 2. CHIPS DE FILTRO DE ESTADO (SIN BUSCADOR) */}
-      <div className="grid grid-cols-4 gap-1 bg-slate-900/90 p-1 rounded-2xl border border-slate-800 text-[10px] font-bold text-center">
+      {/* 2. CHIPS DE FILTRO DE ESTADO (COCKPIT SEGMENTS) */}
+      <div className="grid grid-cols-4 gap-1 bg-[#0f1722]/90 p-1 rounded-2xl border border-white/10 text-[10px] font-bold text-center shadow-md">
         <button
           onClick={() => setStatusFilter('ALL')}
-          className={`py-1.5 rounded-xl transition ${statusFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+          className={`py-1.5 rounded-xl transition ${statusFilter === 'ALL' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm font-black' : 'text-slate-400 hover:text-white'}`}
         >
           Todos ({dayOrders.length})
         </button>
         <button
           onClick={() => setStatusFilter('Pendiente')}
-          className={`py-1.5 rounded-xl transition ${statusFilter === 'Pendiente' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+          className={`py-1.5 rounded-xl transition ${statusFilter === 'Pendiente' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm font-black' : 'text-slate-400 hover:text-white'}`}
         >
           Pendientes ({dayPending.length})
         </button>
         <button
           onClick={() => setStatusFilter('Completado')}
-          className={`py-1.5 rounded-xl transition ${statusFilter === 'Completado' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+          className={`py-1.5 rounded-xl transition ${statusFilter === 'Completado' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm font-black' : 'text-slate-400 hover:text-white'}`}
         >
           Hechos ({dayCompleted.length})
         </button>
         <button
           onClick={() => setStatusFilter('No Realizado')}
-          className={`py-1.5 rounded-xl transition ${statusFilter === 'No Realizado' ? 'bg-rose-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+          className={`py-1.5 rounded-xl transition ${statusFilter === 'No Realizado' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm font-black' : 'text-slate-400 hover:text-white'}`}
         >
           Cancelados ({dayCancelled.length})
         </button>
@@ -732,12 +741,12 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
 
       {/* 3. LISTA DE TRABAJOS DEL DÍA CON NÚMEROS EN CÍRCULO */}
       {visibleOrders.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-3">
-          <div className="h-12 w-12 rounded-2xl bg-slate-800/80 text-slate-500 flex items-center justify-center mx-auto">
+        <div className="bg-[#131b26] border border-white/10 rounded-3xl p-8 text-center space-y-3 shadow-md">
+          <div className="h-12 w-12 rounded-2xl bg-slate-800/80 text-slate-400 flex items-center justify-center mx-auto border border-white/5">
             <CheckCircle2 className="h-6 w-6" />
           </div>
           <div className="space-y-1">
-            <h4 className="text-sm font-bold text-slate-200">
+            <h4 className="text-sm font-bold text-white">
               Sin trabajos en esta fecha
             </h4>
             <p className="text-xs text-slate-400 max-w-xs mx-auto">
@@ -751,13 +760,13 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           <div className="flex items-center justify-center gap-2 pt-1">
             <button
               onClick={onOpenScan}
-              className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl transition"
+              className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl transition active:scale-95 shadow-md shadow-cyan-500/20"
             >
               Escanear Foto
             </button>
             <button
               onClick={() => setIsAddJobOpen(true)}
-              className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 shadow-sm dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-white dark:border-transparent font-bold text-xs rounded-xl transition"
+              className="px-4 py-2 bg-[#182332] hover:bg-[#243140] text-slate-200 border border-white/10 font-bold text-xs rounded-xl transition active:scale-95"
             >
               Añadir Trabajo
             </button>
@@ -774,12 +783,12 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             return (
               <div
                 key={order.id}
-                className={`rounded-2xl p-3.5 pl-4 space-y-2.5 transition border ${
+                className={`bg-[#131b26] border rounded-2xl p-3.5 space-y-2.5 transition shadow-md ${
                   isCompleted
-                    ? 'relative overflow-hidden bg-gradient-to-br from-white via-emerald-50/20 to-emerald-50/60 dark:from-slate-900/95 dark:via-slate-900/90 dark:to-emerald-950/30 border-emerald-500/50 dark:border-emerald-500/40 shadow-[0_4px_22px_-2px_rgba(16,185,129,0.22)] ring-1 ring-emerald-500/20 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5 before:bg-gradient-to-b before:from-emerald-400 before:to-emerald-600'
+                    ? 'border-emerald-500/35 hover:border-emerald-500/60 shadow-emerald-500/5'
                     : isCancelled
-                    ? 'relative overflow-hidden bg-rose-50/40 dark:bg-rose-950/15 border-rose-200 dark:border-rose-900/40 opacity-80 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5 before:bg-rose-400'
-                    : 'relative overflow-hidden bg-white dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.06)] dark:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.4)] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5 before:bg-amber-400'
+                    ? 'border-rose-500/35 hover:border-rose-500/60 shadow-rose-500/5'
+                    : 'border-amber-500/35 hover:border-amber-500/60 shadow-amber-500/5'
                 }`}
               >
                 {/* Header de la Tarjeta con Número en Círculo */}
@@ -788,25 +797,25 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                     {/* Número de ítem en círculo */}
                     <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black font-mono shadow-sm flex-shrink-0 ${
                       isCompleted
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                         : isCancelled
-                        ? 'bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40'
-                        : 'bg-cyan-100 text-cyan-800 border border-cyan-300 dark:bg-cyan-500/20 dark:text-cyan-300 dark:border-cyan-500/40'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                     }`}>
                       {idx + 1}
                     </div>
 
-                    <span className="text-sm font-black text-cyan-700 dark:text-cyan-400 font-mono">
+                    <span className="text-sm font-black text-cyan-400 font-mono">
                       #{order.job_id}
                     </span>
 
                     {/* Status Badge */}
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
                       isCompleted
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/30'
+                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                         : isCancelled
-                        ? 'bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-500/15 dark:text-rose-400 dark:border-rose-500/30'
-                        : 'bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30'
+                        ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                        : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
                     }`}>
                       {isCompleted && <CheckCircle2 className="h-3 w-3" />}
                       {isPending && <Clock className="h-3 w-3" />}
@@ -820,16 +829,16 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                     <div 
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border shadow-sm select-none transition-all ${
                         isCancelled
-                          ? 'bg-slate-100 text-slate-400 border-slate-300 dark:bg-slate-900/60 dark:text-slate-500 dark:border-slate-800 line-through'
+                          ? 'bg-slate-900/60 text-slate-500 border-white/5 line-through'
                           : isCompleted
-                          ? 'bg-gradient-to-r from-emerald-500/20 via-emerald-500/15 to-teal-500/20 border-emerald-500/50 dark:border-emerald-400/50 text-emerald-800 dark:text-emerald-200 shadow-emerald-500/20 ring-1 ring-emerald-500/25'
-                          : 'bg-emerald-500/10 dark:bg-emerald-500/15 border-emerald-500/35 text-emerald-800 dark:text-emerald-300 shadow-emerald-500/10'
+                          ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-emerald-500/10'
+                          : 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-amber-500/10'
                       }`}
                       title={`Tarifa del trabajo: $${order.rate_calculated} USD`}
                     >
-                      <span className={`h-4.5 w-4.5 rounded-full flex items-center justify-center text-[10px] font-black shadow-inner flex-shrink-0 ${
+                      <span className={`h-4 w-4 rounded-full flex items-center justify-center text-[9.5px] font-black shadow-inner flex-shrink-0 ${
                         isCancelled
-                          ? 'bg-slate-300 dark:bg-slate-800 text-slate-500'
+                          ? 'bg-slate-800 text-slate-500'
                           : 'bg-emerald-500 text-slate-950'
                       }`}>
                         $
@@ -846,8 +855,8 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                     <button
                       type="button"
                       onClick={() => setEditingOrder(order)}
-                      className="p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 border border-slate-200 dark:border-slate-700 hover:border-cyan-500/50 transition active:scale-90"
-                      title="Editar datos del trabajo (dirección, teléfono, metraje, precio, etc.)"
+                      className="p-1.5 rounded-full bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-cyan-400 border border-white/10 hover:border-cyan-500/40 transition active:scale-90"
+                      title="Editar datos del trabajo"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
@@ -856,12 +865,12 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
 
                 {/* Dirección y Teléfono */}
                 <div className="space-y-1">
-                  <div className="flex items-start justify-between gap-1.5 text-xs text-slate-800 dark:text-slate-100">
+                  <div className="flex items-start justify-between gap-1.5 text-xs text-white">
                     <div className="flex items-start gap-1.5">
-                      <MapPin className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 flex-shrink-0 mt-0.5" />
+                      <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="font-bold text-slate-900 dark:text-white">{order.address}</p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400">{order.city} {order.zip_code}</p>
+                        <p className="font-bold text-white">{order.address}</p>
+                        <p className="text-[10px] text-slate-400">{order.city} {order.zip_code}</p>
                       </div>
                     </div>
 
@@ -881,13 +890,13 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                     <div className="flex items-center gap-2 pl-5 text-[11px]">
                       <a 
                         href={`tel:${order.phone}`} 
-                        className="text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-1 font-mono font-bold"
+                        className="text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-1 font-mono font-bold"
                       >
                         <Phone className="h-3 w-3" />
                         <span>{order.phone}</span>
                       </a>
                       {order.call_first === 1 && (
-                        <span className="text-[9px] bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30 px-1.5 py-0.2 rounded font-bold">
+                        <span className="text-[9px] bg-amber-500/15 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold">
                           CALL FIRST
                         </span>
                       )}
@@ -895,43 +904,43 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   )}
                 </div>
 
-                {/* Especificaciones Técnicas (Fila deslizable horizontalmente con Remark al final) */}
+                {/* Especificaciones Técnicas */}
                 {(() => {
                   const orderRemark = getOrderRemark(order);
                   return (
                     <div className="flex items-center gap-1.5 text-[10px] font-mono overflow-x-auto scrollbar-none pb-0.5 whitespace-nowrap">
-                      <span className="shrink-0 bg-slate-100 dark:bg-slate-950 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-800 text-amber-800 dark:text-amber-300 font-bold">
+                      <span className="shrink-0 bg-[#0f1722] px-2 py-0.5 rounded border border-white/10 text-amber-300 font-bold">
                         {order.drop_footage} ft
                       </span>
 
-                      <span className="shrink-0 bg-slate-100 dark:bg-slate-950 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300">
+                      <span className="shrink-0 bg-[#0f1722] px-2 py-0.5 rounded border border-white/10 text-slate-300">
                         {order.cable_type}
                       </span>
 
                       {hasDrivewayBore ? (
-                        <span className="shrink-0 bg-cyan-100 dark:bg-cyan-950 text-cyan-800 dark:text-cyan-300 px-2 py-0.5 rounded border border-cyan-300 dark:border-cyan-800 font-bold">
+                        <span className="shrink-0 bg-cyan-500/15 text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/30 font-bold">
                           DW Bore: +$30
                         </span>
                       ) : order.bore_type && order.bore_type !== 'N' ? (
-                        <span className="shrink-0 bg-slate-100 dark:bg-slate-950 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-800">
+                        <span className="shrink-0 bg-[#0f1722] text-slate-300 px-2 py-0.5 rounded border border-white/10">
                           Bore: {order.bore_type}
                         </span>
                       ) : null}
 
                       {/* Bono por Metraje Largo (>300 ft) */}
                       {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
-                        <span className="shrink-0 bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 font-bold">
+                        <span className="shrink-0 bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
                           Drop &gt;300ft: +${Math.floor((order.drop_footage - 300) / 100) * 25}
                         </span>
                       )}
 
-                      {/* Píldora compacta de Ajuste Manual (Bono/Descuento) en la misma fila */}
+                      {/* Píldora compacta de Ajuste Manual */}
                       {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
                         <span 
                           className={`shrink-0 px-2 py-0.5 rounded font-mono font-bold border flex items-center gap-1 shadow-2xs cursor-pointer ${
                             order.manual_adjustment > 0 
-                              ? 'bg-cyan-50 text-cyan-800 border-cyan-300 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800' 
-                              : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800'
+                              ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' 
+                              : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                           }`}
                           onClick={() => setEditingOrder(order)}
                           title={`Ajuste Supervisor: ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}${order.adjustment_reason ? ` • ${order.adjustment_reason}` : ''} (Toca para editar)`}
@@ -946,23 +955,12 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                         </span>
                       )}
 
-                      {/* Píldora de Información Extra / Urgente directamente SIN prefijo 'Remark:' */}
-                      {orderRemark && (() => {
-                        const isUrgent = /urgent/i.test(orderRemark);
-                        return (
-                          <span 
-                            className={`shrink-0 px-2 py-0.5 rounded font-bold flex items-center gap-1 shadow-2xs border ${
-                              isUrgent
-                                ? 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800 animate-pulse'
-                                : 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-700/80'
-                            }`}
-                            title={`Información extra: ${orderRemark}`}
-                          >
-                            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${isUrgent ? 'bg-rose-600' : 'bg-amber-500'}`} />
-                            <span>{orderRemark}</span>
-                          </span>
-                        );
-                      })()}
+                      {/* Píldora de Información Extra / Urgente */}
+                      {orderRemark && (
+                        <span className="shrink-0 bg-blue-500/15 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30 text-[9px] font-bold">
+                          {orderRemark}
+                        </span>
+                      )}
                     </div>
                   );
                 })()}

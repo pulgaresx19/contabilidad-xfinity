@@ -47,14 +47,14 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
     formData.append('category', category);
 
     try {
-      // Stamp each photo with real-time GPS coordinates, current timestamp, and job address
+      // Stamp each photo with real-time GPS coordinates, current timestamp, and actual photo site location
       for (let i = 0; i < files.length; i++) {
         const stamped = await stampPhotoWithWatermark(files[i], {
-          address: order.address,
-          city: order.city,
-          zipCode: order.zip_code,
-          lat: order.latitude,
-          lng: order.longitude
+          fallbackAddress: order.address,
+          fallbackCity: order.city,
+          fallbackZip: order.zip_code,
+          fallbackLat: order.latitude,
+          fallbackLng: order.longitude
         });
         formData.append('photos', stamped);
       }

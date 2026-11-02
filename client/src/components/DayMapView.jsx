@@ -7,6 +7,7 @@ import {
   ChevronRight, Car, Layers, Eye
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { formatRouteDuration } from '../utils/dateUtils';
 
 // Great-circle distance converted to realistic driving miles (~1.28 grid detour factor)
 function getEstimatedDrivingMiles(lat1, lon1, lat2, lon2) {
@@ -359,7 +360,7 @@ export default function DayMapView({
               <span>{milesToNext !== null ? `${milesToNext.toFixed(1)} mi` : '—'}</span>
               {milesToNext !== null && (
                 <span className="text-[10px] text-slate-500 font-sans font-normal">
-                  (~{Math.max(1, Math.round(milesToNext * 2.2))} min)
+                  ({formatRouteDuration(Math.max(1, Math.round(milesToNext * 2.2)), true)})
                 </span>
               )}
             </div>
@@ -370,7 +371,7 @@ export default function DayMapView({
             <div className="font-mono font-bold text-amber-400 flex items-center gap-1 text-sm mt-0.5">
               <span>{totalRouteMiles > 0 ? `${totalRouteMiles.toFixed(1)} mi` : '—'}</span>
               <span className="text-[10px] text-slate-500 font-sans font-normal">
-                ({validOrders.length} paradas)
+                ({validOrders.length} paradas • {formatRouteDuration(Math.round(totalRouteMiles * 2.2), true)})
               </span>
             </div>
           </div>

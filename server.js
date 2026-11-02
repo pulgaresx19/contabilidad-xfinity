@@ -145,6 +145,136 @@ async function geocodeAddress(address, city = '', zipCode = '') {
   return null;
 }
 
+// Map of US state names to 2-letter postal abbreviations
+const US_STATE_ABBRS = {
+  'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+  'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+  'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+  'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+  'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
+  'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+  'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
+  'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
+  'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY'
+};
+
+// Helper for reverse geocoding real-time GPS coordinates into physical street address, city, state, zip & country
+async function reverseGeocode(lat, lng) {
+  if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) return null;
+  const numLat = parseFloat(lat);
+  const numLng = parseFloat(lng);
+
+  // Cache key: rounded to 4 decimals (~11m precision)
+  const cacheKey = `${numLat.toFixed(4)}_${numLng.toFixed(4)}`;
+
+  try {
+    const cached = db.prepare('SELECT result_json FROM reverse_geocache WHERE coord_key = ?').get(cacheKey);
+    if (cached && cached.result_json) {
+      return JSON.parse(cached.result_json);
+    }
+  } catch (e) {}
+
+  // 1. Primary: Nominatim Reverse Geocoding with Spanish language support
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${numLat}&lon=${numLng}&zoom=18&addressdetails=1&accept-language=es`;
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'ContabilidadXFinityApp/1.0 (Comcast Cable Tech Javier)' }
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const addr = data.address || {};
+
+      let houseNum = addr.house_number || '';
+      let road = addr.road || addr.pedestrian || addr.street || addr.footway || addr.path || '';
+
+      // Translate Spanish highway/route if needed (e.g., 'US 33' -> 'Carretera 33')
+      if (/^US(?:\s+Highway)?\s*(\d+)\s*([NSEW])?/i.test(road)) {
+        road = road.replace(/^US(?:\s+Highway)?\s*(\d+)\s*([NSEW])?/i, (_, n, d) => `Carretera ${n}${d ? ' ' + d : ''}`);
+      }
+
+      let street = [houseNum, road].filter(Boolean).join(' ').trim();
+      if (!street && data.display_name) {
+        street = data.display_name.split(',')[0].trim();
+      }
+
+      let city = addr.city || addr.town || addr.village || addr.municipality || '';
+      if (!city && addr.county) {
+        city = addr.county.replace(/\s+County/i, '').trim();
+      }
+      if (!city && addr.hamlet) {
+        city = addr.hamlet.trim();
+      }
+
+      let state = '';
+      if (addr['ISO3166-2-lvl4']) {
+        const parts = addr['ISO3166-2-lvl4'].split('-');
+        if (parts.length > 1) state = parts[1].toUpperCase();
+      }
+      if (!state && addr.state) {
+        const stLower = addr.state.toLowerCase();
+        state = US_STATE_ABBRS[stLower] || addr.state;
+      }
+
+      const postcode = addr.postcode || '';
+      let country = (addr.country || 'Estados Unidos').replace(/\s+de América/i, '').trim();
+      if (/United States/i.test(country)) country = 'Estados Unidos';
+
+      const cityStateZip = [city, state, postcode].filter(Boolean).join(' ').trim();
+
+      const result = {
+        street: street || 'Ubicación actual',
+        cityStateZip: cityStateZip || 'Área de servicio',
+        city,
+        state,
+        postcode,
+        country: country || 'Estados Unidos',
+        fullAddress: [street, cityStateZip, country].filter(Boolean).join(', ')
+      };
+
+      try {
+        db.prepare('INSERT OR REPLACE INTO reverse_geocache (coord_key, result_json) VALUES (?, ?)').run(
+          cacheKey, JSON.stringify(result)
+        );
+      } catch (saveErr) {}
+
+      return result;
+    }
+  } catch (err) {
+    console.warn('[ReverseGeocode] Nominatim request failed:', err.message);
+  }
+
+  // 2. Fallback: BigDataCloud Reverse Geocoding
+  try {
+    const bdcUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${numLat}&longitude=${numLng}&localityLanguage=es`;
+    const bdcResp = await fetch(bdcUrl);
+    if (bdcResp.ok) {
+      const bdcData = await bdcResp.json();
+      const city = bdcData.locality || (bdcData.city ? bdcData.city.replace(/Municipio de\s*/i, '').replace(/\s*\(.*\)/, '').trim() : '');
+      const state = bdcData.principalSubdivisionCode ? bdcData.principalSubdivisionCode.split('-')[1] : (bdcData.principalSubdivision || '');
+      const postcode = bdcData.postcode || '';
+      const country = bdcData.countryName || 'Estados Unidos';
+      const cityStateZip = [city, state, postcode].filter(Boolean).join(' ').trim();
+
+      const result = {
+        street: 'Ubicación actual',
+        cityStateZip,
+        city,
+        state,
+        postcode,
+        country,
+        fullAddress: [cityStateZip, country].filter(Boolean).join(', ')
+      };
+      return result;
+    }
+  } catch (err) {
+    console.warn('[ReverseGeocode] BigDataCloud fallback failed:', err.message);
+  }
+
+  return null;
+}
+
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -454,6 +584,24 @@ function getWeekInfo(dateStr, cutoffSetting = null) {
 // API ENDPOINTS
 // -----------------------------------------------------------------------------
 
+// Reverse geocode real-time GPS coordinates to physical address
+app.get('/api/reverse-geocode', async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'lat and lng parameters are required' });
+    }
+    const result = await reverseGeocode(lat, lng);
+    if (result) {
+      return res.json(result);
+    }
+    return res.status(404).json({ error: 'Address could not be determined for these coordinates' });
+  } catch (err) {
+    console.error('Error in /api/reverse-geocode:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // 1. Get all work orders with filters
 app.get('/api/orders', (req, res) => {
   try {
@@ -748,17 +896,20 @@ app.patch('/api/orders/:id/note', (req, res) => {
 app.post('/api/orders/reorder-route', (req, res) => {
   try {
     const { orderedIds } = req.body;
+    console.log('⚡ [reorder-route] Received orderedIds:', orderedIds);
     if (Array.isArray(orderedIds) && orderedIds.length > 0) {
       const updateStmt = db.prepare('UPDATE work_orders SET route_order = ? WHERE id = ?');
       const tx = db.transaction(() => {
         orderedIds.forEach((id, idx) => {
-          updateStmt.run(idx + 1, id);
+          updateStmt.run(idx + 1, Number(id));
         });
       });
       tx();
+      console.log('✅ [reorder-route] Updated DB route_order for', orderedIds.length, 'orders');
     }
     res.json({ success: true });
   } catch (err) {
+    console.error('❌ [reorder-route] Error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1497,8 +1648,17 @@ app.delete('/api/dispatch-sheets/:id', (req, res) => {
 // Serve frontend build if present
 const clientDist = path.join(__dirname, 'client', 'dist');
 if (fs.existsSync(clientDist)) {
+  app.use((req, res, next) => {
+    if (req.path === '/' || req.path === '/index.html') {
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+    }
+    next();
+  });
   app.use(express.static(clientDist));
   app.use((req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }

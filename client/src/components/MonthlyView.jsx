@@ -217,11 +217,11 @@ ${weeksLines || '  (No hay semanas registradas)'}
 
   return (
     <div className="space-y-4 max-w-md sm:max-w-lg mx-auto w-full pb-24">
-      {/* 1. SELECTOR DEL MES */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-2.5 flex items-center justify-between shadow-md">
+      {/* 1. SELECTOR DEL MES (COCKPIT STYLE) */}
+      <div className="bg-[#131b26] border border-white/10 rounded-2xl p-2.5 flex items-center justify-between shadow-md">
         <button
           onClick={handlePrevMonth}
-          className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition active:scale-95"
+          className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white transition active:scale-95 border border-white/5"
           title="Mes Anterior"
         >
           <ChevronLeft className="w-5 h-5" />
@@ -234,7 +234,7 @@ ${weeksLines || '  (No hay semanas registradas)'}
           </div>
           <button
             onClick={handleTodayMonth}
-            className="text-[10px] text-cyan-400 hover:text-cyan-300 font-semibold tracking-wide uppercase transition mt-0.5"
+            className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold tracking-wide uppercase transition mt-0.5"
           >
             Ir a Mes Actual
           </button>
@@ -242,85 +242,85 @@ ${weeksLines || '  (No hay semanas registradas)'}
 
         <button
           onClick={handleNextMonth}
-          className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition active:scale-95"
+          className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white transition active:scale-95 border border-white/5"
           title="Mes Siguiente"
         >
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
 
-      {/* 2. TARJETA PRINCIPAL: BALANCE NETO MENSUAL */}
-      <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-gradient-to-br dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 border border-slate-200 dark:border-slate-800 p-5 shadow-xl">
+      {/* 2. TARJETA PRINCIPAL: BALANCE NETO MENSUAL (COCKPIT HUD) */}
+      <div className="relative overflow-hidden rounded-3xl bg-[#0f1722]/95 border border-white/10 p-5 shadow-xl">
         <div className="absolute top-0 right-0 w-36 h-36 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-36 h-36 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                 Balance Neto Mensual
               </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                 {totals.marginPercent}% Margen
               </span>
             </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+            <div className="text-[11px] text-slate-400 font-medium">
               {totals.totalWeeksCount} {totals.totalWeeksCount === 1 ? 'semana' : 'semanas'}
             </div>
           </div>
 
           <div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white">
+              <span className="text-3xl sm:text-4xl font-black font-mono tracking-tight text-white drop-shadow-[0_0_12px_rgba(52,211,153,0.3)]">
                 ${totals.netPaidBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-transparent px-1.5 py-0.5 rounded">en mano</span>
+              <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded">en mano</span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-xs text-slate-400 mt-1">
               Cobrado (${totals.totalPaid.toFixed(2)}) menos gastos (-${totals.totalExpenses.toFixed(2)})
             </p>
           </div>
 
           {/* Sub-cards: Cobrado vs Gastos vs Pendiente */}
-          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200 dark:border-slate-800/80">
+          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/8">
             {/* Cobrado */}
-            <div className="bg-emerald-50/80 dark:bg-slate-950/60 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl p-2.5 shadow-sm">
-              <div className="flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-400 font-bold mb-0.5">
+            <div className="bg-[#131b26] border border-emerald-500/30 rounded-2xl p-2.5 shadow-sm space-y-0.5">
+              <div className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold mb-0.5">
                 <TrendingUp className="w-3 h-3 stroke-[3]" />
                 <span>Cobrado</span>
               </div>
-              <div className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+              <div className="text-sm sm:text-base font-black font-mono text-emerald-400">
                 ${totals.totalPaid.toFixed(2)}
               </div>
-              <div className="text-[9px] text-slate-500 dark:text-slate-400 font-medium">
+              <div className="text-[9px] text-slate-400 font-medium">
                 {totals.completedWeeksCount} sem. cobradas
               </div>
             </div>
 
             {/* Gastos */}
-            <div className="bg-rose-50/80 dark:bg-slate-950/60 border border-rose-200 dark:border-rose-500/20 rounded-2xl p-2.5 shadow-sm">
-              <div className="flex items-center gap-1 text-[10px] text-rose-700 dark:text-rose-400 font-bold mb-0.5">
+            <div className="bg-[#131b26] border border-rose-500/30 rounded-2xl p-2.5 shadow-sm space-y-0.5">
+              <div className="flex items-center gap-1 text-[10px] text-rose-400 font-bold mb-0.5">
                 <TrendingDown className="w-3 h-3 stroke-[3]" />
                 <span>Gastos</span>
               </div>
-              <div className="text-sm sm:text-base font-black text-rose-600 dark:text-rose-400">
+              <div className="text-sm sm:text-base font-black font-mono text-rose-400">
                 -${totals.totalExpenses.toFixed(2)}
               </div>
-              <div className="text-[9px] text-slate-500 dark:text-slate-400 font-medium">
+              <div className="text-[9px] text-slate-400 font-medium">
                 {expenses.length} registros
               </div>
             </div>
 
             {/* Pendiente */}
-            <div className="bg-cyan-50/80 dark:bg-slate-950/60 border border-cyan-200 dark:border-cyan-500/20 rounded-2xl p-2.5 shadow-sm">
-              <div className="flex items-center gap-1 text-[10px] text-cyan-700 dark:text-cyan-400 font-bold mb-0.5">
+            <div className="bg-[#131b26] border border-amber-500/30 rounded-2xl p-2.5 shadow-sm space-y-0.5">
+              <div className="flex items-center gap-1 text-[10px] text-amber-400 font-bold mb-0.5">
                 <Clock className="w-3 h-3 stroke-[2.5]" />
                 <span>Pendiente</span>
               </div>
-              <div className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+              <div className="text-sm sm:text-base font-black font-mono text-amber-400">
                 ${totals.totalPending.toFixed(2)}
               </div>
-              <div className="text-[9px] text-slate-500 dark:text-slate-400 font-medium">
+              <div className="text-[9px] text-slate-400 font-medium">
                 Por cobrar
               </div>
             </div>
@@ -328,18 +328,18 @@ ${weeksLines || '  (No hay semanas registradas)'}
         </div>
       </div>
 
-      {/* 3. SUB-PESTAÑAS CON FORMATO: ÍCONO ARRIBA Y TEXTO ABAJO */}
-      <div className="bg-slate-900 p-1.5 rounded-2xl border border-slate-800 grid grid-cols-3 gap-1 shadow-sm">
+      {/* 3. SUB-PESTAÑAS CON FORMATO COCKPIT */}
+      <div className="bg-[#0f1722]/95 backdrop-blur-xl p-1.5 rounded-2xl border border-white/10 grid grid-cols-3 gap-1 shadow-md">
         <button
           onClick={() => setActiveSubTab('weeks')}
           className={`flex flex-col items-center justify-center py-2 px-2 rounded-xl transition text-center select-none ${
             activeSubTab === 'weeks'
-              ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/40 font-medium'
+              ? 'bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-cyan-500/10 text-cyan-400 border border-cyan-500/40 shadow-sm shadow-cyan-500/20 font-bold'
+              : 'text-slate-400 hover:text-white hover:bg-white/5 font-medium border border-transparent'
           }`}
         >
-          <Calendar className={`w-4 h-4 mb-1 ${activeSubTab === 'weeks' ? 'stroke-[2.5]' : 'stroke-2'}`} />
-          <span className="text-[11px] leading-tight">
+          <Calendar className={`w-4 h-4 mb-1 ${activeSubTab === 'weeks' ? 'stroke-[2.5] text-cyan-400' : 'stroke-2'}`} />
+          <span className="text-[11px] leading-tight font-bold">
             Semanas ({weeks.length})
           </span>
         </button>
@@ -348,12 +348,12 @@ ${weeksLines || '  (No hay semanas registradas)'}
           onClick={() => setActiveSubTab('expenses')}
           className={`flex flex-col items-center justify-center py-2 px-2 rounded-xl transition text-center select-none ${
             activeSubTab === 'expenses'
-              ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/40 font-medium'
+              ? 'bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-cyan-500/10 text-cyan-400 border border-cyan-500/40 shadow-sm shadow-cyan-500/20 font-bold'
+              : 'text-slate-400 hover:text-white hover:bg-white/5 font-medium border border-transparent'
           }`}
         >
-          <DollarSign className={`w-4 h-4 mb-1 ${activeSubTab === 'expenses' ? 'stroke-[2.5]' : 'stroke-2'}`} />
-          <span className="text-[11px] leading-tight">
+          <DollarSign className={`w-4 h-4 mb-1 ${activeSubTab === 'expenses' ? 'stroke-[2.5] text-cyan-400' : 'stroke-2'}`} />
+          <span className="text-[11px] leading-tight font-bold">
             Gastos ({expenses.length})
           </span>
         </button>
@@ -362,12 +362,12 @@ ${weeksLines || '  (No hay semanas registradas)'}
           onClick={() => setActiveSubTab('report')}
           className={`flex flex-col items-center justify-center py-2 px-2 rounded-xl transition text-center select-none ${
             activeSubTab === 'report'
-              ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/40 font-medium'
+              ? 'bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-cyan-500/10 text-cyan-400 border border-cyan-500/40 shadow-sm shadow-cyan-500/20 font-bold'
+              : 'text-slate-400 hover:text-white hover:bg-white/5 font-medium border border-transparent'
           }`}
         >
-          <Share2 className={`w-4 h-4 mb-1 ${activeSubTab === 'report' ? 'stroke-[2.5]' : 'stroke-2'}`} />
-          <span className="text-[11px] leading-tight">
+          <Share2 className={`w-4 h-4 mb-1 ${activeSubTab === 'report' ? 'stroke-[2.5] text-cyan-400' : 'stroke-2'}`} />
+          <span className="text-[11px] leading-tight font-bold">
             Constancia
           </span>
         </button>
@@ -399,56 +399,54 @@ ${weeksLines || '  (No hay semanas registradas)'}
               return (
                 <div
                   key={w.key}
-                  className={`border rounded-2xl p-4 transition shadow-sm space-y-3 ${
+                  className={`bg-[#131b26] border rounded-2xl p-4 transition shadow-md space-y-3 ${
                     w.isPaid
-                      ? 'bg-gradient-to-br from-emerald-50/70 via-white to-white dark:from-emerald-950/20 dark:via-slate-900/90 dark:to-slate-900 border-emerald-300/80 dark:border-emerald-500/35 hover:border-emerald-400'
-                      : 'bg-gradient-to-br from-amber-50/70 via-white to-white dark:from-amber-950/20 dark:via-slate-900/90 dark:to-slate-900 border-amber-300/80 dark:border-amber-500/35 hover:border-amber-400'
+                      ? 'border-emerald-500/30 hover:border-emerald-500/50'
+                      : 'border-amber-500/30 hover:border-amber-500/50'
                   }`}
                 >
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                        <h3 className="text-sm font-black text-white font-mono">
                           Semana {w.displayLabel}
                         </h3>
                         {w.isPaid ? (
-                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/90 dark:text-emerald-300 dark:border-emerald-600/50 flex items-center gap-1.5 shadow-xs">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-xs">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            <ShieldCheck className="w-3 h-3 text-emerald-400" />
                             <span>Cobrado</span>
                           </span>
                         ) : (
-                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300 dark:bg-amber-950/90 dark:text-amber-300 dark:border-amber-600/50 flex items-center gap-1.5 shadow-xs">
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                            <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 shadow-xs">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                            <Clock className="w-3 h-3 text-amber-400" />
                             <span>Pendiente</span>
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                      <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
                         {w.startDate} al {w.endDate} • {w.completedCount} trabajos • {Math.round(w.totalFootage)} ft
                       </p>
                     </div>
 
                     <div className="text-right">
                       <div className={`text-base font-black font-mono ${
-                        w.isPaid ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'
+                        w.isPaid ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]' : 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]'
                       }`}>
                         ${w.totalEarnings.toFixed(2)}
                       </div>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                      <span className="text-[10px] text-slate-400 font-medium">
                         {w.isPaid ? 'Cobrado ✓' : `Pendiente: $${w.pendingEarnings.toFixed(2)}`}
                       </span>
                     </div>
                   </div>
 
                   {/* Action buttons */}
-                  <div className={`flex items-center justify-between pt-2 border-t gap-2 ${
-                    w.isPaid ? 'border-emerald-100 dark:border-slate-800/80' : 'border-amber-100 dark:border-slate-800/80'
-                  }`}>
+                  <div className="flex items-center justify-between pt-2 border-t border-white/8 gap-2">
                     <button
                       onClick={() => setExpandedWeekKey(isExpanded ? null : w.key)}
-                      className="text-xs text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 font-bold flex items-center gap-1 py-1"
+                      className="text-xs text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 py-1"
                     >
                       {isExpanded ? (
                         <>
@@ -468,19 +466,19 @@ ${weeksLines || '  (No hay semanas registradas)'}
                       disabled={isUpdating}
                       className={`text-xs px-2.5 py-1 rounded-xl font-black transition flex items-center gap-1 ${
                         w.isPaid
-                          ? 'bg-emerald-500/10 hover:bg-rose-500/10 text-emerald-700 hover:text-rose-600 dark:text-emerald-300 dark:hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30 shadow-2xs'
-                          : 'bg-amber-500/15 hover:bg-emerald-500/15 text-amber-800 hover:text-emerald-700 dark:text-amber-300 dark:hover:text-emerald-300 border border-amber-500/30 hover:border-emerald-500/30 shadow-2xs active:scale-95'
+                          ? 'bg-emerald-500/15 hover:bg-rose-500/15 text-emerald-400 hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30'
+                          : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 shadow-md shadow-emerald-500/20 active:scale-95'
                       }`}
                     >
                       {w.isPaid ? (
                         <>
-                          <CheckCircle className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                          <CheckCircle className="h-3 w-3 text-emerald-400" />
                           <span>Cobrado ✓</span>
                         </>
                       ) : (
                         <>
                           <DollarSign className="h-3 w-3 stroke-[2.5]" />
-                          <span>Confirmar</span>
+                          <span>Confirmar Cobro</span>
                         </>
                       )}
                     </button>
@@ -488,44 +486,44 @@ ${weeksLines || '  (No hay semanas registradas)'}
 
                   {/* Expanded orders preview */}
                   {isExpanded && w.orders && w.orders.length > 0 && (
-                    <div className="pt-2 border-t border-slate-200 dark:border-slate-800/60 space-y-2">
+                    <div className="pt-2 border-t border-white/8 space-y-2">
                       {w.orders.map((ord, idx) => (
                         <div
                           key={ord.id}
-                          className="bg-white dark:bg-slate-950/70 hover:bg-slate-50 dark:hover:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 flex items-center justify-between text-xs transition gap-2 shadow-2xs"
+                          className="bg-[#182332] hover:bg-[#1e2c3c] p-2.5 rounded-xl border border-white/8 hover:border-cyan-500/30 flex items-center justify-between text-xs transition gap-2 shadow-xs"
                         >
                           <div className="min-w-0 flex-1">
-                            <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
-                              <span>#{ord.job_id}</span>
-                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">{ord.work_date}</span>
+                            <div className="font-bold text-white flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono text-cyan-400">#{ord.job_id}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">{ord.work_date}</span>
                               {Number(ord.manual_adjustment) > 0 && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30">
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
                                   +${ord.manual_adjustment} Bono {ord.adjustment_reason ? `(${ord.adjustment_reason})` : ''}
                                 </span>
                               )}
                               {Number(ord.manual_adjustment) < 0 && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-50 text-amber-800 border border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30">
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
                                   -${Math.abs(ord.manual_adjustment)} Descuento {ord.adjustment_reason ? `(${ord.adjustment_reason})` : ''}
                                 </span>
                               )}
                             </div>
-                            <div className="text-slate-600 dark:text-slate-400 truncate max-w-[260px] sm:max-w-md text-[11px]">
+                            <div className="text-slate-300 truncate max-w-[260px] sm:max-w-md text-[11px]">
                               {ord.address}
                             </div>
-                            <div className="text-[10px] text-slate-500 font-medium">
+                            <div className="text-[10px] text-slate-400 font-mono">
                               {ord.drop_footage} ft • {ord.cable_type} {ord.bore_type && ord.bore_type !== 'N' ? `• ${ord.bore_type}` : ''}
                             </div>
                           </div>
 
                           <div className="flex items-center gap-2 shrink-0">
                             <div className="text-right">
-                              <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm block">
+                              <span className="font-mono font-black text-emerald-400 text-sm block">
                                 ${ord.rate_calculated}
                               </span>
                               <span className={`inline-block px-1.5 py-0.5 rounded border text-[9px] font-bold ${
                                 ord.payment_status === 'Cobrado'
-                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/80 dark:border-emerald-800 dark:text-emerald-400'
-                                  : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/80 dark:border-amber-800 dark:text-amber-300'
+                                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                  : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
                               }`}>
                                 {ord.payment_status || 'Pendiente'}
                               </span>
@@ -534,7 +532,7 @@ ${weeksLines || '  (No hay semanas registradas)'}
                             <button
                               type="button"
                               onClick={() => setEditingOrder(ord)}
-                              className="p-1.5 text-slate-500 hover:text-cyan-600 dark:text-slate-400 dark:hover:text-cyan-400 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 hover:border-cyan-500/40 rounded-xl transition shadow-xs"
+                              className="p-1.5 text-slate-400 hover:text-cyan-400 bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 hover:border-cyan-500/40 rounded-xl transition shadow-xs"
                               title="Editar trabajo o ajustar bono/descuento"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
