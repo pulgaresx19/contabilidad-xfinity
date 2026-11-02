@@ -569,7 +569,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
   const isViewingToday = activeDate === todayReal;
 
   return (
-    <div className="w-full h-full flex flex-col min-h-0">
+    <div className={`w-full ${viewMode === 'uber' ? 'h-full flex flex-col min-h-0' : ''}`}>
       {viewMode === 'uber' ? (
         <UberDriverView
           orders={dayOrders}
@@ -595,7 +595,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           onSwitchToClassic={() => setViewMode('classic')}
         />
       ) : (
-        <div className="space-y-3.5 max-w-md mx-auto">
+        <div className="space-y-3.5 w-full">
           {/* Botón flotante para regresar al Modo Uber */}
           {!hideModeToggle && (
             <button

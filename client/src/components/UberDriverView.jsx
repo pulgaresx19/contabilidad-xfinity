@@ -252,7 +252,7 @@ export default function UberDriverView({
   const dayPending = orders.filter(o => o.status === 'Pendiente');
   const dayCompleted = orders.filter(o => o.status === 'Completado');
   const dayCancelled = orders.filter(o => o.status === 'No Realizado');
-  const dayEarnings = dayCompleted.reduce((sum, o) => sum + (o.rate_calculated || 0), 0);
+  const dayEarnings = dayCompleted.reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
   const validOrders = orders.filter(o => o.latitude && o.longitude);
 
   // Active Timer Tick interval
@@ -1301,8 +1301,8 @@ export default function UberDriverView({
 
       {/* 2. TOP HUD: PREMIUM COCKPIT DATE & BALANCE PILL + ACTION BUTTONS */}
       <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between pointer-events-none gap-2">
-        {/* Fixed-Size Static Date Selector Card (w-[205px] h-[52px]) */}
-        <div className="pointer-events-auto bg-[#0f1722]/94 backdrop-blur-2xl border border-white/10 rounded-2xl px-2 py-1 shadow-[0_8px_30px_rgba(0,0,0,0.5)] flex items-center justify-between w-[205px] h-[52px] select-none shrink-0">
+        {/* Fixed-Size Static Date Selector Card */}
+        <div className="pointer-events-auto bg-[#0f1722]/94 backdrop-blur-2xl border border-white/10 rounded-2xl px-1.5 sm:px-2 py-1 shadow-[0_8px_30px_rgba(0,0,0,0.5)] flex items-center justify-between w-[155px] sm:w-[185px] h-[52px] select-none shrink-0">
           {/* Previous Day Chevron */}
           <button
             type="button"
@@ -1381,8 +1381,8 @@ export default function UberDriverView({
           </button>
         </div>
 
-        {/* Actions: [+] & [Lista] */}
-        <div className="pointer-events-auto flex items-center gap-1.5 shrink-0">
+        {/* Actions: [+] & [Lista] & [Saldo Diario] */}
+        <div className="pointer-events-auto flex items-center gap-1 sm:gap-1.5 shrink-0">
           <button
             onClick={onOpenAddJob}
             className="w-9 h-9 rounded-2xl bg-gradient-to-r from-[#007AFF] to-cyan-500 hover:from-blue-600 hover:to-cyan-400 text-white font-black shadow-lg shadow-blue-500/25 active:scale-95 transition flex items-center justify-center border border-white/15 cursor-pointer"
@@ -1399,6 +1399,25 @@ export default function UberDriverView({
           >
             <List className="h-4 w-4" />
           </button>
+
+          {/* Saldo Diario / Ganancia del Día */}
+          <div
+            onClick={() => setShowDayJobsOverlay(true)}
+            className="h-9 px-2 sm:px-2.5 rounded-2xl bg-[#0f1722]/95 backdrop-blur-2xl border border-emerald-500/30 hover:border-emerald-500/60 shadow-xl active:scale-95 transition flex items-center gap-1.5 cursor-pointer select-none group"
+            title={`Saldo del día (${dayCompleted.length} completados): $${dayEarnings.toFixed(2)}. Toca para ver lista.`}
+          >
+            <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-[10.5px] font-black shrink-0 font-mono">
+              $
+            </div>
+            <div className="flex flex-col justify-center leading-none">
+              <span className="text-[7.5px] sm:text-[8px] uppercase tracking-wider text-slate-400 font-bold group-hover:text-emerald-400/80 transition">
+                {isViewingToday ? 'Hoy' : 'Total'}
+              </span>
+              <span className="text-xs sm:text-[13px] font-black font-mono text-emerald-400 tracking-tight">
+                ${dayEarnings % 1 === 0 ? dayEarnings.toFixed(0) : dayEarnings.toFixed(2)}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -216,7 +216,7 @@ ${weeksLines || '  (No hay semanas registradas)'}
   const expensesByCategory = data?.expensesByCategory || {};
 
   return (
-    <div className="space-y-4 max-w-md mx-auto pb-24">
+    <div className="space-y-4 max-w-md sm:max-w-lg mx-auto w-full pb-24">
       {/* 1. SELECTOR DEL MES */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-2.5 flex items-center justify-between shadow-md">
         <button

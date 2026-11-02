@@ -19,7 +19,7 @@ export default function HistoryView({
   onOrderUpdated, 
   onUpdateOrders 
 }) {
-  const [subTab, setSubTab] = useState('today'); // 'today' | 'weeks' | 'monthly' | 'all_orders'
+  const [subTab, setSubTab] = useState('daily'); // 'daily' | 'weeks' | 'monthly' | 'all_orders'
   const [selectedWeekModal, setSelectedWeekModal] = useState(null); // Week object for overlay modal
   const [copiedWeekKey, setCopiedWeekKey] = useState(null);
   const [copiedJobId, setCopiedJobId] = useState(null);
@@ -162,20 +162,20 @@ ${jobLines}
   };
 
   return (
-    <div className="space-y-4 max-w-md mx-auto">
+    <div className="space-y-4 max-w-md sm:max-w-lg mx-auto w-full">
       {/* 1. SELECTOR SUPERIOR DE 4 SUBPESTAÑAS (FORMATO: ÍCONO ARRIBA Y TEXTO ABAJO) */}
       <div className="bg-slate-900 p-1.5 rounded-2xl border border-slate-800 grid grid-cols-4 gap-1 shadow-sm">
         <button
-          onClick={() => setSubTab('today')}
+          onClick={() => setSubTab('daily')}
           className={`flex flex-col items-center justify-center py-2 px-1 text-center rounded-xl transition select-none ${
-            subTab === 'today'
+            subTab === 'daily'
               ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/40 font-medium'
           }`}
         >
-          <Clock className={`w-4 h-4 mb-1 ${subTab === 'today' ? 'stroke-[2.5]' : 'stroke-2'}`} />
+          <Clock className={`w-4 h-4 mb-1 ${subTab === 'daily' ? 'stroke-[2.5]' : 'stroke-2'}`} />
           <span className="text-[10.5px] leading-tight font-bold">
-            Hoy
+            Diario
           </span>
         </button>
 
@@ -222,9 +222,9 @@ ${jobLines}
         </button>
       </div>
 
-      {/* SUBTAB 1: REPORTE DIARIO DE HOY (VISTA COMPLETA DE TRABAJOS DEL DÍA) */}
-      {subTab === 'today' && (
-        <div className="animate-fade-in">
+      {/* SUBTAB 1: REPORTE DIARIO (VISTA COMPLETA DE TRABAJOS DEL DÍA CON ANCHO COMPLETO) */}
+      {subTab === 'daily' && (
+        <div className="animate-fade-in w-full">
           <TodayView
             orders={orders}
             summaryData={summaryData}
