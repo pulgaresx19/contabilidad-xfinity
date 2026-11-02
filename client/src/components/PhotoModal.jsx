@@ -15,6 +15,15 @@ const PHOTO_STEPS = [
   { id: 'General', label: 'General / Extra', short: 'Extra', icon: '📷' }
 ];
 
+const QUICK_CANCEL_REASONS = [
+  'Perro suelto en la propiedad',
+  'Cliente no estaba / Sin acceso',
+  'Cliente cancela o no desea servicio',
+  'Ducto o canalización obstruida',
+  'Problema técnico en Tap / Línea principal',
+  'Sin acceso a caja de entrada'
+];
+
 export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
   const [uploading, setUploading] = useState(false);
   const [category, setCategory] = useState('Casa/Ground Block');
@@ -24,6 +33,9 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
   const [previewPhoto, setPreviewPhoto] = useState(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [copiedReportText, setCopiedReportText] = useState(false);
+  const [showCancelPrompt, setShowCancelPrompt] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [savingCancel, setSavingCancel] = useState(false);
 
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
@@ -132,6 +144,32 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
     }
   };
 
+  const handleConfirmCancelled = async () => {
+    const finalReason = cancelReason.trim() || 'No realizado por inconveniente en la propiedad';
+    setSavingCancel(true);
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...order, status: 'No Realizado', cancel_reason: finalReason })
+      });
+      if (res.ok) {
+        order.status = 'No Realizado';
+        order.cancel_reason = finalReason;
+        if (onPhotoUpdated) onPhotoUpdated();
+        setShowCancelPrompt(false);
+        onClose();
+      } else {
+        const d = await res.json();
+        setError(d.error || 'Error al guardar cancelación');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingCancel(false);
+    }
+  };
+
   const handleCopyReportDirect = async () => {
     const isDw = order.bore_type && order.bore_type.includes('DW');
     const isSw = order.bore_type && order.bore_type.includes('SW');
@@ -201,6 +239,74 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
             <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-600 dark:text-rose-300 text-xs flex items-center gap-2">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {/* Sección Expandible para Declarar Trabajo No Realizado */}
+          {showCancelPrompt && (
+            <div className="p-3.5 bg-rose-500/10 dark:bg-rose-950/40 border border-rose-500/40 rounded-2xl space-y-2.5 animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-black text-rose-600 dark:text-rose-400">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>Declarar Trabajo No Realizado</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCancelPrompt(false)}
+                  className="text-slate-400 hover:text-slate-200 p-1 rounded-lg"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                Selecciona o escribe el motivo por el cual no se pudo completar el trabajo en la propiedad:
+              </p>
+
+              {/* Quick Reason Chips */}
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_CANCEL_REASONS.map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => setCancelReason(reason)}
+                    className={`text-[10px] px-2.5 py-1 rounded-lg border transition font-medium text-left cursor-pointer ${
+                      cancelReason === reason
+                        ? 'bg-rose-600 text-white border-rose-500 font-bold shadow-sm'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-rose-400'
+                    }`}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+
+              <input
+                type="text"
+                placeholder="Escribe un motivo específico (opcional)..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full h-9 px-3 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:border-rose-500 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+              />
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowCancelPrompt(false)}
+                  className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white font-bold cursor-pointer"
+                >
+                  Volver
+                </button>
+                <button
+                  type="button"
+                  disabled={savingCancel}
+                  onClick={handleConfirmCancelled}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow-lg shadow-rose-600/30 flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
+                >
+                  <X className="h-4 w-4 stroke-[3]" />
+                  <span>{savingCancel ? 'Guardando...' : 'Confirmar No Realizado'}</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -451,14 +557,32 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
         </div>
 
         {/* Footer con Acción Directa para Confirmar el Trabajo o Reportar */}
-        <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 flex items-center justify-between gap-2.5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-10 px-4 bg-slate-200/80 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition shrink-0"
-          >
-            Cerrar
-          </button>
+        <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-10 px-3.5 bg-slate-200/80 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition shrink-0 cursor-pointer"
+            >
+              Cerrar
+            </button>
+
+            {!isCompleted && order.status !== 'No Realizado' && (
+              <button
+                type="button"
+                onClick={() => setShowCancelPrompt(prev => !prev)}
+                className={`h-10 px-3 text-xs font-bold rounded-xl transition flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer ${
+                  showCancelPrompt
+                    ? 'bg-rose-600 text-white shadow-md'
+                    : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                }`}
+                title="Marcar trabajo como No Realizado (inconveniente en la propiedad)"
+              >
+                <X className="h-3.5 w-3.5 stroke-[2.5]" />
+                <span>No Realizado</span>
+              </button>
+            )}
+          </div>
 
           {!isCompleted ? (
             <button

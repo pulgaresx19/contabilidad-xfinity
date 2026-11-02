@@ -1708,36 +1708,12 @@ export default function UberDriverView({
 
             {/* ROW 3: NOTES & WORK SPECS CARD (STATUS ICON + SPECS + REMARKS + EDIT) */}
             <div className="bg-[#131b26] border border-white/8 rounded-2xl p-2.5 flex items-center justify-between gap-2.5 my-1">
-              {/* Status Icon Circle (Relojito amarillo si pendiente, 1 palomita si completado, 2 palomitas si reportado) */}
+              {/* Site / Parada Circle Badge */}
               <div 
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs shrink-0 select-none transition-all shadow-sm ${
-                  isSelectedCompleted && isSelectedShared
-                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-cyan-500/20'
-                    : isSelectedCompleted
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-emerald-500/20'
-                    : isSelectedCancelled
-                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-rose-500/20'
-                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-amber-500/25 ring-1 ring-amber-500/20'
-                }`}
-                title={
-                  isSelectedCompleted && isSelectedShared
-                    ? 'Estado: Reportado'
-                    : isSelectedCompleted
-                    ? 'Estado: Completado'
-                    : isSelectedCancelled
-                    ? 'Estado: No Realizado'
-                    : 'Estado: Pendiente'
-                }
+                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0 select-none transition-all shadow-sm bg-gradient-to-tr from-cyan-500/25 to-blue-600/25 text-cyan-300 border border-cyan-400/40 font-mono shadow-cyan-500/15"
+                title={`Site / Parada #${currentStopNumber} de la jornada`}
               >
-                {isSelectedCompleted && isSelectedShared ? (
-                  <CheckCheck className="h-4 w-4 stroke-[2.5]" />
-                ) : isSelectedCompleted ? (
-                  <Check className="h-4 w-4 stroke-[3]" />
-                ) : isSelectedCancelled ? (
-                  <X className="h-4 w-4 stroke-[2.5]" />
-                ) : (
-                  <Clock className="h-4 w-4 stroke-[2.5]" />
-                )}
+                {currentStopNumber}
               </div>
 
               {/* Center: Specs Summary & Notes */}
@@ -1781,27 +1757,42 @@ export default function UberDriverView({
 
             {/* ROW 4: BOTTOM CONTROL BAR (NO REALIZADO | $SALDO EN MEDIO | 3 BOTONES MILESTONES) */}
             <div className="flex items-center justify-between gap-2 pt-1 pb-0.5">
-              {/* 1. Left: Botón No Realizado / Cancelado */}
+              {/* 1. Left: Estado del Trabajo (Pendiente / Completado / Por Compartir / Reportado / No Realizado) */}
               {isSelectedCancelled ? (
-                <button
-                  type="button"
+                <div
                   onClick={() => onOpenCancelDetail ? onOpenCancelDetail(selectedOrder) : null}
-                  className="px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 transition active:scale-95 shadow-sm cursor-pointer shrink-0"
-                  title="Ver constancia de trabajo no realizado"
+                  className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-xs cursor-pointer hover:bg-rose-500/30 transition shrink-0 active:scale-95"
+                  title="Estado: No Realizado - Toca para ver motivo y constancia"
                 >
                   <X className="h-3.5 w-3.5 stroke-[2.5]" />
-                  <span>Cancelado</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => onOpenCancelModal(selectedOrder)}
-                  className="px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-[#182332] hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 border border-white/10 hover:border-rose-500/30 transition active:scale-95 shadow-sm cursor-pointer shrink-0"
-                  title="Marcar trabajo como No Realizado"
-                >
-                  <X className="h-3.5 w-3.5 text-rose-400 stroke-[2.5]" />
                   <span>No Realizado</span>
-                </button>
+                </div>
+              ) : isSelectedCompleted && isSelectedShared ? (
+                <div
+                  className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-xs shrink-0 select-none"
+                  title="Estado: Reportado y confirmado exitosamente"
+                >
+                  <CheckCheck className="h-3.5 w-3.5 stroke-[2.5] text-cyan-400" />
+                  <span>Reportado</span>
+                </div>
+              ) : isSelectedCompleted ? (
+                <div
+                  onClick={() => onOpenShareModal(selectedOrder)}
+                  className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-cyan-500/25 text-cyan-300 border border-cyan-400 shadow-md shadow-cyan-500/30 animate-pulse cursor-pointer hover:bg-cyan-500/35 transition shrink-0 active:scale-95"
+                  title="Estado: Por Compartir - Toca para compartir reporte"
+                >
+                  <Share2 className="h-3.5 w-3.5 stroke-[2.2] text-cyan-300" />
+                  <span>Por Compartir</span>
+                </div>
+              ) : (
+                <div
+                  onClick={() => onOpenPhotos(selectedOrder)}
+                  className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-amber-500/15 text-amber-300 border border-amber-500/35 shadow-xs cursor-pointer hover:bg-amber-500/25 transition shrink-0 active:scale-95"
+                  title="Estado: Pendiente - Toca para abrir fotos y comenzar"
+                >
+                  <Clock className="h-3.5 w-3.5 stroke-[2.5] text-amber-400" />
+                  <span>Pendiente</span>
+                </div>
               )}
 
               {/* 2. Center: Saldo prominently in neon green monospace */}
@@ -1848,7 +1839,7 @@ export default function UberDriverView({
                   <button
                     type="button"
                     onClick={() => onOpenPhotos(selectedOrder)}
-                    className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer flex items-center gap-1 ${
+                    className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer flex items-center justify-center ${
                       isSelectedCompleted
                         ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 shadow-xs'
                         : activePhotosCount > 0
@@ -1857,17 +1848,16 @@ export default function UberDriverView({
                     }`}
                     title={
                       isSelectedCompleted
-                        ? `Paso 1: Fotos listas (${activePhotosCount}) y trabajo completado`
+                        ? 'Paso 1: Fotos listas y trabajo completado'
                         : activePhotosCount > 0
-                        ? `Fotos tomadas (${activePhotosCount}) - Toca para agregar más o finalizar`
+                        ? 'Fotos tomadas - Toca para agregar más o finalizar'
                         : 'Paso 1: Solicita fotos de evidencia. Toca para tomar fotos'
                     }
                   >
-                    <Camera className="h-4 w-4 stroke-[2.2]" />
-                    {activePhotosCount > 0 && (
-                      <span className="text-[10px] font-mono font-bold leading-none pr-0.5">
-                        {activePhotosCount}
-                      </span>
+                    {isSelectedCompleted ? (
+                      <Check className="h-4 w-4 stroke-[3]" />
+                    ) : (
+                      <Camera className="h-4 w-4 stroke-[2.2]" />
                     )}
                   </button>
                 )}
