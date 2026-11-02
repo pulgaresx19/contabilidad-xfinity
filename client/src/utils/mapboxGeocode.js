@@ -1,3 +1,21 @@
+const US_STATES = new Set([
+  'ALABAMA','ALASKA','ARIZONA','ARKANSAS','CALIFORNIA','COLORADO','CONNECTICUT','DELAWARE','FLORIDA','GEORGIA',
+  'HAWAII','IDAHO','ILLINOIS','INDIANA','IOWA','KANSAS','KENTUCKY','LOUISIANA','MAINE','MARYLAND',
+  'MASSACHUSETTS','MICHIGAN','MINNESOTA','MISSISSIPPI','MISSOURI','MONTANA','NEBRASKA','NEVADA','NEW HAMPSHIRE',
+  'NEW JERSEY','NEW MEXICO','NEW YORK','NORTH CAROLINA','NORTH DAKOTA','OHIO','OKLAHOMA','OREGON','PENNSYLVANIA',
+  'RHODE ISLAND','SOUTH CAROLINA','SOUTH DAKOTA','TENNESSEE','TEXAS','UTAH','VERMONT','VIRGINIA','WASHINGTON',
+  'WEST VIRGINIA','WISCONSIN','WYOMING',
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
+  'MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC',
+  'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'
+]);
+
+function isUsState(val) {
+  if (!val) return false;
+  const clean = val.trim().toUpperCase().replace(/\s+\d{5}.*$/, '');
+  return US_STATES.has(clean);
+}
+
 // Utility for Mapbox Geocoding API with state detection and proximity bias
 
 const getFallbackToken = () => {
@@ -110,7 +128,10 @@ export async function searchAddressSuggestions(query) {
       if (Array.isArray(f.context)) {
         for (const item of f.context) {
           if (item.id.startsWith('place') || item.id.startsWith('locality')) {
-            city = item.text;
+            const cand = item.text ? item.text.trim() : '';
+            if (!isUsState(cand)) {
+              city = cand;
+            }
           } else if (item.id.startsWith('region')) {
             state = item.short_code ? item.short_code.replace('US-', '') : item.text;
           } else if (item.id.startsWith('postcode')) {
@@ -121,8 +142,12 @@ export async function searchAddressSuggestions(query) {
 
       if (!city && f.place_name) {
         const parts = f.place_name.split(',').map(p => p.trim());
-        if (parts.length >= 3) {
-          city = parts[1];
+        for (let i = 1; i < parts.length - 1; i++) {
+          const cand = parts[i].replace(/\s+\d{5}.*$/, '').trim();
+          if (cand && !isUsState(cand) && cand.toLowerCase() !== 'united states') {
+            city = cand;
+            break;
+          }
         }
       }
 
@@ -132,8 +157,8 @@ export async function searchAddressSuggestions(query) {
         id: f.id,
         streetAddress: street,
         fullAddress: f.place_name || street,
-        city: (city || 'ELKHART').toUpperCase(),
-        state: state || 'IN',
+        city: city ? city.toUpperCase() : '',
+        state: state || '',
         zipCode: zipCode || '',
         latitude: f.center ? f.center[1] : null,
         longitude: f.center ? f.center[0] : null

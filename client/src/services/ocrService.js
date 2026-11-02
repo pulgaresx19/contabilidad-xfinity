@@ -22,8 +22,8 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
     const tech_id = parts[1] || defaultTech || 'Javier (P0G1)';
     const job_id = (parts[2] || '').replace(/[^0-9]/g, '');
     const address = (parts[3] || '').replace(/,\s*$/, '').trim();
-    const city = (parts[4] || 'ELKHART').toUpperCase().trim();
-    const zip_code = parts[5] || (city === 'GOSHEN' ? '46526' : city === 'BRISTOL' ? '46507' : '46516');
+    const city = (parts[4] || '').toUpperCase().trim();
+    const zip_code = parts[5] || '';
     const notes = parts.slice(6).join(' ');
 
     let call_first = false;
@@ -166,15 +166,24 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
     textAfterAddr = postJobText.substring(addrEndIndex).trim();
   }
 
-  // City detection: check text after address first
-  let city = 'ELKHART';
-  const cityRegex = /\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW)\b/i;
-  const cityMatch = textAfterAddr.match(cityRegex) || postJobText.match(cityRegex);
-  if (cityMatch) city = cityMatch[1].toUpperCase();
+  // City detection: extract directly from OCR text after address (no hardcoded fallback)
+  let city = '';
+  const cityBetweenMatch = textAfterAddr.match(/^([A-Za-z\s]+?)(?:,\s*|\s+)(?:4\d{4}|\d{5}|P#|CALLFIRST|DROP|Type|BORE|$)/i);
+  if (cityBetweenMatch && cityBetweenMatch[1].trim().length >= 3) {
+    const cand = cityBetweenMatch[1].trim().toUpperCase();
+    if (!/\b(INDIANA|ILLINOIS|MICHIGAN|OHIO|USA|IN|IL|MI)\b/i.test(cand)) {
+      city = cand;
+    }
+  }
 
-  // Zip Code
-  let zipCode = city === 'GOSHEN' ? '46526' : city === 'BRISTOL' ? '46507' : '46516';
-  const zipMatch = textAfterAddr.match(/\b(46\d{3}(?:-\d{4})?)\b/) || postJobText.match(/\b(46\d{3}(?:-\d{4})?)\b/);
+  if (!city) {
+    const cityRegex = /\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW|SKOKIE|CHICAGO|EVANSTON|NILES|LINCOLNWOOD)\b/i;
+    const cityMatch = textAfterAddr.match(cityRegex) || postJobText.match(cityRegex);
+    if (cityMatch) city = cityMatch[1].toUpperCase();
+  }
+
+  let zipCode = '';
+  const zipMatch = textAfterAddr.match(/\b(\d{5}(?:-\d{4})?)\b/) || postJobText.match(/\b(\d{5}(?:-\d{4})?)\b/);
   if (zipMatch) zipCode = zipMatch[1];
 
   // Drop Footage

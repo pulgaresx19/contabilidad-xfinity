@@ -650,7 +650,7 @@ app.post('/api/orders', async (req, res) => {
       tech_id: data.tech_id || 'Javier (P0G1)',
       job_id: cleanJobId,
       address: data.address.trim(),
-      city: data.city ? data.city.trim().toUpperCase() : 'ELKHART',
+      city: data.city ? data.city.trim().toUpperCase() : '',
       zip_code: data.zip_code || '',
       phone: data.phone || '',
       call_first: data.call_first ? 1 : 0,

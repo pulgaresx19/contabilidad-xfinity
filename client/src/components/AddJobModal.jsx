@@ -12,7 +12,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
     tech_id: defaultTech || 'Javier (P0G1)',
     job_id: '',
     address: '',
-    city: 'ELKHART',
+    city: '',
     zip_code: '',
     phone: '',
     call_first: false,
@@ -44,7 +44,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
         tech_id: defaultTech || 'Javier (P0G1)',
         job_id: '',
         address: '',
-        city: 'ELKHART',
+        city: '',
         zip_code: '',
         phone: '',
         call_first: false,
@@ -94,7 +94,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
     setFormData(prev => ({
       ...prev,
       address: sug.streetAddress,
-      city: sug.city || 'ELKHART',
+      city: sug.city || '',
       zip_code: sug.zipCode || prev.zip_code,
       latitude: sug.latitude,
       longitude: sug.longitude
@@ -156,7 +156,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
         ...formData,
         job_id: cleanJobId,
         address: cleanAddress,
-        city: (formData.city || 'ELKHART').trim().toUpperCase(),
+        city: (formData.city || '').trim().toUpperCase(),
         drop_footage: numFootage,
         rate_calculated: currentTotal,
         latitude: lat,
@@ -282,7 +282,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
             </div>
           </div>
 
-          {/* Fila 2: Dirección con Autocompletado y Detección Automática */}
+          {/* Fila 2: Dirección con Buscador y Autocompletado */}
           <div className="relative">
             <div className="flex items-center justify-between mb-1">
               <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
@@ -290,7 +290,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
               </label>
               {searchingAddress && (
                 <span className="flex items-center gap-1 text-[10px] text-cyan-400 font-bold animate-pulse">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Buscando...
+                  <Loader2 className="h-3 w-3 animate-spin" /> Buscando sugerencias...
                 </span>
               )}
             </div>
@@ -300,7 +300,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
               <input
                 type="text"
                 required
-                placeholder="Escribe la calle (ej. 517 Express Centre, 1024 Prairie...)"
+                placeholder="Escribe la dirección (ej. 1308 Mintcrest, 23322 Ironwood...)"
                 value={formData.address}
                 onChange={(e) => handleAddressChange(e.target.value)}
                 onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
@@ -312,7 +312,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
             {showSuggestions && suggestions.length > 0 && (
               <div className="absolute left-0 right-0 top-full mt-1.5 bg-[#192433] border border-cyan-500/40 rounded-2xl shadow-2xl z-40 overflow-hidden divide-y divide-white/5 animate-fade-in max-h-52 overflow-y-auto">
                 <div className="p-1.5 bg-cyan-950/40 text-[10px] font-bold text-cyan-400 uppercase tracking-wider px-3">
-                  Sugerencias del Mapa:
+                  Direcciones encontradas:
                 </div>
                 {suggestions.map((sug) => (
                   <button
@@ -327,7 +327,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
                         {sug.streetAddress}
                       </p>
                       <p className="text-[11px] text-slate-400 truncate">
-                        {sug.city}, {sug.state} {sug.zipCode}
+                        {sug.city ? `${sug.city}, ` : ''}{sug.state} {sug.zipCode}
                       </p>
                     </div>
                   </button>
@@ -335,36 +335,42 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
               </div>
             )}
 
-            {/* Ciudad Detectada Automática (Píldora Inteligente) */}
-            <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400">
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Ciudad detectada: <strong className="text-cyan-300 font-bold">{formData.city || 'ELKHART'}</strong></span>
-                {formData.latitude && formData.longitude && (
-                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded-md font-mono">GPS ✓</span>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowManualCity(prev => !prev)}
-                className="text-[10px] text-slate-400 hover:text-cyan-300 underline"
-              >
-                {showManualCity ? 'Ocultar' : 'Cambiar ciudad'}
-              </button>
-            </div>
-
-            {/* Campo manual de ciudad solo si el usuario pulsa 'Cambiar ciudad' */}
-            {showManualCity && (
-              <div className="mt-2 animate-fade-in">
-                <input
-                  type="text"
-                  placeholder="Ciudad manual (ej. SKOKIE, GOSHEN)"
-                  value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value.toUpperCase() })}
-                  className="w-full h-8 bg-[#16202c] border border-white/10 rounded-lg px-2.5 text-xs text-white uppercase font-bold focus:outline-none focus:border-cyan-400"
-                />
+            {/* Indicador de ciudad detectada (solo cuando existe ciudad seleccionada) */}
+            {formData.city && (
+              <div className="mt-1 flex items-center gap-1.5 text-[10.5px] text-emerald-400 font-semibold animate-fade-in">
+                <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                <span>Ubicación: <strong className="text-white font-bold">{formData.city}</strong>{formData.latitude ? ' (GPS activo)' : ''}</span>
               </div>
             )}
+          </div>
+
+          {/* Fila Ciudad y Código Postal (Inputs directos sin valores por defecto forzados) */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="min-w-0">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 truncate">
+                Ciudad
+              </label>
+              <input
+                type="text"
+                placeholder="Ciudad (ej. Goshen)"
+                value={formData.city}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value.toUpperCase() })}
+                className="w-full h-10 bg-[#16202c] border border-white/10 rounded-xl px-3 text-white uppercase font-bold focus:outline-none focus:border-cyan-400 text-xs shadow-xs"
+              />
+            </div>
+
+            <div className="min-w-0">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 truncate">
+                Código Postal (ZIP)
+              </label>
+              <input
+                type="text"
+                placeholder="ej. 46526"
+                value={formData.zip_code}
+                onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
+                className="w-full h-10 bg-[#16202c] border border-white/10 rounded-xl px-3 text-slate-200 font-mono text-xs focus:outline-none focus:border-cyan-400 shadow-xs"
+              />
+            </div>
           </div>
 
           {/* Fila 3: Teléfono del Cliente & Pies de Cable */}
