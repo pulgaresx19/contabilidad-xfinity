@@ -2020,7 +2020,7 @@ export default function UberDriverView({
               </div>
             </div>
 
-            {/* ROW 2: CENTERED ADDRESS + ROUTE TRAVEL SUMMARY */}
+            {/* ROW 2: CENTERED ADDRESS */}
             <div 
               className="py-0.5 cursor-pointer group text-center"
               onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
@@ -2030,14 +2030,6 @@ export default function UberDriverView({
               </h2>
               <div className="flex items-center justify-center gap-1.5 mt-0.5 text-[11px] text-slate-400 font-medium truncate">
                 <span>A {tripMiles} • {tripMinutes} ({tripSummary})</span>
-                {travesiaSummary.totalMiles > 0 && (
-                  <>
-                    <span className="text-slate-600">•</span>
-                    <span className="text-sky-400 font-bold">
-                      Travesía: {travesiaSummary.totalMinutes > 0 ? `${formatRouteDuration(travesiaSummary.totalMinutes, false)} (${travesiaSummary.totalMiles.toFixed(1)} mi)` : `${travesiaSummary.totalMiles.toFixed(1)} mi`}
-                    </span>
-                  </>
-                )}
               </div>
             </div>
 
@@ -2343,34 +2335,6 @@ export default function UberDriverView({
                       </a>
                     </div>
                   )}
-                </div>
-
-                {/* Panel Informativo de la Travesía General del Día */}
-                <div className="bg-gradient-to-r from-[#121c29] via-[#152335] to-[#111925] border border-sky-500/30 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-lg">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-400/40 text-sky-400 flex items-center justify-center shrink-0 shadow-sm shadow-sky-500/10">
-                      <Route className="h-4.5 w-4.5 stroke-[2.3]" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-[9.5px] font-black uppercase text-sky-400 tracking-wider block">
-                        Travesía General del Día
-                      </span>
-                      <div className="flex items-baseline gap-2 mt-0.5">
-                        <span className="text-base sm:text-lg font-black text-white font-mono leading-none">
-                          {travesiaSummary.totalMinutes > 0 ? formatRouteDuration(travesiaSummary.totalMinutes, false) : 'Calculando...'}
-                        </span>
-                        <span className="text-xs text-sky-300 font-mono font-bold">
-                          • {travesiaSummary.totalMiles > 0 ? `${travesiaSummary.totalMiles.toFixed(1)} mi` : '0 mi'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0 bg-[#0d141e] px-2.5 py-1.5 rounded-xl border border-white/5">
-                    <span className="text-[8.5px] uppercase tracking-wider text-slate-400 font-bold block">Itinerario</span>
-                    <span className="text-xs font-black text-cyan-400 font-mono">
-                      {activeOrders.length} {activeOrders.length === 1 ? 'parada' : 'paradas'}
-                    </span>
-                  </div>
                 </div>
 
                 <div className="space-y-2 pt-1">
