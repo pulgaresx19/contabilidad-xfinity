@@ -277,7 +277,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
                 required
                 value={formData.work_date}
                 onChange={(e) => setFormData({ ...formData, work_date: e.target.value })}
-                className="w-full h-10 bg-[#16202c] border border-white/10 rounded-xl px-3 text-slate-200 font-mono font-bold focus:outline-none focus:border-cyan-400 text-xs shadow-xs [color-scheme:dark]"
+                className="w-full h-10 bg-[#16202c] border border-white/10 rounded-xl px-3 text-slate-200 font-mono font-bold focus:outline-none focus:border-cyan-400 text-xs shadow-xs dark:[color-scheme:dark] [color-scheme:light]"
               />
             </div>
           </div>

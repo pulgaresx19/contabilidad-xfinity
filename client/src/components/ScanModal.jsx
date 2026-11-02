@@ -366,7 +366,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                 setSheetDate(newDate);
                 setExtractedOrders((prev) => prev.map((o) => ({ ...o, work_date: newDate })));
               }}
-              className="bg-transparent text-cyan-400 text-xs font-mono font-black text-center focus:outline-none cursor-pointer w-full [color-scheme:dark]"
+              className="bg-transparent text-cyan-400 text-xs font-mono font-black text-center focus:outline-none cursor-pointer w-full dark:[color-scheme:dark] [color-scheme:light]"
             />
           </div>
           <div className="bg-[#16202c] py-1.5 px-1 rounded-xl border border-white/5 flex flex-col justify-center">

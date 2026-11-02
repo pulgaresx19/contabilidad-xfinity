@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { formatDateFriendly, normalizeDateStr, formatRouteDuration } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
+import { useTheme } from '../context/ThemeContext';
 
 const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
 mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
@@ -203,16 +204,33 @@ export default function UberDriverView({
     return () => { isMounted = false; };
   }, [selectedOrder?.id, selectedOrder?.photos_count, selectedOrder?.work_photos_count, orders]);
 
-  // Map Theme state: Default is 'dark' (Mapa Oscuro)
+  const { actualTheme } = useTheme();
+
+  // Map Theme state: Defaults to streets in Light Mode, dark in Dark Mode
   const [mapTheme, setMapTheme] = useState(() => {
     const saved = localStorage.getItem('xfinity_map_theme');
-    if (saved === 'apple_dark' || saved === 'night' || saved === 'dark') return 'dark';
-    if (saved === 'streets' || saved === 'satellite') return saved;
-    return 'dark';
+    if (saved === 'satellite') return 'satellite';
+    if (saved === 'streets' || saved === 'dark') return saved;
+    return actualTheme === 'light' ? 'streets' : 'dark';
   });
   const mapThemeRef = useRef(mapTheme);
   mapThemeRef.current = mapTheme;
   const [showThemePicker, setShowThemePicker] = useState(false);
+
+  // Sync Mapbox theme when global app theme switches (unless user locked satellite)
+  useEffect(() => {
+    const isLockedSatellite = localStorage.getItem('xfinity_map_theme_locked') === 'satellite';
+    if (isLockedSatellite && mapTheme === 'satellite') return;
+
+    const targetStyle = actualTheme === 'light' ? 'streets' : 'dark';
+    if (mapTheme !== targetStyle) {
+      setMapTheme(targetStyle);
+      mapThemeRef.current = targetStyle;
+      if (mapInstanceRef.current && MAP_THEMES[targetStyle]) {
+        mapInstanceRef.current.setStyle(MAP_THEMES[targetStyle].style);
+      }
+    }
+  }, [actualTheme]);
 
   // Unified Overlay modal: Day's full jobs list & Travesía reordering
   const [showDayJobsOverlay, setShowDayJobsOverlay] = useState(false);
@@ -1137,7 +1155,7 @@ export default function UberDriverView({
       : DEFAULT_LNG_LAT;
 
     const activeKey = (mapTheme === 'apple_dark' || mapTheme === 'night') ? 'dark' : mapTheme;
-    const initialStyleUrl = MAP_THEMES[activeKey]?.style || MAP_THEMES.dark.style;
+    const initialStyleUrl = MAP_THEMES[activeKey]?.style || (actualTheme === 'light' ? MAP_THEMES.streets.style : MAP_THEMES.dark.style);
 
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
@@ -1188,6 +1206,11 @@ export default function UberDriverView({
     mapThemeRef.current = themeKey;
     try {
       localStorage.setItem('xfinity_map_theme', themeKey);
+      if (themeKey === 'satellite') {
+        localStorage.setItem('xfinity_map_theme_locked', 'satellite');
+      } else {
+        localStorage.removeItem('xfinity_map_theme_locked');
+      }
     } catch (e) {}
     setShowThemePicker(false);
 

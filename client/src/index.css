@@ -54,7 +54,7 @@ html.light [class*="from-slate-900"] {
   border-color: #e2e8f0 !important;
 }
 
-/* 2. Backgrounds & Surfaces */
+/* 2. Primary Cockpit Surfaces & Modals -> Pure White Cards */
 html.light .bg-slate-900 {
   background-color: #ffffff !important;
 }
@@ -65,7 +65,23 @@ html.light .bg-slate-900\/60 {
   background-color: rgba(255, 255, 255, 0.96) !important;
 }
 
-/* Inner containers (sub-boxes inside cards) */
+html.light .bg-\[\#0f1722\],
+html.light .bg-\[\#0f1722\]\/90,
+html.light .bg-\[\#0f1722\]\/95,
+html.light .bg-\[\#0f1722\]\/96,
+html.light .bg-\[\#0f1722\]\/98,
+html.light .bg-\[\#101722\],
+html.light .bg-\[\#121922\],
+html.light .bg-\[\#121a24\],
+html.light .bg-\[\#131b26\],
+html.light .bg-\[\#131d2b\],
+html.light .bg-\[\#141d28\] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* 2.1 Secondary Cockpit Containers -> Soft Slate-100 Panels */
 html.light .bg-slate-950,
 html.light .bg-slate-950\/40,
 html.light .bg-slate-950\/60,
@@ -76,6 +92,39 @@ html.light .bg-slate-950\/90 {
   border-color: #e2e8f0 !important;
 }
 
+html.light .bg-\[\#16202c\],
+html.light .bg-\[\#16202c\]\/90,
+html.light .bg-\[\#16202c\]\/98,
+html.light .bg-\[\#182332\],
+html.light .bg-\[\#192433\],
+html.light .bg-\[\#1a2634\],
+html.light .bg-\[\#1b2533\],
+html.light .bg-\[\#1e2a3a\],
+html.light .bg-\[\#1e2b3b\],
+html.light .bg-\[\#1e2c3c\],
+html.light .bg-\[\#1e2d40\],
+html.light .bg-\[\#0d141e\],
+html.light .bg-\[\#0e1622\],
+html.light .bg-\[\#0e1622\]\/60,
+html.light .bg-\[\#0b1017\],
+html.light .bg-\[\#0a0f16\],
+html.light .bg-\[\#0a0f18\],
+html.light .bg-\[\#080d14\] {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* Selected orders / Active rows */
+html.light .bg-\[\#007AFF\]\/20 {
+  background-color: #eff6ff !important;
+  border-color: #3b82f6 !important;
+}
+html.light .border-\[\#007AFF\]\/80,
+html.light .border-\[\#007AFF\]\/70 {
+  border-color: #007aff !important;
+}
+
 html.light .bg-slate-800,
 html.light .bg-slate-800\/80,
 html.light .bg-slate-800\/60,
@@ -84,19 +133,42 @@ html.light .bg-slate-800\/50 {
   border-color: #cbd5e1 !important;
 }
 
+html.light .bg-slate-700 {
+  background-color: #cbd5e1 !important;
+}
+
+html.light .bg-\[\#243140\],
+html.light .bg-\[\#344558\] {
+  background-color: #e2e8f0 !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
 html.light .hover\:bg-slate-800:hover,
 html.light .hover\:bg-slate-800\/80:hover,
-html.light .hover\:bg-slate-700:hover {
+html.light .hover\:bg-slate-700:hover,
+html.light .hover\:bg-\[\#1f2d3d\]:hover,
+html.light .hover\:bg-\[\#1e2b3b\]:hover,
+html.light .hover\:bg-\[\#1e2a3a\]:hover,
+html.light .hover\:bg-\[\#1e2c3c\]:hover,
+html.light .hover\:bg-\[\#344558\]:hover,
+html.light .hover\:bg-white\/10:hover,
+html.light .hover\:bg-white\/5:hover {
   background-color: #cbd5e1 !important;
+  color: #0f172a !important;
 }
 
 /* Modal Overlay must remain semi-transparent dark */
 html.light .fixed.inset-0.bg-slate-950\/80,
+html.light .fixed.inset-0.bg-black\/85,
+html.light .fixed.inset-0.bg-black\/80,
+html.light .fixed.inset-0[class*="bg-black"],
 html.light .fixed.inset-0[class*="bg-slate-950"] {
-  background-color: rgba(15, 23, 42, 0.65) !important;
+  background-color: rgba(15, 23, 42, 0.6) !important;
+  backdrop-filter: blur(8px) !important;
 }
 
-/* 3. Borders */
+/* 3. Borders & Dividers */
 html.light .border-slate-800,
 html.light .border-slate-800\/80,
 html.light .border-slate-800\/90,
@@ -108,6 +180,24 @@ html.light .border-slate-700,
 html.light .border-slate-700\/80,
 html.light .border-slate-700\/60 {
   border-color: #cbd5e1 !important;
+}
+html.light .border-white\/5,
+html.light .border-white\/8,
+html.light .border-white\/10,
+html.light .border-white\/15,
+html.light .border-white\/20,
+html.light .border-white\/25,
+html.light .border-white\/30,
+html.light .border-white\/40,
+html.light [class*="border-white\/"],
+html.light .border-\[\#232f3e\] {
+  border-color: #e2e8f0 !important;
+}
+
+html.light .divide-white\/5 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-white\/10 > :not([hidden]) ~ :not([hidden]),
+html.light [class*="divide-white\/"] > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e2e8f0 !important;
 }
 
 /* 4. Text & Numbers in Light Mode - ALL CRISP DARK */
@@ -160,6 +250,12 @@ html.light .text-rose-400 {
   color: #be123c !important; /* Rose-700 */
 }
 
+/* Purple: Rich Royal Indigo */
+html.light .text-purple-300,
+html.light .text-purple-400 {
+  color: #6d28d9 !important; /* Purple-700 */
+}
+
 /* 6. Tinted Badge Containers in Light Mode */
 html.light .bg-emerald-500\/10,
 html.light .bg-emerald-500\/15,
@@ -205,6 +301,14 @@ html.light [class*="bg-rose-950"] {
   border-color: #fecdd3 !important;
 }
 
+html.light .bg-purple-500\/10,
+html.light .bg-purple-500\/15,
+html.light .bg-purple-500\/20,
+html.light .bg-purple-950 {
+  background-color: #faf5ff !important;
+  border-color: #e9d5ff !important;
+}
+
 /* Active tab in bottom nav */
 html.light .bg-cyan-950\/50,
 html.light .bg-cyan-950\/40 {
@@ -212,12 +316,26 @@ html.light .bg-cyan-950\/40 {
   border-color: #0284c7 !important;
 }
 
-/* 7. Numbers in Circles (①, ②, ③...) */
-html.light .h-6.w-6.rounded-full {
+/* 7. Numbers in Circles & Apple Status Badges */
+html.light .h-6.w-6.rounded-full:not(.bg-\[\#007AFF\]):not(.bg-\[\#34C759\]):not(.bg-\[\#FF3B30\]) {
   background-color: #f1f5f9 !important;
   color: #0f172a !important;
   border-color: #cbd5e1 !important;
   font-weight: 900 !important;
+}
+
+/* Solid iOS Status Badges retain white text */
+html.light .bg-\[\#007AFF\],
+html.light .bg-\[\#007AFF\] *,
+html.light .bg-\[\#34C759\],
+html.light .bg-\[\#34C759\] *,
+html.light .bg-\[\#FF3B30\],
+html.light .bg-\[\#FF3B30\] *,
+html.light .bg-\[\#FF9500\],
+html.light .bg-\[\#FF9500\] *,
+html.light .bg-\[\#8E8E93\],
+html.light .bg-\[\#8E8E93\] * {
+  color: #ffffff !important;
 }
 
 /* 8. Solid Gradient & Action Buttons (Must preserve text contrast) */
@@ -243,6 +361,7 @@ html.light .bg-rose-500,
 html.light .bg-rose-600,
 html.light [class*="from-rose-500"],
 html.light [class*="from-blue-600"],
+html.light [class*="from-purple-600"],
 html.light .bg-emerald-600 {
   color: #ffffff !important;
 }
@@ -250,6 +369,7 @@ html.light .bg-rose-500 *,
 html.light .bg-rose-600 *,
 html.light [class*="from-rose-500"] *,
 html.light [class*="from-blue-600"] *,
+html.light [class*="from-purple-600"] *,
 html.light .bg-emerald-600 * {
   color: #ffffff !important;
 }
@@ -261,6 +381,7 @@ html.light textarea {
   background-color: #ffffff !important;
   border-color: #cbd5e1 !important;
   color: #0f172a !important;
+  color-scheme: light !important;
 }
 html.light input:focus,
 html.light select:focus,
@@ -268,6 +389,21 @@ html.light textarea:focus {
   background-color: #ffffff !important;
   border-color: #0284c7 !important;
   box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2) !important;
+}
+html.light select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+html.light [class*="color-scheme:dark"] {
+  color-scheme: light !important;
+}
+
+/* Pre & Code blocks */
+html.light pre,
+html.light code {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
 }
 
 /* 9.1 Mobile WebKit & Date Input Normalization (iOS Safari / Android Chrome) */
@@ -632,4 +768,50 @@ div[data-netlify-drawer],
   font-size: 8.5px;
   font-weight: 700;
   color: #94a3b8;
+}
+
+/* ============================================================
+   LIGHT MODE: APPLE MAPS & HUD OVERLAYS SPECIFIC ADJUSTMENTS
+   ============================================================ */
+html.light .apple-dest-label {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.15) !important;
+}
+
+html.light .apple-travesia-leg-badge {
+  background: #ffffff !important;
+  color: #0284c7 !important;
+  border: 1.5px solid #0284c7 !important;
+  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.22) !important;
+}
+html.light .apple-travesia-leg-badge:hover {
+  background: #f0f9ff !important;
+  border-color: #0284c7 !important;
+}
+html.light .apple-travesia-leg-badge .leg-time {
+  color: #0284c7 !important;
+}
+html.light .apple-travesia-leg-badge .leg-dot {
+  color: #94a3b8 !important;
+}
+html.light .apple-travesia-leg-badge .leg-dist {
+  color: #475569 !important;
+}
+
+html.light .apple-alt-route-badge {
+  background: #ffffff !important;
+  color: #334155 !important;
+  border: 1.5px solid #cbd5e1 !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08) !important;
+}
+html.light .apple-alt-route-badge:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #007aff !important;
+}
+
+html.light .apple-drawer-scroll::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.2) !important;
 }
