@@ -1850,30 +1850,24 @@ export default function UberDriverView({
                     onClick={() => onOpenPhotos(selectedOrder)}
                     className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer flex items-center gap-1 ${
                       isSelectedCompleted
-                        ? 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 shadow-xs'
+                        ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 shadow-xs'
                         : activePhotosCount > 0
-                        ? 'text-blue-400 bg-blue-500/15 border border-blue-500/30 shadow-xs'
-                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/35 animate-pulse shadow-xs'
+                        : 'text-cyan-300 bg-cyan-500/20 border border-cyan-400/80 shadow-md shadow-cyan-500/30 animate-pulse'
                     }`}
                     title={
                       isSelectedCompleted
-                        ? 'Trabajo finalizado con fotos'
+                        ? `Paso 1: Fotos listas (${activePhotosCount}) y trabajo completado`
                         : activePhotosCount > 0
                         ? `Fotos tomadas (${activePhotosCount}) - Toca para agregar más o finalizar`
-                        : 'Iniciar trabajo y tomar fotos de evidencia'
+                        : 'Paso 1: Solicita fotos de evidencia. Toca para tomar fotos'
                     }
                   >
-                    {isSelectedCompleted ? (
-                      <Check className="h-4 w-4 stroke-[3]" />
-                    ) : (
-                      <>
-                        <Camera className="h-4 w-4 stroke-[2.2]" />
-                        {activePhotosCount > 0 && (
-                          <span className="text-[10px] font-mono font-bold leading-none pr-0.5">
-                            {activePhotosCount}
-                          </span>
-                        )}
-                      </>
+                    <Camera className="h-4 w-4 stroke-[2.2]" />
+                    {activePhotosCount > 0 && (
+                      <span className="text-[10px] font-mono font-bold leading-none pr-0.5">
+                        {activePhotosCount}
+                      </span>
                     )}
                   </button>
                 )}
@@ -1892,24 +1886,24 @@ export default function UberDriverView({
                     onClick={() => onOpenShareModal(selectedOrder)}
                     className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer ${
                       isSelectedShared
-                        ? 'text-cyan-400 bg-cyan-500/20 border border-cyan-500/40 shadow-xs'
+                        ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 shadow-xs'
                         : isSelectedCompleted
-                        ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 animate-pulse'
-                        : 'text-slate-500/40 hover:text-slate-300'
+                        ? 'text-cyan-300 bg-cyan-500/25 border border-cyan-400 shadow-md shadow-cyan-500/40 animate-pulse'
+                        : 'text-slate-500/40 border border-transparent hover:text-slate-300'
                     }`}
                     title={
                       isSelectedShared
-                        ? 'Compartido por WhatsApp (Toca para volver a compartir)'
+                        ? 'Paso 2: Compartido por WhatsApp (Hecho - Toca para volver a compartir)'
                         : isSelectedCompleted
-                        ? 'Completado: Toca para compartir reporte por WhatsApp'
-                        : 'Compartir reporte con fotos por WhatsApp'
+                        ? 'Paso 2: ¡Trabajo completado! Toca para compartir reporte por WhatsApp'
+                        : 'Paso 2: Compartir reporte (Se habilita al completar el trabajo)'
                     }
                   >
                     <Share2 className="h-4 w-4 stroke-[2.2]" />
                   </button>
                 )}
 
-                {/* 3. Paso Reportar / Confirmar Reportado (Dos palomitas) */}
+                {/* 3. Paso Reportado / Confirmar Reportado (Dos palomitas) */}
                 {isSelectedCancelled ? (
                   <div 
                     className="p-1.5 rounded-full text-rose-400/30 select-none cursor-not-allowed"
@@ -1927,19 +1921,15 @@ export default function UberDriverView({
                         onOpenShareModal(selectedOrder);
                       }
                     }}
-                    className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer ${
+                    className={`p-1.5 rounded-full transition active:scale-90 ${
                       isSelectedCompleted && isSelectedShared
-                        ? 'text-cyan-300 bg-cyan-500/20 border border-cyan-500/40 shadow-xs'
-                        : isSelectedCompleted
-                        ? 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/15'
-                        : 'text-slate-500/40 hover:text-slate-400'
+                        ? 'text-cyan-400 bg-cyan-500/20 border border-cyan-500/40 shadow-xs cursor-pointer'
+                        : 'text-slate-500/30 border border-transparent cursor-default'
                     }`}
                     title={
                       isSelectedCompleted && isSelectedShared
-                        ? 'Paso 3: Reportado y confirmado. Toca para ver reporte'
-                        : isSelectedCompleted
-                        ? 'Completado: Pendiente de compartir'
-                        : 'Toca para completar y reportar'
+                        ? 'Paso 3: ¡Reportado y confirmado exitosamente!'
+                        : 'Paso 3: Se marca completo automáticamente al compartir el reporte'
                     }
                   >
                     <CheckCheck className="h-4 w-4 stroke-[2.5]" />
