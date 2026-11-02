@@ -206,45 +206,154 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div 
-        className="bg-[#0c121c] text-white border border-white/10 ring-1 ring-white/5 w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl shadow-black/90 overflow-hidden flex flex-col max-h-[90vh] mx-auto transition-all"
+        className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-white transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         
-        {/* Header Compacto y Directo al estilo Cockpit */}
-        <div className="px-4.5 py-3.5 border-b border-white/8 flex items-center justify-between bg-[#0e1522]">
+        {/* 1. Header (Estructura y proporciones idénticas a Travesía del Día) */}
+        <div className="px-4 sm:px-5 py-3.5 border-b border-white/10 flex items-center justify-between bg-slate-900/70 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-500/25 to-blue-600/25 text-cyan-300 border border-cyan-400/40 flex items-center justify-center shrink-0 shadow-xs">
-              <Camera className="h-4 w-4 stroke-[2.2]" />
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 shrink-0 shadow-md shadow-cyan-500/20">
+              <Camera className="h-4 w-4 stroke-[2.5]" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-black text-white text-sm sm:text-base tracking-tight truncate">
-                  Evidencias del Trabajo
-                </h3>
-                <span className="text-[10px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-400/30 px-2 py-0.5 rounded-full shrink-0">
-                  #{order.job_id}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">
-                {order.address}{order.city ? ` • ${order.city}` : ''}
+              <h3 className="text-sm font-black text-white truncate">
+                Evidencias del Trabajo
+              </h3>
+              <p className="text-[10.5px] text-slate-400 font-medium truncate">
+                #{order.job_id} • {order.address}{order.city ? `, ${order.city}` : ''}
               </p>
             </div>
           </div>
-
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10 flex items-center justify-center transition active:scale-90 cursor-pointer shrink-0"
+            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
             title="Cerrar"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Cuerpo del Modal */}
-        <div className="p-4 overflow-y-auto space-y-3.5 flex-1 scrollbar-none">
+        {/* 2. Quick KPI / Specs Bar (Idéntico a la barra superior de Travesía) */}
+        <div className="grid grid-cols-3 gap-2 px-4 py-2.5 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
+          <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
+            <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+              Metraje / Cable
+            </span>
+            <span className="text-sm font-black text-cyan-400 font-mono truncate block">
+              {order.drop_footage || 0} ft • {order.cable_type || 'RG-6'}
+            </span>
+          </div>
+          <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
+            <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+              Evidencias
+            </span>
+            <span className="text-sm font-black text-white font-mono">
+              {workPhotosCount} {workPhotosCount === 1 ? 'foto' : 'fotos'}
+            </span>
+          </div>
+          <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
+            <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+              Tarifa
+            </span>
+            <span className="text-sm font-black text-emerald-400 font-mono">
+              ${order.rate_calculated || 100}
+            </span>
+          </div>
+        </div>
+
+        {/* 3. Action Bar: Tomar Foto y Desde Galería */}
+        <div className="px-4 py-2.5 bg-[#0e1622] border-b border-white/5 shrink-0">
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleUpload}
+            disabled={uploading}
+            className="hidden"
+          />
+
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/heic,image/heif,image/webp,.jpg,.jpeg,.png,.heic"
+            multiple
+            onChange={handleUpload}
+            disabled={uploading}
+            className="hidden"
+          />
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              disabled={uploading}
+              className="py-2 px-3 rounded-xl bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black text-xs shadow-md shadow-cyan-600/20 flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer disabled:opacity-50"
+            >
+              <Camera className="h-3.5 w-3.5 stroke-[2.2]" />
+              <span>{uploading ? 'Estampando GPS...' : 'Tomar Foto'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => galleryInputRef.current?.click()}
+              disabled={uploading}
+              className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white border border-white/10 font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer shadow-sm disabled:opacity-50"
+            >
+              <Upload className="h-3.5 w-3.5 stroke-[2] text-slate-400" />
+              <span>{uploading ? 'Procesando...' : 'Desde Galería'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 4. Selector de Pasos (Estilo pestañas de estado de Travesía) */}
+        <div className="flex items-center justify-between gap-1.5 px-4 py-2 border-b border-white/5 bg-[#101722] shrink-0">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none flex-1 py-0.5">
+            {PHOTO_STEPS.map((step) => {
+              const isSelected = category === step.id;
+              const hasPhotos = workPhotos.some(p => p.category === step.id);
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => setCategory(step.id)}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition whitespace-nowrap cursor-pointer flex items-center gap-1 shrink-0 ${
+                    isSelected
+                      ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                      : hasPhotos
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <span>{step.icon}</span>
+                  <span>{step.short}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <label className="flex items-center gap-1 cursor-pointer text-slate-400 hover:text-cyan-300 text-[10px] shrink-0 select-none font-medium ml-1">
+            <input
+              type="checkbox"
+              checked={autoAdvance}
+              onChange={(e) => setAutoAdvance(e.target.checked)}
+              className="h-3 w-3 rounded border-white/20 bg-slate-900 text-cyan-500 focus:ring-0"
+            />
+            <span className="hidden sm:inline">Auto</span>
+          </label>
+        </div>
+
+        {/* 5. Cuerpo del Modal Scrollable */}
+        <div className="p-4 overflow-y-auto space-y-3.5 flex-1 scrollbar-none bg-[#101722]">
           {error && (
             <div className="p-2.5 bg-rose-500/15 border border-rose-500/35 rounded-xl text-rose-300 text-xs flex items-center gap-2">
               <AlertCircle className="h-4 w-4 flex-shrink-0 text-rose-400" />
@@ -252,98 +361,8 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
             </div>
           )}
 
-          {/* Selector de Pasos Rápido (Chips Horizontales con Iconos) */}
-          <div className="bg-[#131b26] p-3 rounded-2xl border border-white/8 space-y-2">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">
-                Paso actual de la foto:
-              </span>
-              <label className="flex items-center gap-1.5 cursor-pointer text-slate-400 hover:text-cyan-300 select-none text-[10px]">
-                <input
-                  type="checkbox"
-                  checked={autoAdvance}
-                  onChange={(e) => setAutoAdvance(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-white/20 bg-[#0e141f] text-cyan-500 focus:ring-0"
-                />
-                <span>Auto-avanzar paso</span>
-              </label>
-            </div>
-
-            {/* Chips de Categoría */}
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-              {PHOTO_STEPS.map((step) => {
-                const isSelected = category === step.id;
-                const hasPhotosInStep = workPhotos.some(p => p.category === step.id);
-                return (
-                  <button
-                    type="button"
-                    key={step.id}
-                    onClick={() => setCategory(step.id)}
-                    className={`py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border text-center cursor-pointer ${
-                      isSelected
-                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/60 shadow-xs shadow-cyan-500/15'
-                        : hasPhotosInStep
-                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                        : 'bg-[#0e1522] text-slate-400 border-white/5 hover:border-white/10 hover:text-slate-200'
-                    }`}
-                  >
-                    <span>{step.icon}</span>
-                    <span className="truncate">{step.short}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Botones de Captura Rápida: Estéticos, Ergonómicos y Discretos */}
-          <div className="grid grid-cols-2 gap-2 my-0.5">
-            {/* Input oculto para cámara directa (capture="environment") */}
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleUpload}
-              disabled={uploading}
-              className="hidden"
-            />
-
-            {/* Input oculto para galería directa */}
-            <input
-              ref={galleryInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/heic,image/heif,image/webp,.jpg,.jpeg,.png,.heic"
-              multiple
-              onChange={handleUpload}
-              disabled={uploading}
-              className="hidden"
-            />
-
-            {/* Botón Tomar Foto */}
-            <button
-              type="button"
-              onClick={() => cameraInputRef.current?.click()}
-              disabled={uploading}
-              className="h-11 px-3 bg-gradient-to-r from-cyan-500/20 to-blue-600/20 hover:from-cyan-500/30 hover:to-blue-600/30 active:scale-95 text-cyan-300 border border-cyan-400/40 hover:border-cyan-300 font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-xs shadow-cyan-500/10 transition cursor-pointer disabled:opacity-50"
-            >
-              <Camera className="h-4 w-4 stroke-[2.2] text-cyan-400" />
-              <span>{uploading ? 'Estampando GPS...' : 'Tomar Foto'}</span>
-            </button>
-
-            {/* Botón Desde Galería */}
-            <button
-              type="button"
-              onClick={() => galleryInputRef.current?.click()}
-              disabled={uploading}
-              className="h-11 px-3 bg-[#131b26] hover:bg-[#182332] active:scale-95 text-slate-300 hover:text-white border border-white/10 hover:border-white/20 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer shadow-xs disabled:opacity-50"
-            >
-              <Upload className="h-4 w-4 stroke-[2] text-slate-400" />
-              <span>{uploading ? 'Procesando...' : 'Desde Galería'}</span>
-            </button>
-          </div>
-
           {/* Galería Compacta de Fotos de Instalación */}
-          <div className="space-y-2 pt-0.5">
+          <div className="space-y-2">
             <div className="flex items-center justify-between gap-1 flex-wrap">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Fotos de Instalación ({workPhotosCount})
@@ -354,11 +373,11 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                 <button
                   type="button"
                   onClick={handleCopyReportDirect}
-                  className="px-2.5 py-1 bg-[#131b26] hover:bg-[#182332] text-slate-300 border border-white/10 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+                  className="px-2.5 py-1 bg-[#16202c] hover:bg-[#1e2b3b] text-slate-300 border border-white/10 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
                   title="Copiar texto del reporte para pegar en WhatsApp"
                 >
                   {copiedReportText ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3 text-cyan-400" />}
-                  <span>{copiedReportText ? '¡Copiado!' : 'Copiar Reporte'}</span>
+                  <span>{copiedReportText ? '¡Copiado!' : 'Copiar'}</span>
                 </button>
 
                 <button
@@ -368,13 +387,13 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                   title="Abrir ventana para enviar reporte y fotos por WhatsApp"
                 >
                   <Share2 className="h-3 w-3 text-emerald-400" />
-                  <span>Reportar WhatsApp</span>
+                  <span>Reportar</span>
                 </button>
               </div>
             </div>
 
             {workPhotosCount === 0 ? (
-              <div className="text-center py-7 border border-dashed border-white/10 rounded-2xl bg-[#101722]/60">
+              <div className="text-center py-7 border border-dashed border-white/10 rounded-2xl bg-[#0e1622]/60">
                 <ImageIcon className="h-7 w-7 text-slate-600 mx-auto mb-1.5" />
                 <p className="text-xs text-slate-400 font-medium">
                   Aún no hay fotos de la instalación
@@ -384,12 +403,12 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {workPhotos.map((photo) => (
                   <div
                     key={photo.id}
                     onClick={() => setPreviewPhoto(photo.photo_data || `/uploads/${photo.filename}`)}
-                    className="group relative bg-[#131b26] border border-white/10 hover:border-cyan-400/50 rounded-xl overflow-hidden aspect-video shadow-xs transition cursor-pointer"
+                    className="group relative bg-[#16202c] border border-white/10 hover:border-cyan-400/50 rounded-2xl overflow-hidden aspect-video shadow-xs transition cursor-pointer"
                   >
                     <img
                       src={photo.photo_data || `/uploads/${photo.filename}`}
@@ -398,7 +417,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-between p-1.5">
                       <div className="flex justify-between items-center" onClick={(e) => e.stopPropagation()}>
-                        <span className="text-[9px] bg-black/80 backdrop-blur-xs text-cyan-300 border border-cyan-400/20 px-1.5 py-0.5 rounded font-bold truncate max-w-[85%]">
+                        <span className="text-[9px] bg-black/80 backdrop-blur-xs text-cyan-300 border border-cyan-400/20 px-1.5 py-0.5 rounded-md font-bold truncate max-w-[85%]">
                           {photo.category}
                         </span>
                         <button
@@ -456,7 +475,8 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               </div>
             </div>
           )}
-        {/* Sección Expandible para Declarar Trabajo No Realizado */}
+
+          {/* Sección Expandible para Declarar Trabajo No Realizado (Al final de la lista) */}
           {showCancelPrompt && (
             <div ref={cancelPromptRef} className="p-3.5 bg-rose-950/20 border border-rose-500/30 rounded-2xl space-y-2.5 animate-in fade-in">
               <div className="flex items-center justify-between">
@@ -487,7 +507,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                     className={`text-[10px] px-2.5 py-1 rounded-lg border transition font-medium text-left cursor-pointer ${
                       cancelReason === reason
                         ? 'bg-rose-600 text-white border-rose-500 font-bold shadow-sm'
-                        : 'bg-[#131b26] text-slate-300 border-white/10 hover:border-rose-400/50'
+                        : 'bg-[#16202c] text-slate-300 border-white/10 hover:border-rose-400/50'
                     }`}
                   >
                     {reason}
@@ -500,7 +520,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
                 placeholder="Escribe un motivo específico (opcional)..."
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
-                className="w-full h-9 px-3 text-xs bg-[#0e141f] border border-white/10 focus:border-rose-500 rounded-xl text-white placeholder-slate-500 focus:outline-none"
+                className="w-full h-9 px-3 text-xs bg-[#0d141e] border border-white/10 focus:border-rose-500 rounded-xl text-white placeholder-slate-500 focus:outline-none"
               />
 
               <div className="flex items-center justify-end gap-2 pt-1">
@@ -523,46 +543,33 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               </div>
             </div>
           )}
+        </div>
 
-          </div>
-
-        {/* Footer con Acción Directa para Confirmar el Trabajo o Reportar */}
-        <div className="px-4 py-3 border-t border-white/8 bg-[#0e1522] flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-10 px-3.5 bg-[#141b24] hover:bg-[#1a2330] text-slate-300 text-xs font-bold rounded-xl border border-white/10 transition shrink-0 cursor-pointer active:scale-95"
-            >
-              Cerrar
-            </button>
-
-            {!isCompleted && order.status !== 'No Realizado' && (
-              <button
-                type="button"
-                onClick={() => setShowCancelPrompt(prev => !prev)}
-                className={`h-10 px-3 text-xs font-bold rounded-xl transition flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer ${
-                  showCancelPrompt
-                    ? 'bg-rose-600 text-white border border-rose-500 shadow-md'
-                    : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30'
-                }`}
-                title="Marcar trabajo como No Realizado (inconveniente en la propiedad)"
-              >
-                <X className="h-3.5 w-3.5 stroke-[2.5]" />
-                <span>No Realizado</span>
-              </button>
-            )}
-          </div>
+        {/* 6. Footer (Idéntico a Travesía del Día) */}
+        <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowCancelPrompt(prev => !prev)}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer border ${
+              showCancelPrompt
+                ? 'bg-rose-600 text-white border-rose-500 shadow-sm'
+                : 'bg-white/10 hover:bg-white/15 text-rose-300 hover:text-white border-white/10'
+            }`}
+            title="Marcar trabajo como No Realizado"
+          >
+            <X className="h-3.5 w-3.5 stroke-[2.5]" />
+            <span>No Realizado</span>
+          </button>
 
           {!isCompleted ? (
             <button
               type="button"
               disabled={workPhotosCount === 0 || confirming || uploading}
               onClick={handleConfirmCompletion}
-              className={`flex-1 h-10 px-4 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 ${
+              className={`px-4 py-2 text-xs font-black rounded-xl shadow-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer ${
                 workPhotosCount > 0
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-md shadow-emerald-500/20 cursor-pointer'
-                  : 'bg-[#141b24] text-slate-500 border border-white/5 cursor-not-allowed'
+                  ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/25 ring-2 ring-emerald-400/30'
+                  : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
               }`}
             >
               <Check className="h-4 w-4 stroke-[3]" />
@@ -579,13 +586,13 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               <button
                 type="button"
                 onClick={() => setIsShareModalOpen(true)}
-                className="h-10 px-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+                className="px-3.5 py-2 bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 text-white font-black text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
               >
                 <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
                 <span>Enviar Reporte</span>
               </button>
 
-              <div className="hidden sm:flex items-center gap-1.5 h-10 px-3 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs font-bold">
+              <div className="flex items-center gap-1.5 px-2.5 py-2 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs font-bold">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400" />
                 <span>Completado</span>
               </div>
@@ -622,7 +629,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
             <button
               type="button"
               onClick={() => setPreviewPhoto(null)}
-              className="mt-3 px-5 py-2 bg-[#131b26] hover:bg-[#182332] text-white border border-white/10 rounded-xl text-xs font-bold transition shadow cursor-pointer active:scale-95"
+              className="mt-3 px-5 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/10 rounded-xl text-xs font-bold transition shadow cursor-pointer active:scale-95"
             >
               Cerrar Foto
             </button>
