@@ -15,8 +15,8 @@ export function formatDMS(deg, isLat) {
   return `${dir} ${d}° ${m}' ${s}"`;
 }
 
-// Get device GPS location with safe timeout fallback
-export function getDeviceLocation(timeoutMs = 2500) {
+// Get device GPS location in real time with high accuracy (maximumAge: 0 forces fresh sensor fix)
+export function getDeviceLocation(timeoutMs = 4000) {
   return new Promise((resolve) => {
     if (!navigator.geolocation) {
       resolve(null);
@@ -39,11 +39,12 @@ export function getDeviceLocation(timeoutMs = 2500) {
           resolve({
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy
+            accuracy: pos.coords.accuracy,
+            timestamp: pos.timestamp || Date.now()
           });
         }
       },
-      (err) => {
+      () => {
         if (!resolved) {
           resolved = true;
           clearTimeout(timer);
@@ -53,13 +54,13 @@ export function getDeviceLocation(timeoutMs = 2500) {
       {
         enableHighAccuracy: true,
         timeout: timeoutMs,
-        maximumAge: 60000
+        maximumAge: 0 // Garantiza lectura fresca del GPS del teléfono en este instante exacto
       }
     );
   });
 }
 
-// Format local date with time zone (e.g. "oct 31, 2026, 10:20:15 p.m. EDT")
+// Format local date with time zone (e.g. "nov 2, 2026, 12:49:15 a. m. EDT")
 export function formatTimestampText(date = new Date()) {
   const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   const m = months[date.getMonth()];
@@ -72,19 +73,25 @@ export function formatTimestampText(date = new Date()) {
   const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
   hours = hours % 12 || 12;
 
-  // Timezone abbreviation (EDT / EST or local)
-  let tzStr = 'EDT';
+  // Timezone abbreviation (EDT / EST / CDT / CST or local)
+  let tzStr = '';
   try {
     const tzMatch = date.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ');
-    if (tzMatch.length > 2) tzStr = tzMatch[2];
+    if (tzMatch.length > 2) tzStr = ` ${tzMatch[2]}`;
   } catch (e) {}
 
-  return `${m} ${d}, ${y}, ${hours}:${minutes}:${seconds} ${ampm} ${tzStr}`;
+  return `${m} ${d}, ${y}, ${hours}:${minutes}:${seconds} ${ampm}${tzStr}`;
 }
 
 /**
  * Applies a high-contrast watermark to an image file.
  * Returns a new File object with the stamped image.
+ * 
+ * Rules:
+ * - Real-time GPS coordinates captured directly from phone hardware at the instant photo is taken
+ * - Real-time local date and time
+ * - Verified job site address
+ * - NO job ID, NO user name
  */
 export async function stampPhotoWithWatermark(file, meta = {}) {
   // If not an image file, return as is
@@ -93,10 +100,8 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
   }
 
   try {
-    // 1. Try to get device GPS in parallel with image loading
-    const gpsPromise = (meta.lat && meta.lng) 
-      ? Promise.resolve({ lat: meta.lat, lng: meta.lng }) 
-      : getDeviceLocation(2500);
+    // 1. Obtener coordenadas GPS del teléfono en tiempo real en paralelo a la carga de la imagen
+    const gpsPromise = getDeviceLocation(4000).catch(() => null);
 
     // 2. Load file into HTML Image
     const img = await new Promise((resolve, reject) => {
@@ -111,7 +116,11 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
       reader.readAsDataURL(file);
     });
 
-    const gps = await gpsPromise;
+    let gps = await gpsPromise;
+    // Si el GPS del móvil no respondió (ej. sin cobertura/sótano), usar respaldo si existe
+    if (!gps && meta.lat && meta.lng) {
+      gps = { lat: meta.lat, lng: meta.lng };
+    }
 
     // 3. Create canvas preserving high resolution
     const canvas = document.createElement('canvas');
@@ -137,7 +146,7 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
     // Draw base photo
     ctx.drawImage(img, 0, 0, width, height);
 
-    // 4. Build text lines
+    // 4. Build text lines: SOLAMENTE Fecha y Hora actual, Coordenadas GPS y Dirección
     const now = new Date();
     const timeFormatted = formatTimestampText(now);
 
@@ -153,18 +162,14 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
     }
 
     const addrLine1 = (meta.address || '').trim();
-    const addrLine2 = `${meta.city || 'Elkhart'} IN ${meta.zipCode || meta.zip_code || ''}`.trim();
+    const addrLine2 = [
+      meta.city || '',
+      meta.state || (meta.city ? 'IN' : ''),
+      meta.zipCode || meta.zip_code || ''
+    ].filter(Boolean).join(' ').trim();
+
     if (addrLine1) lines.push(addrLine1);
     if (addrLine2) lines.push(addrLine2);
-    lines.push('Estados Unidos');
-
-    // Job and Tech ID line
-    const techTag = meta.techName || meta.tech_id || 'Javier (P0G1)';
-    const jobTag = meta.jobId || meta.job_id ? `Job #${meta.jobId || meta.job_id}` : '';
-    const footerLine = [jobTag, techTag].filter(Boolean).join(' • ');
-    if (footerLine) {
-      lines.push(footerLine);
-    }
 
     // 5. Calculate font size & badge proportions
     const baseFontSize = Math.max(16, Math.round(width * 0.024));
@@ -191,7 +196,7 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
 
     // Draw dark translucent backdrop box with rounded corners
     ctx.save();
-    ctx.fillStyle = 'rgba(10, 15, 29, 0.72)';
+    ctx.fillStyle = 'rgba(10, 15, 29, 0.75)';
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
     ctx.lineWidth = Math.max(1, Math.round(baseFontSize * 0.06));
 
@@ -210,7 +215,7 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
     ctx.fill();
     ctx.stroke();
 
-    // 6. Draw text lines with subtle crisp shadow
+    // 6. Draw text lines with subtle crisp shadow for maximum clarity
     ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
     ctx.shadowBlur = 4;
     ctx.shadowOffsetX = 1;
@@ -219,12 +224,11 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
     lines.forEach((line, idx) => {
       const y = boxY + paddingY + (idx * lineHeight) + (baseFontSize * 0.85);
 
-      // Color coding: primary lines white, footer slightly highlighted in cyan/amber
-      if (idx === lines.length - 1 && footerLine) {
-        ctx.fillStyle = '#38bdf8'; // Cyan for Tech & Job ID
-        ctx.font = `bold ${Math.round(baseFontSize * 0.95)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-      } else if (idx === 0) {
+      if (idx === 0) {
         ctx.fillStyle = '#f8fafc';
+        ctx.font = `600 ${baseFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      } else if (idx === 1 && (line.includes('°') || line.includes('N ') || line.includes('S '))) {
+        ctx.fillStyle = '#38bdf8'; // Coordenadas en cian de alta visibilidad
         ctx.font = `600 ${baseFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
       } else {
         ctx.fillStyle = '#f1f5f9';

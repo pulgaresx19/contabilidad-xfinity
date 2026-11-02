@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
-import { Plus, X, Check, AlertCircle, Phone, MapPin, Ruler, DollarSign, Calendar, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Plus, X, Check, AlertCircle, Phone, MapPin, Ruler, DollarSign, 
+  Calendar, Sparkles, Navigation, Search, Loader2, CheckCircle2
+} from 'lucide-react';
 import { getLocalDateStr } from '../utils/dateUtils';
-import { geocodeAddressWithMapbox } from '../utils/mapboxGeocode';
+import { geocodeAddressWithMapbox, searchAddressSuggestions } from '../utils/mapboxGeocode';
 
 export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, initialDate }) {
   const [formData, setFormData] = useState({
@@ -18,14 +21,23 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
     bore_type: 'N',
     raw_notes: '',
     status: 'Pendiente',
-    payment_status: 'Pendiente'
+    payment_status: 'Pendiente',
+    latitude: null,
+    longitude: null
   });
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  // Address Autocomplete state
+  const [suggestions, setSuggestions] = useState([]);
+  const [searchingAddress, setSearchingAddress] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showManualCity, setShowManualCity] = useState(false);
+  const debounceTimerRef = useRef(null);
+
   // Sync with initialDate and reset form when modal opens
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       setFormData({
         work_date: initialDate || getLocalDateStr(),
@@ -41,12 +53,65 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
         bore_type: 'N',
         raw_notes: '',
         status: 'Pendiente',
-        payment_status: 'Pendiente'
+        payment_status: 'Pendiente',
+        latitude: null,
+        longitude: null
       });
       setError(null);
       setSaving(false);
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setShowManualCity(false);
     }
   }, [isOpen, initialDate, defaultTech]);
+
+  // Debounced search for address suggestions
+  const handleAddressChange = (val) => {
+    setFormData(prev => ({ ...prev, address: val }));
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+
+    if (!val || val.trim().length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setSearchingAddress(true);
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        const results = await searchAddressSuggestions(val);
+        setSuggestions(results);
+        setShowSuggestions(results.length > 0);
+      } catch (e) {
+        setSuggestions([]);
+      } finally {
+        setSearchingAddress(false);
+      }
+    }, 280);
+  };
+
+  const handleSelectSuggestion = (sug) => {
+    setFormData(prev => ({
+      ...prev,
+      address: sug.streetAddress,
+      city: sug.city || 'ELKHART',
+      zip_code: sug.zipCode || prev.zip_code,
+      latitude: sug.latitude,
+      longitude: sug.longitude
+    }));
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
+
+  // Add quick tag to remarks
+  const handleAddRemarkTag = (tag) => {
+    setFormData(prev => {
+      const current = (prev.raw_notes || '').trim();
+      if (current.includes(tag)) return prev;
+      const updated = current ? `${current}, ${tag}` : tag;
+      return { ...prev, raw_notes: updated };
+    });
+  };
 
   if (!isOpen) return null;
 
@@ -71,16 +136,20 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
     setError(null);
 
     try {
-      let lat = null;
-      let lng = null;
-      try {
-        const geo = await geocodeAddressWithMapbox(cleanAddress, formData.city, formData.zip_code);
-        if (geo && geo.latitude && geo.longitude) {
-          lat = geo.latitude;
-          lng = geo.longitude;
+      let lat = formData.latitude;
+      let lng = formData.longitude;
+
+      // If coordinates weren't already resolved by autocomplete, geocode now
+      if (!lat || !lng) {
+        try {
+          const geo = await geocodeAddressWithMapbox(cleanAddress, formData.city, formData.zip_code);
+          if (geo && geo.latitude && geo.longitude) {
+            lat = geo.latitude;
+            lng = geo.longitude;
+          }
+        } catch (geoErr) {
+          console.warn('Geocoding notice:', geoErr.message);
         }
-      } catch (geoErr) {
-        console.warn('Geocoding notice:', geoErr.message);
       }
 
       const payload = {
@@ -118,19 +187,20 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-2.5 sm:p-4 animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[94vh] overflow-hidden transition-colors mx-auto">
-        {/* Header Compacto */}
-        <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/70 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 rounded-lg">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in">
+      <div className="bg-[#101722] border border-white/10 w-full max-w-sm sm:max-w-md rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden transition-all mx-auto text-white">
+        
+        {/* Header Elegante y Centrado */}
+        <div className="px-4 py-3 bg-[#131d2b] border-b border-white/10 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-2xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center shadow-xs">
               <Plus className="h-4 w-4 stroke-[3]" />
             </div>
             <div>
-              <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white leading-tight">
-                Añadir Trabajo a la Jornada
+              <h3 className="text-sm font-black text-white leading-tight">
+                Añadir Trabajo
               </h3>
-              <p className="text-[9px] text-slate-500 dark:text-slate-400">
+              <p className="text-[10px] text-slate-400 font-medium">
                 Ingreso rápido de orden de trabajo
               </p>
             </div>
@@ -139,58 +209,54 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition"
+            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition active:scale-90"
             title="Cerrar ventana"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Formulario Compacto - Todo a primera vista */}
-        <form onSubmit={handleSubmit} className="p-3 sm:p-4 overflow-y-auto space-y-2 sm:space-y-2.5 flex-1 text-xs">
+        {/* Formulario Principal */}
+        <form onSubmit={handleSubmit} className="p-3.5 sm:p-4 overflow-y-auto space-y-3 flex-1 text-xs scrollbar-none">
           {error && (
-            <div className="p-2 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-600 dark:text-rose-300 text-[11px] flex items-center gap-1.5">
-              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            <div className="p-2.5 bg-rose-500/15 border border-rose-500/30 rounded-2xl text-rose-300 text-xs flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
               <span>{error}</span>
             </div>
           )}
 
-          {/* Saldo / Tarifa Dinámica con Desglose Inmediato */}
-          <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/15 to-emerald-500/10 dark:from-emerald-950/40 dark:via-emerald-900/30 dark:to-emerald-950/40 border border-emerald-500/30 rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 shadow-xs shrink-0">
+          {/* Tarifa Estimada Banner */}
+          <div className="bg-gradient-to-r from-emerald-950/40 via-emerald-900/30 to-emerald-950/40 border border-emerald-500/30 rounded-2xl p-2.5 flex items-center justify-between gap-2 shadow-xs shrink-0">
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider">
+                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
                   Tarifa Estimada:
                 </span>
-                <span className="text-[11px] font-mono text-slate-700 dark:text-slate-300 font-semibold">
+                <span className="text-xs font-mono text-slate-200 font-semibold">
                   Base $100
-                  {boreBonus > 0 && <strong className="text-cyan-600 dark:text-cyan-400 font-bold"> +$30 DW</strong>}
-                  {footageBonus > 0 && <strong className="text-emerald-600 dark:text-emerald-400 font-bold"> +${footageBonus} Drop</strong>}
+                  {boreBonus > 0 && <strong className="text-cyan-400 font-bold"> +$30 DW</strong>}
+                  {footageBonus > 0 && <strong className="text-emerald-400 font-bold"> +${footageBonus} Drop</strong>}
                 </span>
               </div>
               {footageBonus > 0 ? (
-                <p className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold truncate">
-                  ✓ Bono metraje: {extraBlocks} tramo(s) de 100 ft sobre 300 ft
-                </p>
-              ) : numFootage > 300 ? (
-                <p className="text-[9px] text-slate-400 truncate">
-                  Drop &gt;300 ft (bono +$25 aplica a partir de 400 ft)
+                <p className="text-[10px] text-emerald-400 font-bold truncate mt-0.5">
+                  ✓ Bono metraje: {extraBlocks} tramo(s) sobre 300 ft
                 </p>
               ) : null}
             </div>
 
             {/* Medallón Dinero */}
-            <div className="flex items-center gap-0.5 px-2.5 py-1 bg-emerald-500 text-slate-950 rounded-xl font-mono font-black shadow-xs shrink-0">
-              <span className="text-[10px]">$</span>
-              <span className="text-base sm:text-lg leading-none">{currentTotal}</span>
+            <div className="flex items-center gap-0.5 px-3 py-1 bg-emerald-500 text-slate-950 rounded-xl font-mono font-black shadow-xs shrink-0">
+              <span className="text-xs">$</span>
+              <span className="text-lg leading-none">{currentTotal}</span>
             </div>
           </div>
 
-          {/* Fila 1: Job ID y Fecha (Lineales lado a lado en 2 columnas 50% / 50%) */}
+          {/* Fila 1: Job ID y Fecha */}
           <div className="grid grid-cols-2 gap-2.5">
             <div className="min-w-0">
-              <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 truncate">
-                Work Order # (Job ID) *
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 truncate">
+                Job ID (Orden #) *
               </label>
               <input
                 type="text"
@@ -198,13 +264,12 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
                 placeholder="ej. 734521"
                 value={formData.job_id}
                 onChange={(e) => setFormData({ ...formData, job_id: e.target.value })}
-                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3 py-2 text-cyan-700 dark:text-cyan-400 font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs shadow-2xs"
-                style={{ height: '40px', minHeight: '40px', maxHeight: '40px', fontSize: '12px', lineHeight: 'normal' }}
+                className="w-full h-10 bg-[#16202c] border border-white/10 rounded-xl px-3 text-cyan-400 font-mono font-bold focus:outline-none focus:border-cyan-400 text-xs shadow-xs"
               />
             </div>
 
             <div className="min-w-0">
-              <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 truncate">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 truncate">
                 Fecha Asignada
               </label>
               <input
@@ -212,100 +277,153 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
                 required
                 value={formData.work_date}
                 onChange={(e) => setFormData({ ...formData, work_date: e.target.value })}
-                className="w-full h-10 min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500 font-mono font-bold text-xs [color-scheme:light] dark:[color-scheme:dark] shadow-2xs"
-                style={{ height: '40px', minHeight: '40px', maxHeight: '40px', fontSize: '12px', lineHeight: 'normal' }}
+                className="w-full h-10 bg-[#16202c] border border-white/10 rounded-xl px-3 text-slate-200 font-mono font-bold focus:outline-none focus:border-cyan-400 text-xs shadow-xs [color-scheme:dark]"
               />
             </div>
           </div>
 
-          {/* Fila 2: Dirección de la Vivienda */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-0.5">
-              Dirección de la Vivienda *
-            </label>
+          {/* Fila 2: Dirección con Autocompletado y Detección Automática */}
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                Dirección de la Vivienda *
+              </label>
+              {searchingAddress && (
+                <span className="flex items-center gap-1 text-[10px] text-cyan-400 font-bold animate-pulse">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Buscando...
+                </span>
+              )}
+            </div>
+
             <div className="relative">
-              <MapPin className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+              <MapPin className="h-4 w-4 text-cyan-400 absolute left-3 top-3 pointer-events-none" />
               <input
                 type="text"
                 required
-                placeholder="ej. 1024 Prairie St"
+                placeholder="Escribe la calle (ej. 517 Express Centre, 1024 Prairie...)"
                 value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700/80 rounded-xl pl-8 pr-2.5 py-1.5 text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:border-cyan-500 text-xs"
+                onChange={(e) => handleAddressChange(e.target.value)}
+                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                className="w-full h-10 bg-[#16202c] border border-white/10 focus:border-cyan-400 rounded-xl pl-9 pr-3 text-white font-semibold focus:outline-none text-xs placeholder-slate-500 shadow-xs"
               />
             </div>
+
+            {/* Dropdown de Sugerencias de Mapbox */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1.5 bg-[#192433] border border-cyan-500/40 rounded-2xl shadow-2xl z-40 overflow-hidden divide-y divide-white/5 animate-fade-in max-h-52 overflow-y-auto">
+                <div className="p-1.5 bg-cyan-950/40 text-[10px] font-bold text-cyan-400 uppercase tracking-wider px-3">
+                  Sugerencias del Mapa:
+                </div>
+                {suggestions.map((sug) => (
+                  <button
+                    key={sug.id}
+                    type="button"
+                    onClick={() => handleSelectSuggestion(sug)}
+                    className="w-full text-left p-2.5 hover:bg-cyan-500/15 flex items-start gap-2.5 transition cursor-pointer"
+                  >
+                    <MapPin className="h-4 w-4 text-cyan-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white leading-tight truncate">
+                        {sug.streetAddress}
+                      </p>
+                      <p className="text-[11px] text-slate-400 truncate">
+                        {sug.city}, {sug.state} {sug.zipCode}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Ciudad Detectada Automática (Píldora Inteligente) */}
+            <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Ciudad detectada: <strong className="text-cyan-300 font-bold">{formData.city || 'ELKHART'}</strong></span>
+                {formData.latitude && formData.longitude && (
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded-md font-mono">GPS ✓</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowManualCity(prev => !prev)}
+                className="text-[10px] text-slate-400 hover:text-cyan-300 underline"
+              >
+                {showManualCity ? 'Ocultar' : 'Cambiar ciudad'}
+              </button>
+            </div>
+
+            {/* Campo manual de ciudad solo si el usuario pulsa 'Cambiar ciudad' */}
+            {showManualCity && (
+              <div className="mt-2 animate-fade-in">
+                <input
+                  type="text"
+                  placeholder="Ciudad manual (ej. SKOKIE, GOSHEN)"
+                  value={formData.city}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value.toUpperCase() })}
+                  className="w-full h-8 bg-[#16202c] border border-white/10 rounded-lg px-2.5 text-xs text-white uppercase font-bold focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+            )}
           </div>
 
-          {/* Fila 3: Ciudad (Manual) y Teléfono (Lineales lado a lado) */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* Fila 3: Teléfono del Cliente & Pies de Cable */}
+          <div className="grid grid-cols-2 gap-2.5">
             <div className="min-w-0">
-              <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-0.5 truncate">
-                Ciudad (Manual)
-              </label>
-              <input
-                type="text"
-                placeholder="ej. Skokie, Elkhart"
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className="w-full min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700/80 rounded-xl px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500 uppercase font-semibold text-xs"
-              />
-            </div>
-
-            <div className="min-w-0">
-              <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-0.5 truncate">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 truncate">
                 Teléfono del Cliente
               </label>
               <div className="relative">
-                <Phone className="h-3 w-3 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+                <Phone className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-3 pointer-events-none" />
                 <input
                   type="tel"
                   placeholder="ej. 5741234567"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700/80 rounded-xl pl-7 pr-2 py-1.5 text-slate-800 dark:text-slate-200 font-mono focus:outline-none focus:border-cyan-500 text-xs"
+                  className="w-full h-10 bg-[#16202c] border border-white/10 rounded-xl pl-8 pr-2 text-slate-200 font-mono text-xs focus:outline-none focus:border-cyan-400"
                 />
               </div>
             </div>
-          </div>
 
-          {/* Fila 4: Pies de Cable y Selector de Cable (Lineales lado a lado) */}
-          <div className="grid grid-cols-2 gap-2">
             <div className="min-w-0">
-              <div className="flex items-center justify-between mb-0.5">
-                <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider truncate">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">
                   Pies (Drop ft)
                 </label>
                 {footageBonus > 0 && (
-                  <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                  <span className="text-[9px] font-bold text-emerald-400 font-mono">
                     +${footageBonus}
                   </span>
                 )}
               </div>
               <div className="relative">
-                <Ruler className="h-3 w-3 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+                <Ruler className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-3 pointer-events-none" />
                 <input
                   type="number"
                   step="0.1"
                   placeholder="ej. 120"
                   value={formData.drop_footage}
                   onChange={(e) => setFormData({ ...formData, drop_footage: e.target.value })}
-                  className="w-full min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700/80 rounded-xl pl-7 pr-2 py-1.5 text-amber-700 dark:text-amber-300 font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs"
+                  className="w-full h-10 bg-[#16202c] border border-white/10 rounded-xl pl-8 pr-2 text-amber-300 font-mono font-bold text-xs focus:outline-none focus:border-cyan-400"
                 />
               </div>
             </div>
+          </div>
 
+          {/* Fila 4: Tipo de Cable & Cruce de Entrada (Driveway Bore) */}
+          <div className="grid grid-cols-2 gap-2.5">
             <div className="min-w-0">
-              <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-0.5 truncate">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 truncate">
                 Tipo de Cable
               </label>
-              <div className="grid grid-cols-2 gap-1 bg-slate-100 dark:bg-slate-950 p-0.5 rounded-xl border border-slate-200 dark:border-slate-800 h-[31px] items-center">
+              <div className="grid grid-cols-2 gap-1 bg-[#16202c] p-1 rounded-xl border border-white/10 h-10 items-center">
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, cable_type: 'RG-6' })}
                   className={`h-full rounded-lg font-bold text-xs flex items-center justify-center transition ${
                     formData.cable_type === 'RG-6'
-                      ? 'bg-cyan-500 text-slate-950 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-xs'
+                      : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   RG-6
@@ -315,91 +433,109 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
                   onClick={() => setFormData({ ...formData, cable_type: 'RG-11' })}
                   className={`h-full rounded-lg font-bold text-xs flex items-center justify-center transition ${
                     formData.cable_type === 'RG-11'
-                      ? 'bg-cyan-500 text-slate-950 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-xs'
+                      : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   RG-11
                 </button>
               </div>
             </div>
-          </div>
 
-          {/* Fila 5: Cruce de Entrada (Driveway Bore) Lineal lado a lado */}
-          <div>
-            <div className="flex items-center justify-between mb-0.5">
-              <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider truncate">
-                Cruce de Entrada (Driveway Bore)
-              </label>
-              {boreBonus > 0 && (
-                <span className="text-[9px] font-bold text-cyan-600 dark:text-cyan-400">
-                  +$30 DW
-                </span>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, bore_type: 'N' })}
-                className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition text-center flex items-center justify-center gap-1 ${
-                  formData.bore_type === 'N'
-                    ? 'bg-white text-slate-900 border-cyan-500 dark:bg-slate-800 dark:text-white dark:border-cyan-500 shadow-xs'
-                    : 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800'
-                }`}
-              >
-                <span>Sin Cruce</span>
-                <span className="font-mono text-[10px] text-slate-400">($100)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, bore_type: 'DW:1' })}
-                className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition text-center flex items-center justify-center gap-1 ${
-                  formData.bore_type === 'DW:1'
-                    ? 'bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border-cyan-500 shadow-xs font-black'
-                    : 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800'
-                }`}
-              >
-                <span>Con Driveway DW</span>
-                <span className="font-mono text-[10px] text-cyan-600 dark:text-cyan-400">(+$30)</span>
-              </button>
+            <div className="min-w-0">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                  Driveway Bore
+                </label>
+                {boreBonus > 0 && (
+                  <span className="text-[9px] font-bold text-cyan-400 font-mono">
+                    +$30 DW
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-1 bg-[#16202c] p-1 rounded-xl border border-white/10 h-10 items-center">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, bore_type: 'N' })}
+                  className={`h-full rounded-lg font-bold text-xs flex items-center justify-center transition ${
+                    formData.bore_type === 'N'
+                      ? 'bg-white/15 text-white font-black shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  No
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, bore_type: 'DW:1' })}
+                  className={`h-full rounded-lg font-bold text-xs flex items-center justify-center transition ${
+                    formData.bore_type === 'DW:1'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Sí (DW)
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Fila 6: Checkbox Call First & Remarks */}
-          <div className="space-y-1 pt-0.5">
+          {/* Fila 5: Remarks / Notas - AMPLIO, CÓMODO Y CON ETIQUETAS RÁPIDAS */}
+          <div className="space-y-1.5 pt-1">
             <div className="flex items-center justify-between">
-              <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                Remarks / Obstáculos Extras
+              <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                Remarks / Notas del Trabajo
               </label>
               <label className="flex items-center gap-1.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={formData.call_first}
                   onChange={(e) => setFormData({ ...formData, call_first: e.target.checked })}
-                  className="h-3.5 w-3.5 rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-cyan-500 focus:ring-0"
+                  className="h-3.5 w-3.5 rounded border-white/20 bg-[#16202c] text-cyan-500 focus:ring-0"
                 />
-                <span className="text-slate-600 dark:text-slate-400 font-semibold text-[10px]">
+                <span className="text-cyan-300 font-bold text-xs">
                   Call First
                 </span>
               </label>
             </div>
+
+            {/* Chips Rápidos de un toque para no tener que teclear tanto en el carro */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[
+                'Call First',
+                'Portón / Gate',
+                'Perro / Dog',
+                'Zanja / Trench',
+                'Traspatio',
+                'Cruce difícil'
+              ].map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => handleAddRemarkTag(tag)}
+                  className="px-2 py-0.5 rounded-lg bg-[#16202c] hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 border border-white/10 text-[10px] font-semibold active:scale-95 transition"
+                >
+                  + {tag}
+                </button>
+              ))}
+            </div>
+
+            {/* Textarea Cómodo y Amplio para Móvil */}
             <textarea
-              rows={1}
-              placeholder="Notas, portón, perro, zanja..."
+              rows={3}
+              placeholder="Escribe notas adicionales, advertencias, detalles del cliente..."
               value={formData.raw_notes}
               onChange={(e) => setFormData({ ...formData, raw_notes: e.target.value })}
-              className="w-full min-w-0 box-border bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700/80 rounded-xl px-2.5 py-1 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+              className="w-full bg-[#16202c] border border-white/10 focus:border-cyan-400 rounded-2xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none min-h-[64px] shadow-xs"
             />
           </div>
 
-          {/* Botones de acción compactos */}
-          <div className="pt-2 flex items-center justify-between gap-2 border-t border-slate-200 dark:border-slate-800 shrink-0">
+          {/* Botones de Acción */}
+          <div className="pt-2 flex items-center justify-between gap-2.5 border-t border-white/10 shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition"
+              className="px-4 py-2.5 bg-[#16202c] hover:bg-white/10 text-slate-300 hover:text-white text-xs font-bold rounded-2xl transition border border-white/5 active:scale-95"
             >
               Cancelar
             </button>
@@ -407,7 +543,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 active:scale-95 transition"
+              className="flex-1 py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 active:scale-95 transition cursor-pointer"
             >
               <Check className="h-4 w-4 stroke-[3]" />
               <span>{saving ? 'Guardando...' : `Añadir Trabajo ($${currentTotal})`}</span>

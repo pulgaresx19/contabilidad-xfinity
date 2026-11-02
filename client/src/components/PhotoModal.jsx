@@ -47,14 +47,14 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
     formData.append('category', category);
 
     try {
-      // Stamp each photo with GPS coordinates, local date/time, and job address
+      // Stamp each photo with real-time GPS coordinates, current timestamp, and job address
       for (let i = 0; i < files.length; i++) {
         const stamped = await stampPhotoWithWatermark(files[i], {
           address: order.address,
           city: order.city,
           zipCode: order.zip_code,
-          jobId: order.job_id,
-          techName: order.tech_id
+          lat: order.latitude,
+          lng: order.longitude
         });
         formData.append('photos', stamped);
       }
@@ -248,7 +248,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
           </div>
 
           {/* Botones de Captura Rápida (Cámara de Móvil directa y Galería) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-1">
             {/* Input oculto para cámara directa (capture="environment") */}
             <input
               ref={cameraInputRef}
@@ -260,11 +260,11 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               className="hidden"
             />
 
-            {/* Input oculto para galería múltiple */}
+            {/* Input oculto para galería directa (especificando formatos de imagen para evitar menú de cámara) */}
             <input
               ref={galleryInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/heic,image/heif,image/webp,.jpg,.jpeg,.png,.heic"
               multiple
               onChange={handleUpload}
               disabled={uploading}
@@ -276,18 +276,18 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
               type="button"
               onClick={() => cameraInputRef.current?.click()}
               disabled={uploading}
-              className="py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-95 text-slate-950 font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-cyan-500/25 transition"
+              className="py-3.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-95 text-slate-950 font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 transition cursor-pointer"
             >
               <Camera className="h-5 w-5 stroke-[2.5]" />
               <span>{uploading ? 'Estampando GPS...' : 'Abrir Cámara'}</span>
             </button>
 
-            {/* Botón Secundario: Seleccionar de Galería */}
+            {/* Botón Secundario: Seleccionar de Galería directamente */}
             <button
               type="button"
               onClick={() => galleryInputRef.current?.click()}
               disabled={uploading}
-              className="py-3 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 text-slate-800 dark:text-slate-200 font-bold text-sm rounded-2xl border border-slate-300 dark:border-slate-700/80 flex items-center justify-center gap-2 transition"
+              className="py-3.5 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 text-slate-800 dark:text-slate-200 font-bold text-sm rounded-2xl border border-slate-300 dark:border-slate-700/80 flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
             >
               <Upload className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
               <span>{uploading ? 'Procesando...' : 'Subir de Galería'}</span>

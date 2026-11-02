@@ -82,3 +82,65 @@ export async function geocodeAddressWithMapbox(address, city = '', zipCode = '')
     displayName: `${effectiveCity}, ${state} (Aprox)`
   };
 }
+
+/**
+ * Searches real-time address suggestions using Mapbox Places API
+ * Auto-detects street address, city, state, zip code and precise GPS coordinates.
+ */
+export async function searchAddressSuggestions(query) {
+  if (!query || typeof query !== 'string' || query.trim().length < 2) {
+    return [];
+  }
+
+  const cleanQ = query.trim();
+
+  try {
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cleanQ)}.json?access_token=${MAPBOX_TOKEN}&country=US&types=address&autocomplete=true&limit=5`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    if (!data.features || !Array.isArray(data.features)) return [];
+
+    return data.features.map(f => {
+      let city = '';
+      let state = '';
+      let zipCode = '';
+
+      if (Array.isArray(f.context)) {
+        for (const item of f.context) {
+          if (item.id.startsWith('place') || item.id.startsWith('locality')) {
+            city = item.text;
+          } else if (item.id.startsWith('region')) {
+            state = item.short_code ? item.short_code.replace('US-', '') : item.text;
+          } else if (item.id.startsWith('postcode')) {
+            zipCode = item.text;
+          }
+        }
+      }
+
+      if (!city && f.place_name) {
+        const parts = f.place_name.split(',').map(p => p.trim());
+        if (parts.length >= 3) {
+          city = parts[1];
+        }
+      }
+
+      const street = f.address ? `${f.address} ${f.text}` : (f.text || (f.place_name ? f.place_name.split(',')[0] : cleanQ));
+
+      return {
+        id: f.id,
+        streetAddress: street,
+        fullAddress: f.place_name || street,
+        city: (city || 'ELKHART').toUpperCase(),
+        state: state || 'IN',
+        zipCode: zipCode || '',
+        latitude: f.center ? f.center[1] : null,
+        longitude: f.center ? f.center[0] : null
+      };
+    });
+  } catch (err) {
+    console.warn('Address autocomplete search failed:', err.message);
+    return [];
+  }
+}

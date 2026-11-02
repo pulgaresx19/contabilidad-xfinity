@@ -3,7 +3,7 @@ import {
   X, Share2, Copy, Check, Camera, ExternalLink, AlertCircle, AlertTriangle
 } from 'lucide-react';
 
-export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdated }) {
+export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdated, onShared }) {
   const [reportText, setReportText] = useState('');
   const [copiedText, setCopiedText] = useState(false);
   const [orderPhotos, setOrderPhotos] = useState([]);
@@ -98,6 +98,9 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
   const markOrderAsShared = () => {
     order.whatsapp_shared = 1;
     order.whatsapp_shared_at = new Date().toISOString();
+    if (onShared && order.id) {
+      onShared(order.id);
+    }
 
     fetch(`/api/orders/${order.id}/whatsapp-shared`, {
       method: 'PATCH',

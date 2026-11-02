@@ -1381,11 +1381,11 @@ export default function UberDriverView({
         <div className="pointer-events-auto flex items-center gap-1.5 shrink-0">
           <button
             onClick={onOpenAddJob}
-            className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-[#007AFF] to-cyan-500 hover:from-blue-600 hover:to-cyan-400 text-white font-black text-xs shadow-lg shadow-blue-500/25 active:scale-95 transition flex items-center gap-1.5 border border-white/15"
+            className="px-3 py-2 rounded-2xl bg-gradient-to-r from-[#007AFF] to-cyan-500 hover:from-blue-600 hover:to-cyan-400 text-white font-black text-xs shadow-lg shadow-blue-500/25 active:scale-95 transition flex items-center gap-1.5 border border-white/15"
             title="Añadir nuevo trabajo"
           >
             <Plus className="h-4 w-4 stroke-[3]" />
-            <span className="text-xs font-black tracking-tight">+ Trabajo</span>
+            <span className="text-xs font-black tracking-tight">Trabajo</span>
           </button>
 
           <button
@@ -1535,7 +1535,7 @@ export default function UberDriverView({
 
                 <div 
                   onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
-                  className="px-4 py-1 rounded-full bg-[#007AFF] text-white text-[10px] font-black tracking-wider uppercase shadow-md shadow-blue-500/25 cursor-pointer hover:bg-blue-500 transition select-none"
+                  className="px-3.5 py-1 rounded-full bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/25 text-[10px] font-black tracking-wider uppercase cursor-pointer transition select-none shadow-xs"
                 >
                   PARADA {selectedIndex + 1} DE {orders.length}
                 </div>
@@ -1576,43 +1576,80 @@ export default function UberDriverView({
               </p>
             </div>
 
-            {/* ROW 3: THE 3 MAIN PUNCHY ACTION BUTTONS (FOTOS | COMPLETAR | SIGUIENTE) */}
+            {/* ROW 3: THE 3 MAIN ACTION BUTTONS (GPS | NO REALIZADO | COMPLETAR) */}
             <div className="grid grid-cols-3 gap-2 py-1">
-              {/* 1. Fotos (0) - Vivid Electric Blue Primary Action */}
-              <button
-                type="button"
-                onClick={() => onOpenPhotos(selectedOrder)}
+              {/* 1. GPS - Direct phone navigation / Google Maps */}
+              <a
+                href={getNavUrl(selectedOrder)}
+                target="_blank"
+                rel="noreferrer"
                 className="py-2.5 px-2 bg-[#007AFF] hover:bg-blue-500 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/30 active:scale-95 transition cursor-pointer"
-                title="Tomar o revisar fotos de evidencia"
+                title="Abrir mapa de navegación normal del teléfono (Google Maps / Apple Maps)"
               >
-                <Camera className="h-4 w-4 stroke-[2.5]" />
-                <span>Fotos ({activePhotosCount})</span>
-              </button>
+                <Navigation className="h-4 w-4 fill-current" />
+                <span>GPS</span>
+              </a>
 
-              {/* 2. Completar / Finalizar */}
+              {/* 2. No Realizado */}
               <button
                 type="button"
-                onClick={() => isSelectedCompleted ? onOpenShareModal(selectedOrder) : onMarkCompleted(selectedOrder)}
+                onClick={() => isSelectedCancelled ? (onOpenCancelDetail ? onOpenCancelDetail(selectedOrder) : null) : onOpenCancelModal(selectedOrder)}
                 className={`py-2.5 px-2 font-black text-xs rounded-2xl flex items-center justify-center gap-1.5 active:scale-95 transition shadow-sm cursor-pointer ${
-                  isSelectedCompleted
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 shadow-emerald-500/20'
-                    : 'bg-[#182332] hover:bg-[#223145] text-slate-200 hover:text-white border border-white/10'
+                  isSelectedCancelled
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 shadow-rose-500/20'
+                    : 'bg-[#182332] hover:bg-rose-500/20 text-slate-200 hover:text-rose-300 border border-white/10 hover:border-rose-500/30'
                 }`}
-                title={isSelectedCompleted ? 'Trabajo completado' : 'Marcar trabajo como completado'}
+                title={isSelectedCancelled ? "Ver cancelación" : "Marcar orden como No Realizado"}
               >
-                <CheckCircle2 className={`h-4 w-4 ${isSelectedCompleted ? 'text-emerald-400' : 'text-cyan-400'}`} />
-                <span>{isSelectedCompleted ? 'Completado' : 'Completar'}</span>
+                <X className="h-4 w-4 text-rose-400 stroke-[2.5]" />
+                <span>{isSelectedCancelled ? 'Cancelado' : 'No Realizado'}</span>
               </button>
 
-              {/* 3. Siguiente */}
+              {/* 3. Completar / Compartir (Parpadeante) / Reportado */}
               <button
                 type="button"
-                onClick={handleNextJob}
-                className="py-2.5 px-2 bg-[#182332] hover:bg-[#223145] text-slate-200 hover:text-white border border-white/10 font-black text-xs rounded-2xl flex items-center justify-center gap-1.5 active:scale-95 transition shadow-sm cursor-pointer"
-                title="Avanzar a la siguiente parada"
+                onClick={() => {
+                  if (isSelectedCompleted) {
+                    onOpenShareModal(selectedOrder);
+                  } else if (activePhotosCount === 0) {
+                    onOpenPhotos(selectedOrder);
+                  } else {
+                    onMarkCompleted(selectedOrder);
+                  }
+                }}
+                className={`py-2.5 px-2 font-black text-xs rounded-2xl flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer ${
+                  isSelectedCompleted && isSelectedShared
+                    ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/35 shadow-xs'
+                    : isSelectedCompleted
+                    ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border border-emerald-400 shadow-lg shadow-emerald-500/40 animate-pulse'
+                    : 'bg-[#182332] hover:bg-[#223145] text-slate-200 hover:text-white border border-white/10 shadow-sm'
+                }`}
+                title={
+                  isSelectedCompleted && isSelectedShared
+                    ? 'Reporte enviado al supervisor por WhatsApp. Toca para volver a compartir'
+                    : isSelectedCompleted
+                    ? 'Trabajo completado: Toca para enviar reporte por WhatsApp'
+                    : activePhotosCount === 0
+                    ? 'Tirar foto para completar'
+                    : 'Finalizar trabajo'
+                }
               >
-                <Navigation className="h-4 w-4 text-cyan-400 fill-cyan-400/20" />
-                <span>Siguiente</span>
+                {isSelectedCompleted && isSelectedShared ? (
+                  <>
+                    <CheckCheck className="h-4 w-4 text-emerald-400 stroke-[2.5]" />
+                    <span>Reportado</span>
+                  </>
+                ) : isSelectedCompleted ? (
+                  <>
+                    <Share2 className="h-4 w-4 stroke-[2.5]" />
+                    <span>Compartir</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-cyan-400" />
+                    <span>{activePhotosCount === 0 ? 'Completar' : 'Finalizar'}</span>
+                  </>
+                )}
               </button>
             </div>
 
@@ -1664,19 +1701,15 @@ export default function UberDriverView({
 
             {/* ROW 5: BOTTOM BAR (NO REALIZADO | $SALDO | CAPSULE ACTIONS) */}
             <div className="flex items-center justify-between gap-2 pt-1 pb-0.5">
-              {/* Left: "No Realizado" pill matching reference photo */}
+              {/* Left: Contador de fotos pill (desapercibido, misma estética que tenía No Realizado) */}
               <button
                 type="button"
-                onClick={() => isSelectedCancelled ? (onOpenCancelDetail ? onOpenCancelDetail(selectedOrder) : null) : onOpenCancelModal(selectedOrder)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 active:scale-95 transition shadow-sm cursor-pointer ${
-                  isSelectedCancelled
-                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
-                    : 'bg-[#182332] hover:bg-[#223145] text-slate-300 hover:text-white border border-white/10'
-                }`}
-                title={isSelectedCancelled ? "Ver cancelación" : "Marcar trabajo como No Realizado"}
+                onClick={() => onOpenPhotos(selectedOrder)}
+                className="px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-[#182332] hover:bg-[#223145] text-slate-300 hover:text-white border border-white/10 active:scale-95 transition shadow-sm cursor-pointer"
+                title="Ver o agregar fotos de evidencia"
               >
-                <X className="h-3.5 w-3.5 text-rose-400 stroke-[2.5]" />
-                <span>{isSelectedCancelled ? 'Cancelado' : 'No Realizado'}</span>
+                <Camera className="h-3.5 w-3.5 text-cyan-400 stroke-[2.3]" />
+                <span>Fotos ({activePhotosCount})</span>
               </button>
 
               {/* Center: Saldo prominently in neon green monospace */}
@@ -1694,35 +1727,49 @@ export default function UberDriverView({
                 </span>
               </div>
 
-              {/* Right: Capsule matching reference photo with actions [ ✓ ] [ 💬 ] [ ••• ] */}
-              <div className="flex items-center gap-1 bg-[#182332] border border-white/10 rounded-full px-2 py-1 shadow-sm">
-                {/* Status / Quick check */}
-                <div 
-                  className={`p-1 rounded-full ${isSelectedCompleted ? 'text-emerald-400' : 'text-slate-400'}`}
-                  title={isSelectedCompleted ? 'Completado' : 'Pendiente'}
-                >
-                  <Check className="h-3.5 w-3.5 stroke-[3]" />
-                </div>
-
-                {/* WhatsApp Share Action */}
-                <button
-                  type="button"
-                  onClick={() => onOpenShareModal(selectedOrder)}
-                  className="p-1 text-emerald-400 hover:text-emerald-300 transition active:scale-90"
-                  title="Compartir reporte por WhatsApp"
-                >
-                  <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
-                </button>
-
-                {/* More options (Adjust, Edit, Details) */}
-                <button
-                  type="button"
-                  onClick={() => setShowMoreActions(prev => !prev)}
-                  className="p-1 text-slate-400 hover:text-white transition active:scale-90"
-                  title="Más opciones de la orden"
-                >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </button>
+              {/* Right: Estado de la orden (Pendiente / Completado / Reportado / No Realizado) con la misma estética sobria del botón de fotos */}
+              <div 
+                className="px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-[#182332] text-slate-300 border border-white/10 select-none shadow-sm shrink-0"
+                title={
+                  isSelectedCompleted && isSelectedShared
+                    ? 'Estado: Reportado al supervisor'
+                    : isSelectedCompleted
+                    ? 'Estado: Completado (Pendiente de reportar)'
+                    : isSelectedCancelled
+                    ? (isSelectedShared ? 'Estado: No Realizado (Reportado)' : 'Estado: No Realizado')
+                    : 'Estado: Pendiente'
+                }
+              >
+                {isSelectedCompleted ? (
+                  isSelectedShared ? (
+                    <>
+                      <CheckCheck className="h-3.5 w-3.5 text-emerald-400 stroke-[2.5]" />
+                      <span>Reportado</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>Completado</span>
+                    </>
+                  )
+                ) : isSelectedCancelled ? (
+                  isSelectedShared ? (
+                    <>
+                      <CheckCheck className="h-3.5 w-3.5 text-rose-400 stroke-[2.5]" />
+                      <span>Reportado</span>
+                    </>
+                  ) : (
+                    <>
+                      <X className="h-3.5 w-3.5 text-rose-400 stroke-[2.5]" />
+                      <span>No Realizado</span>
+                    </>
+                  )
+                ) : (
+                  <>
+                    <Clock className="h-3.5 w-3.5 text-amber-400/80 stroke-[2.3]" />
+                    <span>Pendiente</span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -1914,9 +1961,10 @@ export default function UberDriverView({
             <p className="text-xs text-slate-400 mt-1 mb-3">Toca "+ Trabajo" para agregar una nueva orden.</p>
             <button
               onClick={onOpenAddJob}
-              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl text-xs font-bold shadow-md"
+              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-2xl text-xs font-bold shadow-md flex items-center gap-1.5 active:scale-95 transition"
             >
-              + Agregar Trabajo
+              <Plus className="h-4 w-4 stroke-[3]" />
+              <span>Trabajo</span>
             </button>
           </div>
         )}
