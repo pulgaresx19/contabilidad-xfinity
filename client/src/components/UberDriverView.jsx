@@ -2034,21 +2034,6 @@ export default function UberDriverView({
         </div>
       </div>
 
-      {/* 3.1 FLOATING RE-CENTER BUTTON (APPEARS WHEN USER MOVES MAP FREELY) */}
-      {isUserPanned && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 pointer-events-auto animate-in fade-in zoom-in-95 duration-200">
-          <button
-            type="button"
-            onClick={handleCenterOnRoute}
-            className="bg-[#007AFF] hover:bg-[#0066d6] text-white px-3.5 py-1.5 rounded-full shadow-2xl flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 border border-white/30 backdrop-blur-md cursor-pointer select-none"
-            title="Centrar en el trabajo seleccionado y ruta"
-          >
-            <Navigation className="h-3.5 w-3.5 fill-white stroke-[2.5]" />
-            <span>Re-centrar</span>
-          </button>
-        </div>
-      )}
-
       {/* 4. RIGHT FLOATING CONTROLS: THEME (TOP) + 3D/2D (BELOW) + CENTRAR EN RUTA + CENTRAR EN GPS */}
       <div className="absolute right-3 top-20 z-20 flex flex-col gap-2 pointer-events-auto">
         {/* 1. Toggle Theme Popover (Top) */}
@@ -2113,14 +2098,18 @@ export default function UberDriverView({
         <button
           type="button"
           onClick={handleCenterOnRoute}
-          className={`w-10 h-10 rounded-full backdrop-blur-xl border flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer ${
+          className={`w-10 h-10 rounded-full backdrop-blur-xl border flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer select-none ${
             isUserPanned
-              ? 'bg-[#007AFF] text-white border-white/40 ring-2 ring-[#007AFF]/50'
-              : 'bg-[#16202c]/90 text-slate-200 hover:text-white border-white/15'
+              ? 'bg-[#16202c]/95 border-sky-400/60 shadow-sky-500/20 ring-1 ring-sky-400/40 text-sky-400 dark:bg-[#16202c]/95 dark:border-cyan-400/60 dark:text-cyan-300'
+              : 'bg-[#16202c]/90 text-slate-300 hover:text-white border-white/15'
           }`}
-          title="Ver ruta completa de la jornada y centrar"
+          title={isUserPanned ? "Centrar ruta (Actualmente alejado)" : "Ver ruta completa y centrar"}
         >
-          <Car className="h-4 w-4" />
+          <Car className={`h-4.5 w-4.5 transition-all ${
+            isUserPanned 
+              ? 'text-sky-400 dark:text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]' 
+              : 'text-slate-300'
+          }`} />
         </button>
 
         {/* Recenter on Live Tech GPS */}
