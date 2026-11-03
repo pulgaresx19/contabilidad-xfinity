@@ -228,8 +228,8 @@ export default function App() {
       {/* Main View Area */}
       <main className={`flex-1 min-h-0 w-full ${
         activeTab === 'today'
-          ? 'overflow-hidden flex flex-col px-3 pt-1 pb-1.5'
-          : 'overflow-y-auto px-3.5 py-3 pb-8 scrollbar-none'
+          ? 'overflow-hidden flex flex-col px-3 pt-1 pb-1'
+          : 'overflow-y-auto px-3.5 py-3 pb-6 scrollbar-none'
       }`}>
         <>
             {activeTab === 'today' && (

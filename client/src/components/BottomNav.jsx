@@ -10,10 +10,10 @@ export default function BottomNav({ activeTab, setActiveTab, pendingCount }) {
 
   return (
     <div 
-      className="shrink-0 z-40 w-full flex justify-center px-3.5 pt-1 select-none"
-      style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.5rem)' }}
+      className="shrink-0 z-40 w-full flex justify-center px-3 pt-0.5 select-none"
+      style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom, 0px) - 24px), 6px)' }}
     >
-      <nav className="bg-slate-900/95 border border-slate-800/90 shadow-2xl shadow-black/90 backdrop-blur-xl rounded-2xl sm:rounded-3xl px-2 sm:px-3 py-1.5 flex items-center gap-1 w-full max-w-[420px] justify-between">
+      <nav className="bg-slate-900/95 border border-slate-800/90 shadow-2xl shadow-black/90 backdrop-blur-xl rounded-2xl sm:rounded-3xl px-2 sm:px-3 py-1 flex items-center gap-1 w-full max-w-[420px] justify-between">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
