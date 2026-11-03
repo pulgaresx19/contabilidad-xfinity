@@ -175,12 +175,11 @@ export default function App() {
   const pendingCount = orders.filter(o => o.status === 'Pendiente').length;
 
   return (
-    <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center selection:bg-cyan-500 selection:text-slate-950 font-sans ${activeTab === 'today' ? 'h-screen max-h-screen overflow-hidden' : ''}`}>
-      <div className={`w-full max-w-md flex flex-col relative ${activeTab === 'today' ? 'h-full flex-1 min-h-0 overflow-hidden' : 'min-h-screen'}`}>
+    <div className="fixed inset-0 h-[100dvh] max-h-[100dvh] w-full bg-slate-950 text-slate-100 flex flex-col items-center overflow-hidden font-sans select-none selection:bg-cyan-500 selection:text-slate-950">
+      <div className="w-full max-w-md h-full flex flex-col min-h-0 overflow-hidden relative">
         {/* Top Mobile Header with Safe Area Inset to clear phone status bar / notch / dynamic island */}
         <header 
-          className="w-full bg-slate-900/90 border-b border-slate-800/80 sticky top-0 z-30 backdrop-blur-md shrink-0"
-          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 0.75rem)' }}
+          className="app-top-header w-full bg-slate-900/90 border-b border-slate-800/80 shrink-0 z-30 backdrop-blur-md"
         >
           <div className="w-full px-3.5 h-12 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -204,7 +203,7 @@ export default function App() {
             {/* Botón rápido Modo Claro / Modo Oscuro */}
             <button
               onClick={toggleTheme}
-              className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition active:scale-95 border border-slate-700/60"
+              className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition active:scale-95 border border-slate-700/60 cursor-pointer"
               title={actualTheme === 'dark' ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
               aria-label="Cambiar tema de la aplicación"
             >
@@ -217,7 +216,7 @@ export default function App() {
 
             <button
               onClick={() => setIsSettingsModalOpen(true)}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg transition"
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg transition cursor-pointer"
               title="Ajustes de Tarifas"
             >
               <Settings className="h-4 w-4" />
@@ -227,10 +226,10 @@ export default function App() {
       </header>
 
       {/* Main View Area */}
-      <main className={`flex-1 w-full ${
+      <main className={`flex-1 min-h-0 w-full ${
         activeTab === 'today'
-          ? 'min-h-0 pt-1.5 pb-[4.75rem] px-3.5 flex flex-col overflow-hidden'
-          : 'px-3.5 py-2.5 pb-24 overflow-y-auto'
+          ? 'overflow-hidden flex flex-col px-3 pt-1 pb-1.5'
+          : 'overflow-y-auto px-3.5 py-3 pb-8 scrollbar-none'
       }`}>
         <>
             {activeTab === 'today' && (
