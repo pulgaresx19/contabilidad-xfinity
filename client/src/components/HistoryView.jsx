@@ -168,23 +168,21 @@ ${jobLines}
 
   // Copy proof for single order dispute
   const copySingleJobClaim = (order) => {
-    let extraLine = '';
-    if (order.drop_footage > 300) {
-      const extraBlocks = Math.floor((order.drop_footage - 300) / 100);
-      if (extraBlocks > 0) extraLine += `\n📏 *Bono Metraje (>300 ft):* +$${extraBlocks * 25}`;
-    }
-    if (order.manual_adjustment && order.manual_adjustment !== 0) {
-      extraLine += `\n⚖️ *Ajuste Supervisor:* ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`} (${order.adjustment_reason || 'Inconsistencia'})`;
-    }
+    const hasDriveway = Boolean(
+      order.bore_type && (
+        order.bore_type.includes('DW') || 
+        order.bore_type.toLowerCase().includes('driveway') || 
+        order.bore_type === 'Y'
+      )
+    );
 
     const text = `📋 *COMPROBANTE DE TRABAJO - XFINITY*
 🔢 *Work Order #:* ${order.job_id}
 📅 *Fecha Ejecución:* ${order.work_date}
-📍 *Dirección:* ${order.address}, ${order.city}
-📏 *Metraje Instalado:* ${order.drop_footage} ft (${order.cable_type})${extraLine}
-🚧 *Bore:* ${order.bore_type && order.bore_type !== 'N' ? order.bore_type : 'Ninguno'}
+📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
+📏 *Pies / Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
+🚗 *Driveway:* ${hasDriveway ? 'Sí' : 'No'}
 📸 *Fotos de Evidencia:* ${order.photos_count || 0} archivada(s)
-💵 *Monto Total:* $${order.rate_calculated}
 ✅ *Estado:* ${order.status}`;
 
     navigator.clipboard.writeText(text);

@@ -12,6 +12,13 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
   const [previewPhoto, setPreviewPhoto] = useState(null);
 
   const isCancelled = order ? (order.status === 'No Realizado' || order.status === 'Cancelado') : false;
+  const hasDriveway = Boolean(
+    order?.bore_type && (
+      order.bore_type.includes('DW') || 
+      order.bore_type.toLowerCase().includes('driveway') || 
+      order.bore_type === 'Y'
+    )
+  );
 
   useEffect(() => {
     if (!isOpen || !order) return;
@@ -29,22 +36,21 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
 👷 *Técnico:* Javier (P0G1)
 ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})\n` : ''}📸 *Evidencia:* Constancia fotográfica adjunta`;
     } else {
-      // Generar texto inicial del reporte completado
-      const isDw = order.bore_type && order.bore_type.includes('DW');
-      const isSw = order.bore_type && order.bore_type.includes('SW');
-      const boreStr = isDw 
-        ? 'Driveway Bore (+$30)' 
-        : isSw 
-        ? 'Sidewalk Bore (SW)' 
-        : (order.bore_type && order.bore_type !== 'N' ? order.bore_type : 'Sin Perforación');
+      // Generar texto inicial del reporte completado (sin tarifas ni saldos)
+      const hasDriveway = Boolean(
+        order.bore_type && (
+          order.bore_type.includes('DW') || 
+          order.bore_type.toLowerCase().includes('driveway') || 
+          order.bore_type === 'Y'
+        )
+      );
 
       initialText = `📋 *REPORTE DE TRABAJO*
 📅 *Fecha:* ${order.work_date}
 🔢 *Orden #:* ${order.job_id}
 📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
-📏 *Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
-🚗 *Perforación / Bore:* ${boreStr}${order.drop_footage > 300 ? `\n⚡ *Metraje Extra (>300ft):* +$${Math.floor((order.drop_footage - 300) / 100) * 25}` : ''}${order.manual_adjustment ? `\n⚖️ *Ajuste Supervisor:* ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`} (${order.adjustment_reason || 'Bono/Descuento'})` : ''}
-💵 *Tarifa Total:* $${order.rate_calculated}
+📏 *Pies / Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
+🚗 *Driveway:* ${hasDriveway ? 'Sí' : 'No'}
 ✅ *Estado:* Completado y Verificado`;
     }
 
@@ -267,10 +273,12 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           </div>
           <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
             <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
-              {isCancelled ? 'Estado' : 'Tarifa'}
+              {isCancelled ? 'Estado' : 'Driveway'}
             </span>
-            <span className={`text-sm font-black font-mono ${isCancelled ? 'text-rose-400' : 'text-emerald-400'}`}>
-              {isCancelled ? 'No Realizado' : `$${order.rate_calculated || 100}`}
+            <span className={`text-sm font-black font-mono ${
+              isCancelled ? 'text-rose-400' : hasDriveway ? 'text-cyan-400' : 'text-slate-400'
+            }`}>
+              {isCancelled ? 'No Realizado' : hasDriveway ? 'Sí' : 'No'}
             </span>
           </div>
         </div>
@@ -278,23 +286,12 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         {/* 3. Cuerpo del Modal Scrollable */}
         <div className="p-4 overflow-y-auto space-y-3.5 flex-1 scrollbar-none bg-[#101722]">
           
-          {/* Detalles Técnicos Extra si aplican (Driveway / Ajustes) */}
-          {((order.bore_type && order.bore_type.includes('DW')) || (order.manual_adjustment && order.manual_adjustment !== 0)) && (
+          {/* Detalles Técnicos Extra si aplican (Driveway) */}
+          {hasDriveway && (
             <div className="bg-[#16202c] border border-white/5 rounded-2xl p-2.5 flex items-center gap-2 flex-wrap text-xs">
-              {order.bore_type && order.bore_type.includes('DW') && (
-                <span className="px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40 text-[10px] flex items-center gap-1 font-mono">
-                  🚗 Driveway Bore (+$30)
-                </span>
-              )}
-              {order.manual_adjustment && order.manual_adjustment !== 0 && (
-                <span className={`px-2 py-0.5 rounded-lg font-bold border text-[10px] font-mono ${
-                  order.manual_adjustment > 0
-                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                    : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                }`}>
-                  {order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`} {order.adjustment_reason || 'Ajuste'}
-                </span>
-              )}
+              <span className="px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40 text-[10px] flex items-center gap-1 font-mono">
+                🚗 Driveway Bore: Sí
+              </span>
             </div>
           )}
 

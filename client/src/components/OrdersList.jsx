@@ -28,12 +28,19 @@ export default function OrdersList({ orders, onOpenPhotos, onOrderUpdated, onDel
 
   // Copy WhatsApp message for supervisor
   const copyWhatsAppReport = (order) => {
+    const hasDriveway = Boolean(
+      order.bore_type && (
+        order.bore_type.includes('DW') || 
+        order.bore_type.toLowerCase().includes('driveway') || 
+        order.bore_type === 'Y'
+      )
+    );
     const text = `📋 *REPORTE DE TRABAJO*
 📅 *Fecha:* ${order.work_date}
 🔢 *Orden #:* ${order.job_id}
 📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
-📏 *Drop:* ${order.drop_footage} ft (${order.cable_type})${order.bore_type && order.bore_type !== 'N' ? `\n🛠️ *Bore:* ${order.bore_type}` : ''}
-💵 *Tarifa:* $${order.rate_calculated}
+📏 *Pies / Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
+🚗 *Driveway:* ${hasDriveway ? 'Sí' : 'No'}
 ✅ *Estado:* Completado y Verificado`;
 
     navigator.clipboard.writeText(text);

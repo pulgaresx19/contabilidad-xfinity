@@ -180,23 +180,22 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
   };
 
   const handleCopyReportDirect = async () => {
-    const isDw = order.bore_type && order.bore_type.includes('DW');
-    const isSw = order.bore_type && order.bore_type.includes('SW');
-    const boreStr = isDw 
-      ? 'Driveway Bore (+$30)' 
-      : isSw 
-      ? 'Sidewalk Bore (SW)' 
-      : (order.bore_type && order.bore_type !== 'N' ? order.bore_type : 'Sin Perforación');
+    const hasDriveway = Boolean(
+      order.bore_type && (
+        order.bore_type.includes('DW') || 
+        order.bore_type.toLowerCase().includes('driveway') || 
+        order.bore_type === 'Y'
+      )
+    );
 
     const text = `📋 *REPORTE DE TRABAJO*
 📅 *Fecha:* ${order.work_date}
 🔢 *Orden #:* ${order.job_id}
 📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
-📏 *Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
-🚗 *Perforación / Bore:* ${boreStr}${order.drop_footage > 300 ? `\n⚡ *Metraje Extra (>300ft):* +$${Math.floor((order.drop_footage - 300) / 100) * 25}` : ''}${order.manual_adjustment ? `\n⚖️ *Ajuste Supervisor:* ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`} (${order.adjustment_reason || 'Bono/Descuento'})` : ''}
+📏 *Pies / Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
+🚗 *Driveway:* ${hasDriveway ? 'Sí' : 'No'}
 📸 *Fotos:* ${workPhotosCount} evidencia(s)
-💵 *Tarifa Total:* $${order.rate_calculated}
-✅ *Estado:* ${order.status}`;
+✅ *Estado:* Completado y Verificado`;
 
     try {
       await navigator.clipboard.writeText(text);
