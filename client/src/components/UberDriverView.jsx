@@ -1491,7 +1491,8 @@ export default function UberDriverView({
       map.fitBounds(bounds, {
         padding: { top: 120, bottom: 280, left: 50, right: 50 },
         pitch: is3DMode ? 45 : 0,
-        duration: 800
+        duration: 800,
+        maxZoom: 16
       });
     }
   };
@@ -2098,15 +2099,11 @@ export default function UberDriverView({
         <button
           type="button"
           onClick={handleCenterOnRoute}
-          className={`w-10 h-10 rounded-full backdrop-blur-xl border flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer select-none ${
-            isUserPanned
-              ? 'bg-[#16202c]/95 border-sky-400/60 shadow-sky-500/20 ring-1 ring-sky-400/40 text-sky-400 dark:bg-[#16202c]/95 dark:border-cyan-400/60 dark:text-cyan-300'
-              : 'bg-[#16202c]/90 text-slate-300 hover:text-white border-white/15'
-          }`}
-          title={isUserPanned ? "Centrar ruta (Actualmente alejado)" : "Ver ruta completa y centrar"}
+          className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer select-none"
+          title={!isUserPanned ? "Modo Travesía activo (Centrado)" : "Enfocar ruta de travesía"}
         >
           <Car className={`h-4.5 w-4.5 transition-all ${
-            isUserPanned 
+            !isUserPanned 
               ? 'text-sky-400 dark:text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]' 
               : 'text-slate-300'
           }`} />
