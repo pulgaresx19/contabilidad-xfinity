@@ -493,6 +493,16 @@ html.light header {
   scrollbar-width: none;
 }
 
+/* Universal Mobile Safe Bounds for Modal Overlays & Cards */
+.modal-overlay-safe {
+  padding-top: max(env(safe-area-inset-top, 0px) + 16px, 1.25rem) !important;
+  padding-bottom: max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem) !important;
+}
+
+.modal-sheet-compact {
+  max-height: min(78dvh, 660px) !important;
+}
+
 /* Hide Netlify Badge & Drawer injection if present in DOM */
 netlify-drawer,
 iframe[src*="netlify"],

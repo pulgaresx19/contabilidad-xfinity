@@ -187,8 +187,20 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in">
-      <div className="bg-[#101722] border border-white/10 w-full max-w-sm sm:max-w-md rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden transition-all mx-auto text-white">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3.5 sm:p-4 animate-fade-in modal-overlay-safe"
+      style={{
+        paddingTop: 'max(env(safe-area-inset-top, 0px) + 16px, 1.25rem)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="bg-[#101722] border border-white/10 w-full max-w-sm sm:max-w-md rounded-3xl shadow-2xl flex flex-col max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact overflow-hidden transition-all mx-auto text-white"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Header Elegante y Centrado */}
         <div className="px-4 py-3 bg-white dark:bg-[#131d2b] border-b border-slate-200 dark:border-white/10 flex items-center justify-between shrink-0">

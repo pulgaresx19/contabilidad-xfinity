@@ -721,11 +721,23 @@ ${jobLines}
 
       {/* COMPONENTE SUPERPUESTO (MODAL DETALLADO DE LA SEMANA CON DISEÑO COCKPIT) */}
       {selectedWeekModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-white">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
+          style={{
+            paddingTop: 'max(env(safe-area-inset-top, 0px) + 16px, 1.25rem)',
+            paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedWeekModal(null);
+          }}
+        >
+          <div 
+            className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
             
             {/* Header del Modal */}
-            <div className="px-4 sm:px-5 py-3.5 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white dark:bg-slate-900/70 shrink-0">
+            <div className="px-4 sm:px-5 py-3 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white dark:bg-slate-900/70 shrink-0">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white font-bold shrink-0">
                   <FileText className="w-4 h-4" />
@@ -765,8 +777,8 @@ ${jobLines}
             </div>
 
             {/* KPI Bar de 3 Columnas Cockpit */}
-            <div className="grid grid-cols-3 gap-2 px-4 py-2.5 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
-              <div className="bg-[#16202c] border border-white/5 rounded-xl py-1.5 px-1">
+            <div className="grid grid-cols-3 gap-2 px-4 py-2 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
+              <div className="bg-[#16202c] border border-white/5 rounded-xl py-1 px-1">
                 <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Total Liquidar</span>
                 <span className={`text-xs sm:text-sm font-black font-mono leading-none ${
                   selectedWeekModal.isPaid ? 'text-emerald-400' : 'text-amber-400'
@@ -774,13 +786,13 @@ ${jobLines}
                   ${selectedWeekModal.totalEarnings.toFixed(2)}
                 </span>
               </div>
-              <div className="bg-[#16202c] border border-white/5 rounded-xl py-1.5 px-1">
+              <div className="bg-[#16202c] border border-white/5 rounded-xl py-1 px-1">
                 <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Metraje</span>
                 <span className="text-xs sm:text-sm font-black text-amber-300 font-mono leading-none">
                   {Math.round(selectedWeekModal.totalFootage)} ft
                 </span>
               </div>
-              <div className="bg-[#16202c] border border-white/5 rounded-xl py-1.5 px-1">
+              <div className="bg-[#16202c] border border-white/5 rounded-xl py-1 px-1">
                 <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Trabajos</span>
                 <span className="text-xs sm:text-sm font-black text-cyan-400 font-mono leading-none">
                   {selectedWeekModal.orders.length}
@@ -789,7 +801,7 @@ ${jobLines}
             </div>
 
             {/* Cuerpo del Modal con Scroll */}
-            <div className="p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0">
+            <div className="p-3.5 overflow-y-auto space-y-3 flex-1 min-h-0 scrollbar-none">
               
               {/* Acciones Rápidas: Auditoría / Confirmar Cobro */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1009,7 +1021,7 @@ ${jobLines}
             </div>
 
             {/* Footer Estandarizado Cockpit */}
-            <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-3 shrink-0">
+            <div className="px-4 py-2.5 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-3 shrink-0">
               <span className="text-[11px] text-slate-400 font-mono">
                 {selectedWeekModal.orders.length} órdenes registradas
               </span>

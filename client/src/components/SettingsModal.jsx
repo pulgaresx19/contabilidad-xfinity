@@ -96,17 +96,21 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
+      style={{
+        paddingTop: 'max(env(safe-area-inset-top, 0px) + 16px, 1.25rem)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div 
-        className="bg-[#101722] border border-white/10 w-full max-w-sm sm:max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-white transition-all"
+        className="bg-[#101722] border border-white/10 w-full max-w-sm sm:max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact text-white transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Unificado (Estilo Cockpit idéntico a Evidencias y Compartir) */}
-        <div className="px-4 sm:px-5 py-3.5 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white dark:bg-slate-900/70 shrink-0">
+        <div className="px-4 sm:px-5 py-3 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white dark:bg-slate-900/70 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 shrink-0 shadow-md shadow-cyan-500/20">
               <Settings className="h-4 w-4 stroke-[2.5]" />
@@ -131,8 +135,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
           </button>
         </div>
 
-        {/* Form con scroll suave */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-3.5 overflow-y-auto flex-1 scrollbar-none">
+        {/* Form con scroll suave y altura compacta */}
+        <form onSubmit={handleSubmit} className="p-3.5 sm:p-4 space-y-3 overflow-y-auto flex-1 scrollbar-none">
           {/* APARIENCIA / MODO CLARO Y OSCURO */}
           <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
             <div className="flex items-center justify-between">
