@@ -158,10 +158,25 @@ export default function UberDriverView({
   const routeCacheRef = useRef(new Map());
 
   const [userLocation, setUserLocation] = useState(null);
+  const userLocationRef = useRef(userLocation);
+  userLocationRef.current = userLocation;
+
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [drawerState, setDrawerState] = useState('peek');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [is3DMode, setIs3DMode] = useState(true);
+
+  // Free Exploration Mode: User can pan/zoom anywhere freely without being snapped back
+  const [isUserPanned, setIsUserPanned] = useState(false);
+  const userHasPannedMapRef = useRef(false);
+  const framedOrderIdRef = useRef(null);
+
+  // Reset free exploration and framed order when activeDate changes
+  useEffect(() => {
+    userHasPannedMapRef.current = false;
+    setIsUserPanned(false);
+    framedOrderIdRef.current = null;
+  }, [activeDate]);
 
   // Date picker ref for direct calendar jump
   const dateInputRef = useRef(null);
@@ -790,6 +805,9 @@ export default function UberDriverView({
       }
     }
 
+    userHasPannedMapRef.current = false;
+    setIsUserPanned(false);
+    framedOrderIdRef.current = target.id;
     setSelectedOrder(target);
 
     // INSTANT ROUTE RENDER: Check cache right now (0 ms!)
@@ -1167,6 +1185,20 @@ export default function UberDriverView({
       attributionControl: false
     });
 
+    const handleUserInteraction = (e) => {
+      // If user directly touched, dragged, or zoomed (not a programmatic camera event)
+      if (!e || e.originalEvent) {
+        userHasPannedMapRef.current = true;
+        setIsUserPanned(true);
+      }
+    };
+
+    map.on('dragstart', handleUserInteraction);
+    map.on('zoomstart', handleUserInteraction);
+    map.on('rotatestart', handleUserInteraction);
+    map.on('pitchstart', handleUserInteraction);
+    map.on('touchstart', handleUserInteraction);
+
     map.on('load', () => {
       setupRouteLayers(map);
     });
@@ -1178,6 +1210,11 @@ export default function UberDriverView({
     mapInstanceRef.current = map;
 
     return () => {
+      map.off('dragstart', handleUserInteraction);
+      map.off('zoomstart', handleUserInteraction);
+      map.off('rotatestart', handleUserInteraction);
+      map.off('pitchstart', handleUserInteraction);
+      map.off('touchstart', handleUserInteraction);
       travesiaBadgeMarkersRef.current.forEach(m => m.remove());
       travesiaBadgeMarkersRef.current = [];
       map.remove();
@@ -1386,30 +1423,45 @@ export default function UberDriverView({
       setTravesiaSummary({ totalMiles: 0, totalMinutes: 0 });
     }
 
-    // Camera Framing with 3D perspective
-    if (activeTarget && activeTarget.latitude && activeTarget.longitude) {
-      const activeBounds = new mapboxgl.LngLatBounds();
-      activeBounds.extend(startCoords);
-      activeBounds.extend([activeTarget.longitude, activeTarget.latitude]);
+    // Camera Framing with 3D perspective - ONLY when NOT in free exploration and order target changed or initial load
+    const isNewOrderTarget = framedOrderIdRef.current !== activeTarget?.id;
+    const shouldFrameCamera = !userHasPannedMapRef.current && isNewOrderTarget;
 
-      map.fitBounds(activeBounds, {
-        padding: { top: 120, bottom: 280, left: 50, right: 50 },
-        pitch: is3DMode ? 48 : 0,
-        maxZoom: 15.5,
-        duration: 800
-      });
-    } else if (startCoords) {
-      map.flyTo({
-        center: startCoords,
-        zoom: 13,
-        pitch: is3DMode ? 45 : 0,
-        essential: true
-      });
+    if (shouldFrameCamera) {
+      framedOrderIdRef.current = activeTarget?.id;
+      if (activeTarget && activeTarget.latitude && activeTarget.longitude) {
+        const activeBounds = new mapboxgl.LngLatBounds();
+        activeBounds.extend(startCoords);
+        activeBounds.extend([activeTarget.longitude, activeTarget.latitude]);
+
+        map.fitBounds(activeBounds, {
+          padding: { top: 120, bottom: 280, left: 50, right: 50 },
+          pitch: is3DMode ? 48 : 0,
+          maxZoom: 15.5,
+          duration: 800
+        });
+      } else if (startCoords) {
+        map.flyTo({
+          center: startCoords,
+          zoom: 13,
+          pitch: is3DMode ? 45 : 0,
+          essential: true
+        });
+      }
     }
-  }, [activeOrders, selectedOrder?.id, selectedOrder?.route_order, selectedOrder?.latitude, selectedOrder?.longitude, userLocation, is3DMode, mapTheme, selectedRouteIdx]);
+  }, [activeOrders, selectedOrder?.id, selectedOrder?.route_order, selectedOrder?.latitude, selectedOrder?.longitude, is3DMode, mapTheme, selectedRouteIdx, Boolean(userLocation)]);
+
+  // Smoothly move technician GPS vehicle puck on position updates without re-creating markers or moving camera
+  useEffect(() => {
+    if (userMarkerRef.current && userLocation?.lng && userLocation?.lat) {
+      userMarkerRef.current.setLngLat([userLocation.lng, userLocation.lat]);
+    }
+  }, [userLocation?.lat, userLocation?.lng]);
 
   // Center on current technician location
   const handleCenterOnMe = () => {
+    userHasPannedMapRef.current = false;
+    setIsUserPanned(false);
     const map = mapInstanceRef.current;
     if (!map) return;
     const target = userLocation ? [userLocation.lng, userLocation.lat] : DEFAULT_LNG_LAT;
@@ -1424,6 +1476,8 @@ export default function UberDriverView({
 
   // Center on active route overview
   const handleCenterOnRoute = () => {
+    userHasPannedMapRef.current = false;
+    setIsUserPanned(false);
     const map = mapInstanceRef.current;
     if (!map) return;
     const bounds = new mapboxgl.LngLatBounds();
@@ -1437,7 +1491,7 @@ export default function UberDriverView({
       map.fitBounds(bounds, {
         padding: { top: 120, bottom: 280, left: 50, right: 50 },
         pitch: is3DMode ? 45 : 0,
-        duration: 1000
+        duration: 800
       });
     }
   };
@@ -1980,6 +2034,21 @@ export default function UberDriverView({
         </div>
       </div>
 
+      {/* 3.1 FLOATING RE-CENTER BUTTON (APPEARS WHEN USER MOVES MAP FREELY) */}
+      {isUserPanned && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 pointer-events-auto animate-in fade-in zoom-in-95 duration-200">
+          <button
+            type="button"
+            onClick={handleCenterOnRoute}
+            className="bg-[#007AFF] hover:bg-[#0066d6] text-white px-3.5 py-1.5 rounded-full shadow-2xl flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 border border-white/30 backdrop-blur-md cursor-pointer select-none"
+            title="Centrar en el trabajo seleccionado y ruta"
+          >
+            <Navigation className="h-3.5 w-3.5 fill-white stroke-[2.5]" />
+            <span>Re-centrar</span>
+          </button>
+        </div>
+      )}
+
       {/* 4. RIGHT FLOATING CONTROLS: THEME (TOP) + 3D/2D (BELOW) + CENTRAR EN RUTA + CENTRAR EN GPS */}
       <div className="absolute right-3 top-20 z-20 flex flex-col gap-2 pointer-events-auto">
         {/* 1. Toggle Theme Popover (Top) */}
@@ -2042,17 +2111,23 @@ export default function UberDriverView({
 
         {/* Recenter on Route Overview */}
         <button
+          type="button"
           onClick={handleCenterOnRoute}
-          className="w-10 h-10 rounded-full bg-[#16202c]/90 backdrop-blur-xl border border-white/15 text-slate-200 hover:text-white flex items-center justify-center shadow-lg active:scale-95 transition"
-          title="Ver ruta completa de la jornada"
+          className={`w-10 h-10 rounded-full backdrop-blur-xl border flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer ${
+            isUserPanned
+              ? 'bg-[#007AFF] text-white border-white/40 ring-2 ring-[#007AFF]/50'
+              : 'bg-[#16202c]/90 text-slate-200 hover:text-white border-white/15'
+          }`}
+          title="Ver ruta completa de la jornada y centrar"
         >
           <Car className="h-4 w-4" />
         </button>
 
         {/* Recenter on Live Tech GPS */}
         <button
+          type="button"
           onClick={handleCenterOnMe}
-          className="w-10 h-10 rounded-full bg-[#16202c]/90 backdrop-blur-xl border border-white/15 text-[#007AFF] hover:text-blue-400 flex items-center justify-center shadow-lg active:scale-95 transition"
+          className="w-10 h-10 rounded-full bg-[#16202c]/90 backdrop-blur-xl border border-white/15 text-[#007AFF] hover:text-blue-400 flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer"
           title="Centrar en mi ubicación GPS"
         >
           <Navigation className="h-4 w-4 fill-[#007AFF]/25" />
