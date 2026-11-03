@@ -725,29 +725,29 @@ ${jobLines}
           <div className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-white">
             
             {/* Header del Modal */}
-            <div className="px-4 sm:px-5 py-3.5 border-b border-white/10 flex items-center justify-between bg-slate-900/70 shrink-0">
+            <div className="px-4 sm:px-5 py-3.5 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white dark:bg-slate-900/70 shrink-0">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white font-bold shrink-0">
                   <FileText className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono truncate">
+                    <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider font-mono truncate">
                       Semana {selectedWeekModal.displayLabel || selectedWeekModal.key}
                     </h3>
                     {selectedWeekModal.isPaid ? (
-                      <span className="text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full font-black flex items-center gap-1 shrink-0">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full font-black flex items-center gap-1 shrink-0">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         Cobrado
                       </span>
                     ) : (
-                      <span className="text-[10px] text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full font-black flex items-center gap-1 shrink-0">
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full font-black flex items-center gap-1 shrink-0">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                         Pendiente
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] text-slate-400 font-mono truncate">
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 font-mono font-semibold truncate">
                     {selectedWeekModal.startDate} al {selectedWeekModal.endDate}
                   </p>
                 </div>
@@ -757,7 +757,7 @@ ${jobLines}
               <button
                 type="button"
                 onClick={() => setSelectedWeekModal(null)}
-                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition shrink-0 ml-2"
+                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition shrink-0 ml-2"
                 title="Cerrar ventana"
               >
                 <X className="w-4 h-4" />

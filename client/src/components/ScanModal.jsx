@@ -297,16 +297,16 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
         onClick={(e) => e.stopPropagation()}
       >
         {/* 1. Header Cockpit */}
-        <div className="px-4 sm:px-5 py-3.5 border-b border-white/10 flex items-center justify-between bg-slate-900/70 shrink-0">
+        <div className="px-4 sm:px-5 py-3.5 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white dark:bg-slate-900/70 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 shrink-0 shadow-md shadow-cyan-500/20">
               <Camera className="h-4 w-4 stroke-[2.5]" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm font-black text-white truncate tracking-wide">
+              <h3 className="text-sm font-black text-slate-900 dark:text-white truncate tracking-wide">
                 Escanear Hoja de Despacho
               </h3>
-              <p className="text-[10.5px] text-slate-400 font-mono truncate">
+              <p className="text-[10.5px] text-slate-600 dark:text-slate-400 font-mono font-semibold truncate">
                 OCR automático y lectura de órdenes
               </p>
             </div>

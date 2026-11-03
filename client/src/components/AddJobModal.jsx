@@ -191,16 +191,16 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
       <div className="bg-[#101722] border border-white/10 w-full max-w-sm sm:max-w-md rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden transition-all mx-auto text-white">
         
         {/* Header Elegante y Centrado */}
-        <div className="px-4 py-3 bg-[#131d2b] border-b border-white/10 flex items-center justify-between shrink-0">
+        <div className="px-4 py-3 bg-white dark:bg-[#131d2b] border-b border-slate-200 dark:border-white/10 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-2xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center shadow-xs">
+            <div className="w-8 h-8 rounded-2xl bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 flex items-center justify-center shadow-xs">
               <Plus className="h-4 w-4 stroke-[3]" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-white leading-tight">
+              <h3 className="text-sm font-black text-slate-900 dark:text-white leading-tight">
                 Añadir Trabajo
               </h3>
-              <p className="text-[10px] text-slate-400 font-medium">
+              <p className="text-[10px] text-slate-600 dark:text-slate-400 font-semibold">
                 Ingreso rápido de orden de trabajo
               </p>
             </div>

@@ -2697,16 +2697,16 @@ export default function UberDriverView({
         >
           <div className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-white">
             {/* Header */}
-            <div className="px-4 sm:px-5 py-3.5 border-b border-white/10 flex items-center justify-between bg-slate-900/70 shrink-0">
+            <div className="px-4 sm:px-5 py-3.5 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white dark:bg-slate-900/70 shrink-0">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 shrink-0 shadow-md shadow-cyan-500/20">
                   <Route className="h-4 w-4 stroke-[2.5]" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-sm font-black text-white truncate">
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white truncate">
                     Travesía y Trabajos del Día
                   </h3>
-                  <p className="text-[10.5px] text-slate-400 font-medium truncate">
+                  <p className="text-[10.5px] text-slate-600 dark:text-slate-400 font-semibold truncate">
                     {formatDateFriendly(activeDate)} • {tempOrdersList.length} {tempOrdersList.length === 1 ? 'parada' : 'paradas'}
                     {travesiaSummary.totalMinutes > 0 && ` • 🚗 ${formatRouteDuration(travesiaSummary.totalMinutes, false)} (${travesiaSummary.totalMiles.toFixed(1)} mi)`}
                   </p>
@@ -2715,7 +2715,7 @@ export default function UberDriverView({
               <button
                 type="button"
                 onClick={() => setShowDayJobsOverlay(false)}
-                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition cursor-pointer"
                 title="Cerrar"
               >
                 <X className="h-4 w-4" />

@@ -98,14 +98,14 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
       <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header con botón Cruz */}
-        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-950/70">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-cyan-500/10 text-cyan-400 rounded-xl">
+            <div className="p-2 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 rounded-xl">
               <Settings className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="font-bold text-white text-base">Ajustes & Semanario</h3>
-              <p className="text-[11px] text-slate-400">Tarifas y día de cierre de tu compañía</p>
+              <h3 className="font-bold text-slate-900 dark:text-white text-base">Ajustes & Semanario</h3>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold">Tarifas y día de cierre de tu compañía</p>
             </div>
           </div>
 

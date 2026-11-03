@@ -168,25 +168,25 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Cockpit */}
-        <div className="px-4 sm:px-5 py-3.5 border-b border-white/10 flex items-center justify-between bg-slate-900/70 shrink-0">
+        <div className="px-4 sm:px-5 py-3.5 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white dark:bg-slate-900/70 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white font-bold shrink-0">
               <SlidersHorizontal className="w-4 h-4" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono truncate">
+                <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider font-mono truncate">
                   Editar Job #{order.job_id}
                 </h3>
                 <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
-                  formData.status === 'Completado' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                  : formData.status === 'No Realizado' ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                  : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                  formData.status === 'Completado' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                  : formData.status === 'No Realizado' ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
                 }`}>
                   {formData.status}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-mono truncate">
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 font-mono font-semibold truncate">
                 Modificar tarifa, metraje o dirección
               </p>
             </div>

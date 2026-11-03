@@ -223,7 +223,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         onClick={(e) => e.stopPropagation()}
       >
         {/* 1. Header (Misma estructura idéntica de Travesía del Día y PhotoModal) */}
-        <div className="px-4 sm:px-5 py-3.5 border-b border-white/10 flex items-center justify-between bg-slate-900/70 shrink-0">
+        <div className="px-4 sm:px-5 py-3.5 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white dark:bg-slate-900/70 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-md ${
               isCancelled
@@ -233,10 +233,10 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
               {isCancelled ? <AlertTriangle className="h-4 w-4 stroke-[2.5]" /> : <Share2 className="h-4 w-4 stroke-[2.5]" />}
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm font-black text-white truncate">
+              <h3 className="text-sm font-black text-slate-900 dark:text-white truncate">
                 {isCancelled ? 'Constancia No Realizado' : 'Reportar por WhatsApp'}
               </h3>
-              <p className="text-[10.5px] text-slate-400 font-medium truncate">
+              <p className="text-[10.5px] text-slate-600 dark:text-slate-400 font-semibold truncate">
                 #{order.job_id} • {order.address}{order.city ? `, ${order.city}` : ''}
               </p>
             </div>
@@ -244,7 +244,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+            className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition cursor-pointer"
             title="Cerrar"
           >
             <X className="h-4 w-4" />
