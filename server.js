@@ -361,45 +361,77 @@ function normalizeAddrKey(addr) {
   return (addr || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-// High-accuracy Smart Scanner with Sharp image preprocessing and row-level Tesseract OCR
+// High-accuracy Smart Scanner with Sharp image preprocessing, dynamic row detection and row-level Tesseract OCR
 async function smartScanDispatchSheet(imagePath, defaultDate, defaultTech) {
-  const meta = await sharp(imagePath).metadata();
+  // Always apply .rotate() to respect camera EXIF orientation
+  const rotated = sharp(imagePath).rotate();
+  const meta = await rotated.metadata();
   const worker = await Tesseract.createWorker('eng');
 
   const ordersList = [];
   const allLines = [];
 
-  // Pass 1: Row-Sliced Pass for table strips or low height images (< 450px)
-  if (meta.height < 450) {
-    const estRows = Math.round(meta.height / 15.1);
-    const rowCount = Math.max(1, estRows);
-    const rowH = meta.height / rowCount;
+  const w = meta.width;
+  const h = meta.height;
+
+  // Pass 1: Dynamic Row Detection for table strips / screenshots (< 800px)
+  if (h < 800) {
+    const rawBuf = await rotated.clone().grayscale().raw().toBuffer();
+    const rowDarkness = new Float32Array(h);
+    for (let y = 0; y < h; y++) {
+      let sum = 0;
+      for (let x = 0; x < w; x++) sum += rawBuf[y * w + x];
+      rowDarkness[y] = sum / w;
+    }
+
+    const lineCandidates = [];
+    for (let y = 1; y < h - 1; y++) {
+      if (rowDarkness[y] < rowDarkness[y - 1] && rowDarkness[y] <= rowDarkness[y + 1] && rowDarkness[y] < 225) {
+        lineCandidates.push(y);
+      }
+    }
+
+    const filtered = [];
+    for (const y of lineCandidates) {
+      if (filtered.length === 0 || y - filtered[filtered.length - 1] > 10) filtered.push(y);
+    }
+
+    let borders = [0, ...filtered];
+    if (h - borders[borders.length - 1] > 10) borders.push(h);
+
+    if (borders.length > 2 && borders[1] - borders[0] < 10) borders.shift();
+    if (borders.length > 2 && borders[borders.length - 1] - borders[borders.length - 2] < 10) borders.pop();
 
     await worker.setParameters({ tessedit_pageseg_mode: 7 }); // Single text line mode
 
-    for (let r = 0; r < rowCount; r++) {
-      const top = Math.round(r * rowH);
-      const h = Math.round(rowH);
+    for (let i = 0; i < borders.length - 1; i++) {
+      const top = Math.max(0, borders[i]);
+      const sliceH = Math.min(h - top, borders[i + 1] - top);
+      if (sliceH < 10) continue;
 
-      const rowBuf = await sharp(imagePath)
-        .extract({ left: 0, top, width: meta.width, height: h })
-        .resize({ width: meta.width * 4, height: h * 4, kernel: 'lanczos3' })
+      const sliceBuf = await rotated.clone()
+        .extract({ left: 0, top, width: w, height: sliceH })
+        .resize({ width: w * 4, height: sliceH * 4, kernel: 'lanczos3' })
         .grayscale()
+        .sharpen()
         .normalize()
+        .extend({ top: 8, bottom: 8, left: 8, right: 8, background: { r: 255, g: 255, b: 255 } })
         .toBuffer();
 
-      const rowRes = await worker.recognize(rowBuf);
-      const rowLine = rowRes.data.text.trim();
-      if (rowLine) allLines.push(rowLine);
-      const parsed = parseDispatchLine(rowLine, defaultDate, defaultTech);
-      if (parsed) ordersList.push(parsed);
+      const res = await worker.recognize(sliceBuf);
+      let line = (res.data.text || '').trim();
+      if (line) {
+        allLines.push(line);
+        const parsed = parseDispatchLine(line, defaultDate, defaultTech);
+        if (parsed) ordersList.push(parsed);
+      }
     }
   }
 
-  // Pass 2: Whole-image High-Resolution Pass (for general camera photos or fallback)
-  if (ordersList.length === 0 || meta.height >= 400) {
-    const fullBuf = await sharp(imagePath)
-      .resize({ width: Math.max(2500, meta.width * 2.5), kernel: 'lanczos3' })
+  // Pass 2: Whole-image High-Resolution Pass (for general camera photos, full sheets, or when Pass 1 found 0)
+  if (ordersList.length === 0 || h >= 400) {
+    const fullBuf = await rotated.clone()
+      .resize({ width: Math.min(3000, Math.max(2000, w * 2)), kernel: 'lanczos3' })
       .grayscale()
       .normalize()
       .toBuffer();
@@ -947,7 +979,7 @@ app.delete('/api/orders/:id', (req, res) => {
 });
 
 // 6. Photo upload for an order
-app.post('/api/orders/:id/photos', upload.array('photos', 10), (req, res) => {
+app.post('/api/orders/:id/photos', upload.array('photos', 10), async (req, res) => {
   try {
     const orderId = req.params.id;
     const category = req.body.category || 'General';
@@ -959,6 +991,22 @@ app.post('/api/orders/:id/photos', upload.array('photos', 10), (req, res) => {
     `);
 
     for (const file of req.files) {
+      // Backend auto-compression with sharp: guarantees every stored photo stays crisp and lightweight (~200-350KB)
+      const filePath = path.join(uploadsDir, file.filename);
+      try {
+        const meta = await sharp(filePath).metadata();
+        if ((meta.width && meta.width > 1600) || (meta.height && meta.height > 1600) || file.size > 500 * 1024) {
+          const tempPath = filePath + '.opt.jpg';
+          await sharp(filePath)
+            .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 80, mozjpeg: true })
+            .toFile(tempPath);
+          fs.renameSync(tempPath, filePath);
+        }
+      } catch (sharpErr) {
+        // Fallback silently if format isn't supported by sharp
+      }
+
       const result = stmt.run(orderId, file.filename, file.originalname, category);
       inserted.push({
         id: result.lastInsertRowid,
@@ -1547,7 +1595,8 @@ app.post('/api/dispatch-sheets/scan', (req, res, next) => {
     if (!mainFile) return res.status(400).json({ error: 'No se subió ninguna foto de hoja de despacho' });
 
     const ocrFile = files.find(f => f.fieldname === 'ocrPhoto');
-    const ocrPath = ocrFile ? ocrFile.path : mainFile.path;
+    // Always use original mainFile for pristine Sharp Libvips OCR processing
+    const ocrPath = mainFile.path;
 
     const sheetDate = req.body.sheetDate || req.body.sheet_date || new Date().toISOString().split('T')[0];
     const techId = req.body.techId || req.body.tech_id || 'Javier (P0G1)';

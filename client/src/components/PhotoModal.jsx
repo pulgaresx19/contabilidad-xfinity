@@ -8,10 +8,12 @@ import ShareReportModal from './ShareReportModal';
 import { stampPhotoWithWatermark } from '../utils/watermark';
 
 const PHOTO_STEPS = [
-  { id: 'Casa/Ground Block', label: 'Casa / Entrada', short: 'Casa', icon: '🏠' },
-  { id: 'Terreno/Ruta', label: 'Terreno / Zanja', short: 'Terreno', icon: '🌱' },
-  { id: 'Trabajo Terminado', label: 'Finalizado', short: 'Finalizado', icon: '✨' },
-  { id: 'Pedestal/Tap', label: 'Pedestal / Tap', short: 'Pedestal', icon: '⚡' },
+  { id: 'Casa', label: 'Casa / Entrada', short: 'Casa', icon: '🏠' },
+  { id: 'Terreno', label: 'Terreno / Ruta', short: 'Terreno', icon: '🌱' },
+  { id: 'Profundidad', label: 'Profundidad de Zanja', short: 'Profundidad', icon: '📏' },
+  { id: 'Finalizado', label: 'Trabajo Finalizado', short: 'Finalizado', icon: '✨' },
+  { id: 'Pedestal', label: 'Pedestal / Tap', short: 'Pedestal', icon: '⚡' },
+  { id: 'Atrás', label: 'Patio de Atrás', short: 'Atrás', icon: '🏡' },
   { id: 'General', label: 'General / Extra', short: 'Extra', icon: '📷' }
 ];
 
@@ -26,7 +28,7 @@ const QUICK_CANCEL_REASONS = [
 
 export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
   const [uploading, setUploading] = useState(false);
-  const [category, setCategory] = useState('Casa/Ground Block');
+  const [category, setCategory] = useState('Casa');
   const [autoAdvance, setAutoAdvance] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState(null);
@@ -40,6 +42,12 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
   const cancelPromptRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setCategory('Casa');
+    }
+  }, [isOpen, order?.id]);
 
   useEffect(() => {
     if (showCancelPrompt && cancelPromptRef.current) {
@@ -91,10 +99,8 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
         // Auto-avanzar al siguiente paso si está habilitado
         if (autoAdvance) {
           const currentIdx = PHOTO_STEPS.findIndex(s => s.id === category);
-          if (currentIdx !== -1 && currentIdx < PHOTO_STEPS.length - 2) {
+          if (currentIdx !== -1 && currentIdx < PHOTO_STEPS.length - 1) {
             setCategory(PHOTO_STEPS[currentIdx + 1].id);
-          } else if (currentIdx === PHOTO_STEPS.length - 2) {
-            setCategory('General');
           }
         }
       } else {
@@ -323,7 +329,13 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none flex-1 py-0.5">
             {PHOTO_STEPS.map((step) => {
               const isSelected = category === step.id;
-              const hasPhotos = workPhotos.some(p => p.category === step.id);
+              const hasPhotos = workPhotos.some(p => 
+                p.category === step.id || 
+                (step.id === 'Casa' && p.category === 'Casa/Ground Block') || 
+                (step.id === 'Terreno' && p.category === 'Terreno/Ruta') || 
+                (step.id === 'Finalizado' && p.category === 'Trabajo Terminado') || 
+                (step.id === 'Pedestal' && p.category === 'Pedestal/Tap')
+              );
               return (
                 <button
                   key={step.id}

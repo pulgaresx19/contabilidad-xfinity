@@ -271,8 +271,15 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
 
   // Clean pipes and noise from OCR table cells
   cleanLine = cleanLine.replace(/[|~_\[\]]+/g, ' ');
+  // Normalize OCR symbols misread as leading digit for 6-digit job ID:
+  cleanLine = cleanLine.replace(/£(\d{5})\b/g, (m, p) => '8' + p);
+  cleanLine = cleanLine.replace(/&(\d{5})\b/g, (m, p) => '8' + p);
+  cleanLine = cleanLine.replace(/\bB(\d{5})\b/g, (m, p) => '8' + p);
+  cleanLine = cleanLine.replace(/\bS(\d{5})\b/g, (m, p) => '5' + p);
   // Split merged 6-digit Job ID and street house number (e.g. 72061223608 -> 720612 23608)
-  cleanLine = cleanLine.replace(/\b([5-9]\d{5})(\d{1,5})\s+([A-Za-z])/g, '$1 $2 $3');
+  cleanLine = cleanLine.replace(/\b([5-9]\d{5})[1|]?(\d{1,5})\s+([A-Za-z])/g, '$1 $2 $3');
+  // Handle Mype: or Nype: -> Type:
+  cleanLine = cleanLine.replace(/([0-9.]+)[A-Za-z]{1,2}ype:/gi, '$1 / Type:');
   // If OCR read table border | before job ID as 1 (e.g. 1833906 121935 -> 833906 21935)
   cleanLine = cleanLine.replace(/\b1([5-9]\d{5})\s+1?(\d{1,5})\s+/g, '$1 $2 ');
   // Fix OCR artifacts like 4A0 -> 40
@@ -301,7 +308,7 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
 
   // Detect Tech ID
   let techId = defaultTech || 'Javier (P0G1)';
-  const techMatch = cleanLine.match(/([A-Z0-9_\s-]+\(P[0-9A-Z]{3}\))/i) || cleanLine.match(/(OSDENINY\s*\([^)]+\))/i);
+  const techMatch = cleanLine.match(/([A-Za-z\s-]+?\([A-Za-z0-9]+\))/i) || cleanLine.match(/(OSDENINY\s*\([^)]+\))/i);
   if (techMatch) techId = techMatch[1].trim();
 
   // Detect Job ID (6 digits, range 500000 - 999999)
@@ -364,7 +371,7 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
 
   // Drop Footage
   let dropFootage = 100;
-  const dropMatch = postJobText.match(/(?:DROP|DR0P|DR0|JR0|0ROP|OROP)[:\s->.]*([0-9\s.,¢]+?)(?:\/|Type|BORE|TEMP|$)/i);
+  const dropMatch = postJobText.match(/(?:DROP|DR0P|DR0|JR0|0ROP|OROP)[:\s->.]*([0-9]+(?:[.,\s]\d+)?)/i);
   if (dropMatch) {
     let clean = dropMatch[1].trim()
       .replace(/¢/g, '0')
