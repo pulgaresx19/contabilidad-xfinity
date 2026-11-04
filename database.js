@@ -371,7 +371,7 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
 
   // Drop Footage
   let dropFootage = 100;
-  const dropMatch = postJobText.match(/(?:DROP|DR0P|DR0|JR0|0ROP|OROP)[:\s->.]*([0-9]+(?:[.,\s]\d+)?)/i);
+  const dropMatch = postJobText.match(/(?:DR[O0]{1,2}P|DR[0O]|JR[0O]|[0O]R[0O]P|DROP)[:\s->.]*([0-9]+(?:[.,\s]\d+)?)/i);
   if (dropMatch) {
     let clean = dropMatch[1].trim()
       .replace(/¢/g, '0')
@@ -392,15 +392,15 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
 
   // Cable Type
   let cableType = 'RG-6';
-  if (/RG[- ]?11|RG[- ]?M\b|RG[- ]?II\b/i.test(postJobText)) {
+  if (/RG[- ]?(?:11|M\b|II\b|1[1lI])/i.test(postJobText)) {
     cableType = 'RG-11';
   }
 
   // Bore Type
   let boreType = 'N';
-  if (/BORE[:\s]*(?:DW|DV)[-:\s/]*1/i.test(postJobText) || /\b(?:DW|DV)[-:\s/]*1\b/i.test(postJobText)) {
+  if (/(?:BORE[:\s]*)?(?:DW|DV)[-:\s/.]*1/i.test(postJobText) || /\b(?:DW|DV)[-:\s/.]*1\b/i.test(postJobText)) {
     boreType = 'DW:1';
-  } else if (/BORE[:\s]*(?:SW|SV)[-:\s/]*1/i.test(postJobText) || /\b(?:SW|SV)[-:\s/]*1\b/i.test(postJobText) || /BORE[:\s]*(?:SW|SV)\b/i.test(postJobText)) {
+  } else if (/(?:BORE[:\s]*)?(?:SW|SV)[-:\s/.]*1/i.test(postJobText) || /\b(?:SW|SV)[-:\s/.]*1\b/i.test(postJobText) || /BORE[:\s]*(?:SW|SV)\b/i.test(postJobText)) {
     boreType = 'SW:1';
   }
 

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { getLocalDateStr } from '../utils/dateUtils';
 import { preprocessImageForOcr } from '../services/imageUtils';
+import { recognizeDispatchSheet } from '../services/ocrService';
 
 export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech }) {
   const [sheetDate, setSheetDate] = useState(() => getLocalDateStr());
@@ -15,6 +16,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
   // Photo & OCR state
   const [previewUrl, setPreviewUrl] = useState(null);
   const [scanning, setScanning] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
   const [extractedOrders, setExtractedOrders] = useState([]);
   const [rawOcrText, setRawOcrText] = useState('');
   const [showRawText, setShowRawText] = useState(false);
@@ -69,88 +71,101 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
     setPreviewUrl(URL.createObjectURL(file));
     setScanning(true);
+    setOcrProgress(5);
     setMessage(null);
     setExtractedOrders([]);
 
-    let ocrBlob = null;
-    try {
-      const preproc = await preprocessImageForOcr(file);
-      if (preproc && preproc.blob) {
-        ocrBlob = preproc.blob;
-      }
-    } catch (procErr) {
-      console.warn('Preprocessing error (using original):', procErr);
-    }
+    let ordersFound = [];
+    let extractedText = '';
 
-    const formData = new FormData();
-    formData.append('sheetPhoto', file);
-    formData.append('sheet_photo', file);
-    if (ocrBlob) {
-      formData.append('ocrPhoto', ocrBlob, 'ocr.png');
-    }
-    formData.append('sheetDate', sheetDate);
-    formData.append('sheet_date', sheetDate);
-    formData.append('techId', techId);
-
+    // 1. Try server-side OCR first (Node.js + Sharp Libvips)
     try {
+      const formData = new FormData();
+      formData.append('sheetPhoto', file);
+      formData.append('sheet_photo', file);
+      formData.append('sheetDate', sheetDate);
+      formData.append('sheet_date', sheetDate);
+      formData.append('techId', techId);
+
       const res = await fetch('/api/dispatch-sheets/scan', {
         method: 'POST',
         body: formData,
       });
-      const data = await res.json();
-      if (res.ok) {
-        setExtractedOrders(data.parsedOrders || []);
-        setRawOcrText(data.extractedText || '');
-        if (!data.parsedOrders || data.parsedOrders.length === 0) {
-          setMessage({
-            type: 'warning',
-            text: 'Foto guardada. No se reconocieron números de orden automáticamente. Puedes completar los datos en el recuadro o pulsar "Agregar Fila".'
-          });
-          setExtractedOrders([
-            {
-              work_date: sheetDate,
-              tech_id: techId,
-              job_id: '',
-              address: '',
-              city: '',
-              zip_code: '',
-              phone: '',
-              drop_footage: 100,
-              cable_type: 'RG-6',
-              bore_type: 'N',
-              obstacles: 'N',
-              rate_calculated: 100,
-              status: 'Pendiente',
-              payment_status: 'Pendiente',
-              raw_notes: ''
-            }
-          ]);
-        } else {
-          const detectedDate = (data.parsedOrders && data.parsedOrders[0] && data.parsedOrders[0].work_date) || sheetDate;
-          if (detectedDate && detectedDate !== sheetDate) {
-            setSheetDate(detectedDate);
-          }
-          setExtractedOrders(
-            (data.parsedOrders || []).map((o) => ({
-              ...o,
-              work_date: o.work_date || detectedDate,
-              rate_calculated: calcOrderRate(o.drop_footage, o.bore_type),
-              status: 'Pendiente',
-              payment_status: 'Pendiente'
-            }))
-          );
-          setMessage({
-            type: 'success',
-            text: `¡Foto analizada! Se detectaron ${data.parsedOrders.length} orden(es). Revisa y ajusta los datos en el recuadro abajo.`
-          });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.parsedOrders && data.parsedOrders.length > 0) {
+          ordersFound = data.parsedOrders;
+          extractedText = data.extractedText || '';
         }
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Error procesando imagen' });
       }
-    } catch (err) {
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setScanning(false);
+    } catch (apiErr) {
+      console.warn('Backend OCR notice (falling back to client engine):', apiErr);
+    }
+
+    // 2. Client-side Local OCR engine (runs 100% in browser on phone/Netlify)
+    if (!ordersFound || ordersFound.length === 0) {
+      try {
+        setOcrProgress(15);
+        const localResult = await recognizeDispatchSheet(file, sheetDate, techId, (pct) => {
+          setOcrProgress(Math.max(15, pct));
+        });
+        if (localResult && localResult.parsedOrders) {
+          ordersFound = localResult.parsedOrders;
+          extractedText = localResult.text || '';
+        }
+      } catch (clientErr) {
+        console.error('Client OCR error:', clientErr);
+      }
+    }
+
+    setScanning(false);
+    setOcrProgress(0);
+
+    if (!ordersFound || ordersFound.length === 0) {
+      setMessage({
+        type: 'warning',
+        text: 'Foto guardada. No se reconocieron números de orden automáticamente. Puedes completar los datos en el recuadro o pulsar "Agregar Fila".'
+      });
+      setExtractedOrders([
+        {
+          work_date: sheetDate,
+          tech_id: techId,
+          job_id: '',
+          address: '',
+          city: '',
+          zip_code: '',
+          phone: '',
+          drop_footage: 100,
+          cable_type: 'RG-6',
+          bore_type: 'N',
+          obstacles: 'N',
+          rate_calculated: 100,
+          status: 'Pendiente',
+          payment_status: 'Pendiente',
+          raw_notes: ''
+        }
+      ]);
+    } else {
+      const detectedDate = ordersFound[0]?.work_date || sheetDate;
+      if (detectedDate && detectedDate !== sheetDate) {
+        setSheetDate(detectedDate);
+      }
+      setRawOcrText(extractedText);
+      setExtractedOrders(
+        ordersFound.map((o) => ({
+          ...o,
+          work_date: o.work_date || detectedDate,
+          rate_calculated: calcOrderRate(o.drop_footage, o.bore_type),
+          status: 'Pendiente',
+          payment_status: 'Pendiente'
+        }))
+      );
+      setMessage({
+        type: 'success',
+        text: `¡Foto analizada con éxito! Se detectaron ${ordersFound.length} orden(es). Revisa y confirma abajo.`
+      });
     }
   };
 
@@ -441,7 +456,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
           {scanning && (
             <div className="p-3 bg-cyan-500/15 border border-cyan-500/30 rounded-xl flex items-center justify-center gap-2.5 text-cyan-300 text-xs">
               <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin shrink-0"></div>
-              <span className="font-bold">Analizando hoja con OCR y reconociendo órdenes...</span>
+              <span className="font-bold">{ocrProgress > 0 ? `Analizando hoja con OCR inteligente (${ocrProgress}%)...` : "Analizando hoja con OCR y reconociendo órdenes..."}</span>
             </div>
           )}
 

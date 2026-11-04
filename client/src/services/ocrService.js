@@ -1,5 +1,11 @@
 import Tesseract from 'tesseract.js';
 
+// Normalizer for address keys (for deduplication)
+function normalizeAddrKey(addr) {
+  return (addr || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+// Smart parser for Xfinity dispatch format lines
 export function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
   if (!line || typeof line !== 'string') return null;
   const rawLine = line.trim();
@@ -109,17 +115,24 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
     .replace(/\bWW\s+WOLF\b/gi, 'W WOLF')
     .replace(/MISHAV\/AKA/gi, 'MISHAWAKA')
     .replace(/MISHAVAKA/gi, 'MISHAWAKA')
-    .replace(/\b(?:0ROP|OROP|DR0P|DR0|JR0)\b/gi, 'DROP')
+    .replace(/\b(?:DR0\s*OP|DRO\s*OP|DR0OP|DROOP|0ROP|OROP|DR0P|DR0|JR0)\b/gi, 'DROP')
     .replace(/0ROP[:\s]/gi, 'DROP ');
 
   // Clean pipes and noise from OCR table cells
   cleanLine = cleanLine.replace(/[|~_\[\]]+/g, ' ');
+  // Normalize OCR symbols misread as leading digit for 6-digit job ID:
+  cleanLine = cleanLine.replace(/£(\d{5})\b/g, (m, p) => '8' + p);
+  cleanLine = cleanLine.replace(/&(\d{5})\b/g, (m, p) => '8' + p);
+  cleanLine = cleanLine.replace(/\bB(\d{5})\b/g, (m, p) => '8' + p);
+  cleanLine = cleanLine.replace(/\bS(\d{5})\b/g, (m, p) => '5' + p);
   // Split merged 6-digit Job ID and street house number (e.g. 72061223608 -> 720612 23608)
-  cleanLine = cleanLine.replace(/\b([5-9]\d{5})(\d{1,5})\s+([A-Za-z])/g, '$1 $2 $3');
+  cleanLine = cleanLine.replace(/\b([5-9]\d{5})[1|]?(\d{1,5})\s+([A-Za-z])/g, '$1 $2 $3');
   // If OCR read table border | before job ID as 1 (e.g. 1833906 121935 -> 833906 21935)
   cleanLine = cleanLine.replace(/\b1([5-9]\d{5})\s+1?(\d{1,5})\s+/g, '$1 $2 ');
   // Fix OCR artifacts like 4A0 -> 40
   cleanLine = cleanLine.replace(/\b4A0\s*/gi, '40 ');
+  // Handle Mype: or Nype: -> Type:
+  cleanLine = cleanLine.replace(/([0-9.]+)[A-Za-z]{1,2}ype:/gi, '$1 / Type:');
   // Protect tech code like P0G2
   cleanLine = cleanLine.replace(/(\d{1,5})([a-zA-Z])/g, (m, p1, p2) => (m.toUpperCase().includes('P0G') ? m : p1 + ' ' + p2));
   // Separate street types stuck to street names (when followed by period, comma or space)
@@ -144,7 +157,7 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
 
   // Detect Tech ID
   let techId = defaultTech || 'Javier (P0G1)';
-  const techMatch = cleanLine.match(/([A-Z0-9_\s-]+\(P[0-9A-Z]{3}\))/i) || cleanLine.match(/(OSDENINY\s*\([^)]+\))/i);
+  const techMatch = cleanLine.match(/([A-Za-z\s-]+?\([A-Za-z0-9]+\))/i) || cleanLine.match(/(OSDENINY\s*\([^)]+\))/i);
   if (techMatch) techId = techMatch[1].trim();
 
   // Detect Job ID (6 digits, range 500000 - 999999)
@@ -192,19 +205,21 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
     }
   }
 
+  // Known city lookup in remaining text
   if (!city) {
     const cityRegex = /\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW|SKOKIE|CHICAGO|EVANSTON|NILES|LINCOLNWOOD)\b/i;
     const cityMatch = textAfterAddr.match(cityRegex) || postJobText.match(cityRegex);
     if (cityMatch) city = cityMatch[1].toUpperCase();
   }
 
+  // Zip Code: extract from OCR text, do not force a default
   let zipCode = '';
   const zipMatch = textAfterAddr.match(/\b(\d{5}(?:-\d{4})?)\b/) || postJobText.match(/\b(\d{5}(?:-\d{4})?)\b/);
   if (zipMatch) zipCode = zipMatch[1];
 
   // Drop Footage
   let dropFootage = 100;
-  const dropMatch = postJobText.match(/(?:DROP|DR0P|DR0|JR0|0ROP|OROP)[:\s->.]*([0-9\s.,¢]+?)(?:\/|Type|BORE|TEMP|$)/i);
+  const dropMatch = postJobText.match(/(?:DR[O0]{1,2}P|DR[0O]|JR[0O]|[0O]R[0O]P|DROP)[:\s->.]*([0-9]+(?:[.,\s]\d+)?)/i);
   if (dropMatch) {
     let clean = dropMatch[1].trim()
       .replace(/¢/g, '0')
@@ -223,17 +238,17 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
     if (!isNaN(val) && val > 0 && val < 2000) dropFootage = val;
   }
 
-  // Cable Type
+  // Cable Type (Always RG-11 or RG-6)
   let cableType = 'RG-6';
-  if (/RG[- ]?11|RG[- ]?M\b|RG[- ]?II\b/i.test(postJobText)) {
+  if (/RG[- ]?(?:11|M\b|II\b|1[1lI])/i.test(postJobText)) {
     cableType = 'RG-11';
   }
 
-  // Bore Type
+  // Bore Type (Driveway DW:1, Sidewalk SW:1, or None N)
   let boreType = 'N';
-  if (/BORE[:\s]*(?:DW|DV)[-:\s/]*1/i.test(postJobText) || /\b(?:DW|DV)[-:\s/]*1\b/i.test(postJobText)) {
+  if (/(?:BORE[:\s]*)?(?:DW|DV)[-:\s/.]*1/i.test(postJobText) || /\b(?:DW|DV)[-:\s/.]*1\b/i.test(postJobText)) {
     boreType = 'DW:1';
-  } else if (/BORE[:\s]*(?:SW|SV)[-:\s/]*1/i.test(postJobText) || /\b(?:SW|SV)[-:\s/]*1\b/i.test(postJobText) || /BORE[:\s]*(?:SW|SV)\b/i.test(postJobText)) {
+  } else if (/(?:BORE[:\s]*)?(?:SW|SV)[-:\s/.]*1/i.test(postJobText) || /\b(?:SW|SV)[-:\s/.]*1\b/i.test(postJobText) || /BORE[:\s]*(?:SW|SV)\b/i.test(postJobText)) {
     boreType = 'SW:1';
   }
 
@@ -286,49 +301,173 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
   };
 }
 
-export function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
-  if (!text) return [];
-  const lines = text.split('\n').map((l) => l.trim()).filter((l) => l.length > 8);
-  const candidates = [];
-  const seenJobs = new Set();
-  const seenAddrs = new Set();
+// Client-side HTML Image Loader
+function loadImage(source) {
+  return new Promise((resolve, reject) => {
+    if (source instanceof HTMLImageElement) return resolve(source);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = reject;
 
-  for (const line of lines) {
-    const parsed = parseDispatchLine(line, defaultDate, defaultTech);
-    if (parsed) {
-      const addrKey = (parsed.address || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (addrKey && addrKey !== 'DIRECCIONPORVERIFICAR') {
-        if (seenAddrs.has(addrKey)) continue;
-        seenAddrs.add(addrKey);
-      }
-      if (seenJobs.has(parsed.job_id)) continue;
-      seenJobs.add(parsed.job_id);
-      candidates.push(parsed);
+    if (source instanceof Blob || source instanceof File) {
+      img.src = URL.createObjectURL(source);
+    } else if (typeof source === 'string') {
+      img.src = source;
+    } else {
+      reject(new Error('Formato de imagen no soportado'));
     }
-  }
-
-  return candidates;
+  });
 }
 
+// High-Precision Client-Side OCR Engine with Dynamic Canvas Row-Slicing
 export async function recognizeDispatchSheet(imageSource, defaultDate = null, defaultTech = null, onProgress = null) {
   try {
-    const result = await Tesseract.recognize(imageSource, 'eng', {
-      logger: (m) => {
-        if (onProgress && m.status === 'recognizing text' && m.progress !== undefined) {
-          onProgress(Math.round(m.progress * 100));
+    const img = await loadImage(imageSource);
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+
+    // 1. Draw full image to canvas for pixel analysis
+    const fullCanvas = document.createElement('canvas');
+    fullCanvas.width = w;
+    fullCanvas.height = h;
+    const fullCtx = fullCanvas.getContext('2d', { willReadFrequently: true });
+    fullCtx.drawImage(img, 0, 0);
+
+    const imgData = fullCtx.getImageData(0, 0, w, h);
+    const data = imgData.data;
+
+    // 2. Scanline horizontal darkness analysis
+    const rowDarkness = new Float32Array(h);
+    for (let y = 0; y < h; y++) {
+      let sum = 0;
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * 4;
+        const lum = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+        sum += lum;
+      }
+      rowDarkness[y] = sum / w;
+    }
+
+    // 3. Find horizontal divider borders
+    const lineCandidates = [];
+    for (let y = 1; y < h - 1; y++) {
+      if (rowDarkness[y] < rowDarkness[y - 1] && rowDarkness[y] <= rowDarkness[y + 1] && rowDarkness[y] < 225) {
+        lineCandidates.push(y);
+      }
+    }
+    const filtered = [];
+    for (const y of lineCandidates) {
+      if (filtered.length === 0 || y - filtered[filtered.length - 1] > 10) filtered.push(y);
+    }
+
+    let borders = [0, ...filtered];
+    if (h - borders[borders.length - 1] > 10) borders.push(h);
+    if (borders.length > 2 && borders[1] - borders[0] < 10) borders.shift();
+    if (borders.length > 2 && borders[borders.length - 1] - borders[borders.length - 2] < 10) borders.pop();
+
+    const ordersList = [];
+    const allLines = [];
+
+    const worker = await Tesseract.createWorker('eng');
+
+    // Case A: Table strip with detected rows (< 800px)
+    if (h < 800 && borders.length >= 2) {
+      await worker.setParameters({ tessedit_pageseg_mode: 7 }); // Single text line mode
+      const totalSlices = borders.length - 1;
+
+      for (let i = 0; i < totalSlices; i++) {
+        const top = borders[i];
+        const sliceH = borders[i + 1] - top;
+        if (sliceH < 10) continue;
+
+        const scale = 4;
+        const pad = 10;
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = w * scale + pad * 2;
+        sliceCanvas.height = sliceH * scale + pad * 2;
+        const sCtx = sliceCanvas.getContext('2d');
+
+        sCtx.fillStyle = '#FFFFFF';
+        sCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+        sCtx.imageSmoothingEnabled = true;
+        sCtx.imageSmoothingQuality = 'high';
+        sCtx.drawImage(fullCanvas, 0, top, w, sliceH, pad, pad, w * scale, sliceH * scale);
+
+        // Normalize contrast & grayscale
+        const sData = sCtx.getImageData(0, 0, sliceCanvas.width, sliceCanvas.height);
+        const sd = sData.data;
+        for (let j = 0; j < sd.length; j += 4) {
+          const lum = 0.299 * sd[j] + 0.587 * sd[j + 1] + 0.114 * sd[j + 2];
+          const enhanced = lum > 175 ? 255 : (lum < 95 ? 0 : lum);
+          sd[j] = enhanced;
+          sd[j + 1] = enhanced;
+          sd[j + 2] = enhanced;
+        }
+        sCtx.putImageData(sData, 0, 0);
+
+        if (onProgress) onProgress(Math.round(((i + 1) / totalSlices) * 90));
+
+        const res = await worker.recognize(sliceCanvas);
+        let line = (res.data.text || '').trim();
+        if (line) {
+          allLines.push(line);
+          const parsed = parseDispatchLine(line, defaultDate, defaultTech);
+          if (parsed) ordersList.push(parsed);
         }
       }
-    });
+    }
 
-    const text = result.data.text || '';
-    const parsedOrders = extractOrdersFromOcrText(text, defaultDate, defaultTech);
+    // Case B: Full camera photo or fallback if slice pass found no orders
+    if (ordersList.length === 0) {
+      await worker.setParameters({ tessedit_pageseg_mode: 6 }); // Uniform block of text
+      const scaledCanvas = document.createElement('canvas');
+      const targetWidth = Math.min(2400, Math.max(1600, w * 2));
+      const targetHeight = Math.round((h * targetWidth) / w);
+      scaledCanvas.width = targetWidth;
+      scaledCanvas.height = targetHeight;
+      const scCtx = scaledCanvas.getContext('2d');
+      scCtx.imageSmoothingEnabled = true;
+      scCtx.imageSmoothingQuality = 'high';
+      scCtx.drawImage(fullCanvas, 0, 0, targetWidth, targetHeight);
+
+      if (onProgress) onProgress(60);
+      const res = await worker.recognize(scaledCanvas);
+      const lines = (res.data.text || '').split('\n').map(l => l.trim()).filter(Boolean);
+      allLines.push(...lines);
+
+      for (const line of lines) {
+        const parsed = parseDispatchLine(line, defaultDate, defaultTech);
+        if (parsed) ordersList.push(parsed);
+      }
+    }
+
+    await worker.terminate();
+
+    // Deduplicate
+    const finalOrders = [];
+    const seenAddresses = new Set();
+    const seenJobs = new Set();
+
+    for (const o of ordersList) {
+      const addrKey = normalizeAddrKey(o.address);
+      if (addrKey && addrKey !== 'DIRECCIONPORVERIFICAR') {
+        if (seenAddresses.has(addrKey)) continue;
+        seenAddresses.add(addrKey);
+      }
+      if (seenJobs.has(o.job_id)) continue;
+      seenJobs.add(o.job_id);
+      finalOrders.push(o);
+    }
+
+    if (onProgress) onProgress(100);
 
     return {
-      text,
-      parsedOrders
+      text: allLines.join('\n'),
+      parsedOrders: finalOrders
     };
   } catch (err) {
-    console.error('Tesseract OCR error:', err);
+    console.error('Tesseract client OCR error:', err);
     throw err;
   }
 }

@@ -372,22 +372,9 @@ export default function UberDriverView({
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // 1. FAST LIVE GPS GEOLOCATION
+  // 1. FAST LIVE GPS GEOLOCATION (Single gentle watcher, no redundant calls)
   useEffect(() => {
     if (!navigator.geolocation) return;
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          heading: pos.coords.heading || 0,
-          speed: pos.coords.speed || 0
-        });
-      },
-      (err) => console.warn('Fast GPS fix notice:', err.message),
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 5000 }
-    );
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
@@ -398,8 +385,8 @@ export default function UberDriverView({
           speed: pos.coords.speed || 0
         });
       },
-      (err) => console.warn('GPS Watch notice:', err.message),
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+      (err) => console.warn('GPS Notice:', err.message),
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);

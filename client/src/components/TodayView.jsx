@@ -41,9 +41,16 @@ export default function TodayView({
   });
 
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'Pendiente' | 'Completado' | 'No Realizado'
-  const [internalViewMode, setInternalViewMode] = useState(propViewMode || 'uber');
+  const [internalViewMode, setInternalViewMode] = useState(() => {
+    return propViewMode || localStorage.getItem('xfinity_view_mode') || 'classic';
+  });
   const viewMode = propViewMode || internalViewMode;
-  const setViewMode = setInternalViewMode;
+  const setViewMode = (mode) => {
+    setInternalViewMode(mode);
+    try {
+      localStorage.setItem('xfinity_view_mode', mode);
+    } catch (e) {}
+  };
   const [sharingId, setSharingId] = useState(null);
   const [localSharedMap, setLocalSharedMap] = useState({});
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
