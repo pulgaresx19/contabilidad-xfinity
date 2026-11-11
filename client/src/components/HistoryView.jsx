@@ -28,7 +28,8 @@ export default function HistoryView({
   onOpenPhotos, 
   onOpenScan, 
   onOrderUpdated, 
-  onUpdateOrders 
+  onUpdateOrders,
+  focusDateRequest = null
 }) {
   const [subTab, setSubTab] = useState('daily'); // 'daily' | 'weeks' | 'monthly' | 'all_orders'
   const [selectedWeekModal, setSelectedWeekModal] = useState(null); // Week object for overlay modal
@@ -233,6 +234,7 @@ ${jobLines}
             onUpdateOrders={onUpdateOrders}
             viewMode="classic"
             hideModeToggle={true}
+            focusDateRequest={focusDateRequest}
           />
         </div>
       )}

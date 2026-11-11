@@ -283,9 +283,17 @@ export function calculateOrderRate(order, settings) {
   return total;
 }
 
+function getLocalTodayStr() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function normalizeDateStr(d) {
   if (!d) return '';
-  const str = String(d).trim();
+  const str = String(d).trim().split('T')[0];
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
   const m = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
   if (m) {
@@ -414,7 +422,7 @@ export async function createOrder(data) {
   const calculatedRate = calculateOrderRate(data, settings);
 
   const orderRecord = {
-    work_date: data.work_date || new Date().toISOString().split('T')[0],
+    work_date: normalizeDateStr(data.work_date) || getLocalTodayStr(),
     tech_id: data.tech_id || settings.tech_default || 'Javier (P0G1)',
     job_id: String(data.job_id || '').trim(),
     address: data.address || '',
@@ -466,6 +474,7 @@ export async function updateOrder(id, data) {
   if (!existing) throw new Error('Order not found');
 
   const merged = { ...existing, ...data };
+  merged.work_date = normalizeDateStr(merged.work_date || existing.work_date) || getLocalTodayStr();
   if (data.rate_calculated === undefined) {
     merged.rate_calculated = calculateOrderRate(merged, settings);
   } else {
@@ -983,16 +992,26 @@ export async function getOrderByJobId(jobId) {
   });
 }
 
-export async function batchImportOrders(ordersList) {
+export async function batchImportOrders(ordersList = []) {
   const results = {
     total: ordersList.length,
     imported: 0,
     updated: 0,
     skipped: 0,
+    count: 0,
     errors: []
   };
 
-  for (const o of ordersList) {
+  for (let i = 0; i < ordersList.length; i++) {
+    const raw = ordersList[i] || {};
+    const cleanJobId = String(raw.job_id || '').trim();
+    const o = {
+      ...raw,
+      job_id: cleanJobId || `SIN-ID-${Date.now()}-${i + 1}`,
+      work_date: normalizeDateStr(raw.work_date) || getLocalTodayStr(),
+      status: raw.status || 'Pendiente',
+      payment_status: raw.payment_status || 'Pendiente'
+    };
     try {
       const existing = await getOrderByJobId(o.job_id);
       if (existing) {
@@ -1012,6 +1031,7 @@ export async function batchImportOrders(ordersList) {
     }
   }
 
+  results.count = results.imported + results.updated;
   return results;
 }
 

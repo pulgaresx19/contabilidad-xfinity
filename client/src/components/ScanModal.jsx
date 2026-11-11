@@ -1,30 +1,18 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Camera, Check, AlertCircle, Trash2, Plus, Sparkles, X, Eye, 
-  Image as ImageIcon, Calendar, MapPin, Phone, Ruler, Maximize2, 
-  HelpCircle, FileText, Mic, Square, Loader2, Send
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  Camera, Check, AlertCircle, Trash2, Plus, X, Eye,
+  Image as ImageIcon, MapPin, Ruler, Maximize2
 } from 'lucide-react';
-import { getLocalDateStr } from '../utils/dateUtils';
+import { getLocalDateStr, normalizeDateStr } from '../utils/dateUtils';
 import { interactWithAuraCore } from '../services/auraService';
-import { useAuraVoiceInput } from '../hooks/useAuraVoiceInput';
 
-export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech, orders = [], summaryData = null, initialMode = 'photo' }) {
+export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech }) {
   const [sheetDate, setSheetDate] = useState(() => getLocalDateStr());
   const [techId, setTechId] = useState(defaultTech || 'Javier (P0G1)');
-  const [mode, setMode] = useState(initialMode); // 'photo' | 'paste' | 'ai'
-  const [aiQueryText, setAiQueryText] = useState('');
-  const [aiReply, setAiReply] = useState(null);
-  const [aiBusy, setAiBusy] = useState(false);
-  const {
-    isListening,
-    liveTranscript,
-    startListening,
-    stopListening,
-    clearTranscript
-  } = useAuraVoiceInput();
 
   // Photo & AuraCore IA state
   const [previewUrl, setPreviewUrl] = useState(null);
+  const previewUrlRef = useRef(null);
   const [scanning, setScanning] = useState(false);
   const [extractedOrders, setExtractedOrders] = useState([]);
   const [rawAiText, setRawAiText] = useState('');
@@ -32,24 +20,48 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
   const [showFullPhoto, setShowFullPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
-  const [showTextHelp, setShowTextHelp] = useState(false);
 
   // File input refs
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
 
-  // Paste state
-  const [pasteText, setPasteText] = useState('');
+  const replacePreviewUrl = useCallback((nextUrl) => {
+    if (previewUrlRef.current && previewUrlRef.current.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrlRef.current);
+    }
+    previewUrlRef.current = nextUrl;
+    setPreviewUrl(nextUrl);
+  }, []);
+
+  const resetScanState = useCallback(() => {
+    replacePreviewUrl(null);
+    setScanning(false);
+    setSaving(false);
+    setExtractedOrders([]);
+    setRawAiText('');
+    setShowRawText(false);
+    setShowFullPhoto(false);
+    setMessage(null);
+    setSheetDate(getLocalDateStr());
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
+  }, [replacePreviewUrl]);
 
   useEffect(() => {
     if (isOpen) {
-      setMode(initialMode || 'photo');
       setTechId(defaultTech || 'Javier (P0G1)');
     } else {
-      stopListening();
+      resetScanState();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, initialMode, defaultTech]);
+  }, [isOpen, defaultTech, resetScanState]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current && previewUrlRef.current.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -87,11 +99,12 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
 
     e.target.value = '';
 
-    setPreviewUrl(URL.createObjectURL(file));
+    replacePreviewUrl(URL.createObjectURL(file));
     setScanning(true);
     setMessage(null);
     setExtractedOrders([]);
     setRawAiText('');
+    setShowRawText(false);
 
     let ordersFound = [];
     let extractedText = '';
@@ -106,9 +119,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
         imageFile: file,
         text: 'Lee esta foto de hoja de despacho o lista de trabajos Xfinity y extrae TODAS las filas en el arreglo orders.',
         defaultTech: techId,
-        defaultDate: sheetDate,
-        orders,
-        summaryData
+        defaultDate: sheetDate
       });
       ordersFound = auraRes?.data?.orders || [];
       extractedText = auraRes?.data?.transcript || auraRes?.data?.replyText || '';
@@ -155,7 +166,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
         }
       ]);
     } else {
-      const detectedDate = ordersFound[0]?.work_date || sheetDate;
+      const detectedDate = normalizeDateStr(ordersFound[0]?.work_date || sheetDate) || getLocalDateStr();
       if (detectedDate && detectedDate !== sheetDate) {
         setSheetDate(detectedDate);
       }
@@ -163,10 +174,21 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
       setExtractedOrders(
         ordersFound.map((o) => ({
           ...o,
-          work_date: o.work_date || detectedDate,
+          work_date: normalizeDateStr(o.work_date || detectedDate) || detectedDate,
+          tech_id: String(o.tech_id || techId || 'Javier (P0G1)').trim(),
+          job_id: String(o.job_id || '').trim(),
+          address: String(o.address || '').trim(),
+          city: String(o.city || '').trim(),
+          zip_code: String(o.zip_code || '').trim(),
+          phone: String(o.phone || '').trim(),
+          drop_footage: parseFloat(o.drop_footage) || 0,
+          cable_type: o.cable_type === 'RG-11' ? 'RG-11' : 'RG-6',
+          bore_type: o.bore_type || 'N',
+          obstacles: o.obstacles || 'N',
           rate_calculated: calcOrderRate(o.drop_footage, o.bore_type),
           status: 'Pendiente',
-          payment_status: 'Pendiente'
+          payment_status: 'Pendiente',
+          raw_notes: o.raw_notes || ''
         }))
       );
       setMessage({
@@ -219,27 +241,42 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
   };
 
   const handleSaveOrders = async () => {
-    if (extractedOrders.length === 0) return;
+    if (extractedOrders.length === 0 || saving) return;
     setSaving(true);
     setMessage(null);
 
     try {
+      const ordersToSave = extractedOrders.map((o) => ({
+        ...o,
+        work_date: normalizeDateStr(o.work_date || sheetDate) || sheetDate,
+        tech_id: String(o.tech_id || techId || defaultTech || 'Javier (P0G1)').trim(),
+        job_id: String(o.job_id || '').trim(),
+        drop_footage: parseFloat(o.drop_footage) || 0,
+        rate_calculated: calcOrderRate(o.drop_footage, o.bore_type),
+        status: 'Pendiente',
+        payment_status: 'Pendiente'
+      }));
+
       const res = await fetch('/api/batch-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orders: extractedOrders })
+        body: JSON.stringify({ orders: ordersToSave })
       });
       const data = await res.json();
-      if (res.ok) {
-        const count = data.count || data.imported || extractedOrders.length;
-        setMessage({ type: 'success', text: `¡Excelente! Se guardaron ${count} órdenes en tu contabilidad.` });
-        setTimeout(() => {
-          if (onOrdersSaved) onOrdersSaved();
-          onClose();
-        }, 800);
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Error al guardar órdenes' });
+      const savedCount = (data.imported || 0) + (data.updated || 0);
+
+      if (res.ok && savedCount > 0) {
+        const targetDate = normalizeDateStr(ordersToSave[0]?.work_date || sheetDate) || sheetDate;
+        if (onOrdersSaved) {
+          await onOrdersSaved(targetDate);
+        }
+        resetScanState();
+        onClose();
+        return;
       }
+
+      const errorDetail = data.error || (Array.isArray(data.errors) && data.errors.length > 0 ? data.errors.join(', ') : null);
+      setMessage({ type: 'error', text: errorDetail || 'No se pudieron guardar las órdenes en tu lista.' });
     } catch (err) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -247,114 +284,17 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
     }
   };
 
-  const handleParsePaste = async () => {
-    if (!pasteText.trim()) return;
-    setScanning(true);
-    try {
-      const res = await fetch('/api/parse-dispatch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawText: pasteText, defaultDate: sheetDate, defaultTech: techId })
-      });
-      const data = await res.json();
-      const list = data.parsed || data.parsedOrders || [];
-      if (res.ok && list.length > 0) {
-        const detectedDate = list[0]?.work_date || sheetDate;
-        if (detectedDate && detectedDate !== sheetDate) {
-          setSheetDate(detectedDate);
-        }
-        setExtractedOrders(
-          list.map(o => ({
-            ...o,
-            rate_calculated: calcOrderRate(o.drop_footage, o.bore_type)
-          }))
-        );
-        setMessage({ type: 'success', text: `¡${list.length} orden(es) interpretada(s) del texto correctamente!` });
-      } else {
-        setMessage({ type: 'warning', text: 'No se reconocieron órdenes válidas en el texto. Revisa el formato o usa el ejemplo.' });
-      }
-    } catch (err) {
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  const runAuraPrompt = async ({ textPrompt = '', audioBlob = null } = {}) => {
-    const cleanText = String(textPrompt || aiQueryText || '').trim();
-    if (!cleanText && !audioBlob) return;
-
-    setAiBusy(true);
-    setMessage(null);
-    try {
-      const res = await interactWithAuraCore({
-        text: cleanText,
-        audioBlob,
-        defaultTech: techId,
-        defaultDate: sheetDate,
-        orders,
-        summaryData
-      });
-      const d = res?.data || {};
-      setAiReply({
-        intent: d.intent || 'CONSULTA',
-        text: d.replyText || 'Listo.',
-        transcript: d.transcript || cleanText,
-        modelUsed: res.modelUsed || 'Gemini'
-      });
-      if (Array.isArray(d.orders) && d.orders.length > 0) {
-        const normalized = d.orders.map((o) => ({
-          ...o,
-          work_date: o.work_date || sheetDate,
-          tech_id: o.tech_id || techId,
-          rate_calculated: calcOrderRate(o.drop_footage, o.bore_type),
-          status: 'Pendiente',
-          payment_status: 'Pendiente'
-        }));
-        setExtractedOrders((prev) => [...prev, ...normalized]);
-        setMessage({
-          type: d.needsConfirmation ? 'warning' : 'success',
-          text: `AuraCore agregó ${normalized.length} orden(es) al recuadro de revisión.${d.ambiguityNote ? ' ' + d.ambiguityNote : ''}`
-        });
-      }
-      if (cleanText && !audioBlob) setAiQueryText('');
-      clearTranscript();
-    } catch (err) {
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setAiBusy(false);
-    }
-  };
-
-  const handleToggleScanVoice = () => {
-    setMessage(null);
-    startListening({
-      onError: (msg) => setMessage({ type: 'error', text: msg }),
-      onComplete: ({ transcript, audioBlob }) => {
-        if (transcript) setAiQueryText(transcript);
-        runAuraPrompt({ textPrompt: transcript, audioBlob });
-      }
-    });
-  };
-
-  const handleInsertSampleText = () => {
-    const sample = `10-30-2026\tOSDENINY (P0G2)\t748966\t1308 MINTCREST DR,\tGOSHEN\t46526-6282\tP#:5749038080/DROP:71.37/Type:RG-6/BORE:N/TEMP:Y/Obstacles:N/Premise ACS:N/NBR:N
-10-30-2026\tOSDENINY (P0G2)\t833906\t21935 KIMBERLY DR,\tGOSHEN\t46526-8755\tP#:5743500180/DROP:200.57/Type:RG-6/BORE:N/TEMP:Y/Obstacles:N/Premise ACS:N/NBR:N
-10-30-2026\tOSDENINY (P0G2)\t832399\t15387 WILLIAM PAUL DR,\tBRISTOL\t46507-8829\tCALLFIRST/P#:5743046235/DROP:101.27/Type:RG-11/BORE:DW:1/TEMP:N/Obstacles:LANDSC/Premise ACS:DOG/NBR:N`;
-    setPasteText(sample);
-  };
-
   const totalEarnings = extractedOrders.reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 100), 0);
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
       style={{
         paddingTop: 'max(env(safe-area-inset-top, 0px) + 16px, 1.25rem)',
         paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget && !saving) onClose();
       }}
     >
       {/* Hidden inputs para Camara y Galería DIRECTAS */}
@@ -375,7 +315,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
       />
 
       {/* Modal Container: Tamaño Estándar idéntico a EditJobModal y PhotoModal */}
-      <div 
+      <div
         className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all"
         onClick={(e) => e.stopPropagation()}
       >
@@ -387,64 +327,23 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
             </div>
             <div className="min-w-0">
               <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate tracking-wide">
-                Escanear IA
+                Escanear Hoja
               </h3>
               <p className="text-[10px] text-slate-600 dark:text-slate-400 font-mono font-semibold truncate">
-                Foto y Voz IA
+                Lectura de Foto con IA
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Mode Switch (Foto / Texto / IA Voz) */}
-            <div className="flex bg-[#16202c] p-0.5 rounded-lg border border-white/10 text-[10px] whitespace-nowrap shrink-0">
-              <button
-                type="button"
-                onClick={() => setMode('photo')}
-                className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer flex items-center gap-1 ${
-                  mode === 'photo' 
-                    ? 'bg-cyan-500 text-slate-950 shadow-xs' 
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Camera className="w-3 h-3" />
-                <span>Foto</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('paste')}
-                className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer flex items-center gap-1 ${
-                  mode === 'paste' 
-                    ? 'bg-cyan-500 text-slate-950 shadow-xs' 
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <FileText className="w-3 h-3" />
-                <span>Texto</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('ai')}
-                className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer flex items-center gap-1 ${
-                  mode === 'ai' 
-                    ? 'bg-amber-400 text-slate-950 shadow-xs' 
-                    : 'text-amber-300 hover:text-white'
-                }`}
-              >
-                <Sparkles className="w-3 h-3" />
-                <span>Voz</span>
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer border border-white/5"
-              title="Cerrar ventana"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={onClose}
+            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer border border-white/5 disabled:opacity-50"
+            title="Cerrar ventana"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         {/* 2. Quick KPI / Info Bar */}
@@ -457,7 +356,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
               type="date"
               value={sheetDate}
               onChange={(e) => {
-                const newDate = e.target.value;
+                const newDate = normalizeDateStr(e.target.value);
                 setSheetDate(newDate);
                 setExtractedOrders((prev) => prev.map((o) => ({ ...o, work_date: newDate })));
               }}
@@ -466,10 +365,10 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
           </div>
           <div className="bg-[#16202c] py-1.5 px-1 rounded-xl border border-white/5 flex flex-col justify-center">
             <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
-              Modo Activo
+              Escáner
             </span>
             <span className="text-xs font-black text-white uppercase tracking-tight block">
-              {mode === 'photo' ? 'AuraCore IA' : mode === 'ai' ? 'IA Voz / Chat' : 'Texto / Tabla'}
+              AuraCore IA
             </span>
           </div>
           <div className="bg-[#16202c] py-1.5 px-1 rounded-xl border border-white/5 flex flex-col justify-center">
@@ -482,8 +381,8 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
           </div>
         </div>
 
-        {/* 3. Botones de Captura (Cuando aún no hay foto cargada en modo Foto) */}
-        {mode === 'photo' && !previewUrl && (
+        {/* 3. Botones de Captura (Cuando aún no hay foto cargada) */}
+        {!previewUrl && (
           <div className="px-4 py-2.5 bg-[#0e1622] border-b border-white/5 shrink-0">
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -507,9 +406,8 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
           </div>
         )}
 
-        {/* 4. Cuerpo Scrollable Vertical (Aprovecha la altura del modal) */}
+        {/* 4. Cuerpo Scrollable Vertical */}
         <div className="p-3.5 sm:p-4 overflow-y-auto space-y-3 flex-1 min-h-0 scrollbar-none bg-[#101722]">
-          
           {/* Mensajes de Estado */}
           {message && (
             <div className={`p-2.5 rounded-xl border flex items-start gap-2 text-xs animate-in fade-in ${
@@ -536,243 +434,92 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
             </div>
           )}
 
-          {/* MODO FOTO */}
-          {mode === 'photo' && (
-            <div className="space-y-3">
-              {/* Tarjeta compacta de foto cargada (para no robar altura vertical al recuadro) */}
-              {previewUrl && (
-                <div className="bg-[#0e1622] border border-white/10 rounded-2xl p-2.5 space-y-2 shrink-0 shadow-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div 
-                        onClick={() => setShowFullPhoto(true)}
-                        className="w-11 h-11 rounded-xl overflow-hidden border border-white/15 bg-black cursor-pointer shrink-0 relative group"
-                        title="Toca para ampliar imagen"
-                      >
-                        <img src={previewUrl} alt="Thumbnail" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                          <Maximize2 className="w-3.5 h-3.5 text-white" />
-                        </div>
-                      </div>
-                      <div className="min-w-0">
-                        <span className="text-xs font-bold text-white block truncate">Hoja de Despacho</span>
-                        <span className="text-[10px] text-cyan-400 font-mono">
-                          {extractedOrders.length} {extractedOrders.length === 1 ? 'orden detectada' : 'órdenes detectadas'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowFullPhoto(true)}
-                      className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] text-cyan-300 flex items-center gap-1 font-bold transition"
-                    >
-                      <Eye className="w-3 h-3" />
-                      <span>Ver Hoja</span>
-                    </button>
-                  </div>
-
-                  {/* Botones rápidos para cambiar de foto */}
-                  <div className="grid grid-cols-2 gap-1.5 pt-0.5 border-t border-white/5">
-                    <button
-                      type="button"
-                      onClick={handleOpenCamera}
-                      className="py-1 px-2 bg-[#16202c] hover:bg-[#1e2b3b] text-slate-300 hover:text-white text-[11px] font-bold rounded-lg flex items-center justify-center gap-1 transition active:scale-95 border border-white/5 cursor-pointer"
-                    >
-                      <Camera className="h-3 w-3 text-cyan-400" />
-                      <span>Otra Foto</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleOpenGallery}
-                      className="py-1 px-2 bg-[#16202c] hover:bg-[#1e2b3b] text-slate-300 hover:text-white text-[11px] font-bold rounded-lg flex items-center justify-center gap-1 transition active:scale-95 border border-white/5 cursor-pointer"
-                    >
-                      <ImageIcon className="h-3 w-3 text-slate-400" />
-                      <span>De Galería</span>
-                    </button>
-                  </div>
-
-                  {rawAiText && (
-                    <div className="pt-0.5">
-                      <button
-                        type="button"
-                        onClick={() => setShowRawText(!showRawText)}
-                        className="text-[10px] text-slate-400 hover:text-cyan-300 flex items-center gap-1 font-medium cursor-pointer"
-                      >
-                        <Eye className="h-3 w-3" />
-                        <span>{showRawText ? 'Ocultar lectura de IA' : 'Ver lectura de AuraCore IA'}</span>
-                      </button>
-                      {showRawText && (
-                        <pre className="mt-1 p-2 bg-[#080d14] border border-white/10 rounded-xl text-[9px] font-mono text-slate-300 max-h-20 overflow-x-auto whitespace-pre-wrap">
-                          {rawAiText}
-                        </pre>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* RECUADRO DE RESULTADOS: Ocupa todo el espacio vertical disponible */}
-              {renderResultsBox()}
-            </div>
-          )}
-
-          {/* MODO IA VOZ / CONSULTAS */}
-          {mode === 'ai' && (
-            <div className="space-y-3">
-              <div className="bg-[#0e1622] border border-amber-500/25 rounded-2xl p-3 space-y-2.5 shadow-sm">
+          <div className="space-y-3">
+            {/* Tarjeta compacta de foto cargada */}
+            {previewUrl && (
+              <div className="bg-[#0e1622] border border-white/10 rounded-2xl p-2.5 space-y-2 shrink-0 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10.5px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Dictar Trabajos o Preguntar Datos</span>
-                  </span>
-                  <button
-                    type="button"
-                    disabled={aiBusy}
-                    onClick={handleToggleScanVoice}
-                    className={`px-3 py-1 rounded-xl border text-[11px] font-black flex items-center gap-1.5 transition active:scale-95 cursor-pointer disabled:opacity-50 ${
-                      isListening
-                        ? 'bg-rose-500/25 border-rose-400 text-rose-200 animate-pulse'
-                        : 'bg-amber-500 text-slate-950 border-amber-300'
-                    }`}
-                  >
-                    {isListening ? <Square className="w-3 h-3 fill-current" /> : <Mic className="w-3.5 h-3.5" />}
-                    <span>{isListening ? 'Detener Mic' : 'Hablar'}</span>
-                  </button>
-                </div>
-
-                {(isListening || liveTranscript) && (
-                  <div className="p-2.5 bg-black/40 border border-amber-400/25 rounded-xl text-[11px] text-amber-100 leading-snug">
-                    <span className="font-bold text-amber-400 mr-1">{isListening ? 'Escuchando:' : 'Texto:'}</span>
-                    <span className="font-mono">{liveTranscript || 'Habla ahora...'}</span>
-                  </div>
-                )}
-
-                <div className="flex gap-1.5 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => runAuraPrompt({ textPrompt: '¿Cuánto llevo ganado en total y cuántas órdenes pendientes tengo?' })}
-                    className="text-[10px] px-2 py-1 rounded-lg bg-[#16202c] hover:bg-[#1e2b3b] border border-white/10 text-slate-300 font-semibold cursor-pointer"
-                  >
-                    ¿Cuánto llevo ganado?
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => runAuraPrompt({ textPrompt: 'Resume las últimas órdenes pendientes con su dirección.' })}
-                    className="text-[10px] px-2 py-1 rounded-lg bg-[#16202c] hover:bg-[#1e2b3b] border border-white/10 text-slate-300 font-semibold cursor-pointer"
-                  >
-                    ¿Qué trabajos faltan?
-                  </button>
-                </div>
-
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={aiQueryText}
-                    onChange={(e) => setAiQueryText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        runAuraPrompt();
-                      }
-                    }}
-                    placeholder='Ej: "Agrega orden 626746 en 23322 Ironwood Dr drop 104 RG-11"' 
-                    className="flex-1 bg-[#080d14] border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400"
-                  />
-                  <button
-                    type="button"
-                    disabled={aiBusy || !aiQueryText.trim()}
-                    onClick={() => runAuraPrompt()}
-                    className="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-xs flex items-center gap-1 active:scale-95 transition cursor-pointer disabled:opacity-50"
-                  >
-                    {aiBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-
-                {aiReply && (
-                  <div className="p-2.5 bg-[#080d14] border border-cyan-500/25 rounded-xl space-y-1">
-                    <div className="flex items-center justify-between text-[9.5px] font-mono text-cyan-400">
-                      <span>AuraCore IA ({aiReply.modelUsed})</span>
-                      <span>{aiReply.intent}</span>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      onClick={() => setShowFullPhoto(true)}
+                      className="w-11 h-11 rounded-xl overflow-hidden border border-white/15 bg-black cursor-pointer shrink-0 relative group"
+                      title="Toca para ampliar imagen"
+                    >
+                      <img src={previewUrl} alt="Thumbnail" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                        <Maximize2 className="w-3.5 h-3.5 text-white" />
+                      </div>
                     </div>
-                    <p className="text-xs text-slate-100 leading-relaxed whitespace-pre-wrap">{aiReply.text}</p>
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-white block truncate">Hoja de Despacho</span>
+                      <span className="text-[10px] text-cyan-400 font-mono">
+                        {extractedOrders.length} {extractedOrders.length === 1 ? 'orden detectada' : 'órdenes detectadas'}
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
 
-              {extractedOrders.length > 0 && renderResultsBox()}
-            </div>
-          )}
-
-          {/* MODO TEXTO */}
-          {mode === 'paste' && (
-            <div className="space-y-3">
-              <div className="bg-[#0e1622] border border-white/10 rounded-2xl p-3 space-y-2 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10.5px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Pegar Datos de Despacho</span>
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setShowTextHelp(!showTextHelp)}
-                      className="text-[10px] text-cyan-400 hover:text-cyan-300 font-semibold cursor-pointer"
-                    >
-                      {showTextHelp ? 'Ocultar' : '¿Qué poner?'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleInsertSampleText}
-                      className="text-[9.5px] bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded-lg font-bold transition cursor-pointer"
-                    >
-                      Ejemplo Real
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowFullPhoto(true)}
+                    className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] text-cyan-300 flex items-center gap-1 font-bold transition"
+                  >
+                    <Eye className="w-3 h-3" />
+                    <span>Ver Hoja</span>
+                  </button>
                 </div>
 
-                {showTextHelp && (
-                  <div className="p-2.5 bg-[#080d14] border border-cyan-500/20 rounded-xl text-[10.5px] text-slate-300 space-y-1.5 leading-relaxed">
-                    <p className="font-bold text-white">Formatos admitidos:</p>
-                    <ul className="space-y-1 list-disc list-inside text-slate-400">
-                      <li><strong className="text-cyan-300">Excel / Portal:</strong> Copia y pega las filas completas separadas por tabuladores.</li>
-                      <li><strong className="text-cyan-300">WhatsApp / Notas:</strong> <code>748966 1308 MINTCREST DR, GOSHEN DROP:71.37 Type:RG-6</code></li>
-                      <li><strong className="text-cyan-300">Mínimo:</strong> <code>833906 21935 KIMBERLY DR GOSHEN</code></li>
-                    </ul>
+                {/* Botones rápidos para cambiar de foto */}
+                <div className="grid grid-cols-2 gap-1.5 pt-0.5 border-t border-white/5">
+                  <button
+                    type="button"
+                    onClick={handleOpenCamera}
+                    className="py-1 px-2 bg-[#16202c] hover:bg-[#1e2b3b] text-slate-300 hover:text-white text-[11px] font-bold rounded-lg flex items-center justify-center gap-1 transition active:scale-95 border border-white/5 cursor-pointer"
+                  >
+                    <Camera className="h-3 w-3 text-cyan-400" />
+                    <span>Otra Foto</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenGallery}
+                    className="py-1 px-2 bg-[#16202c] hover:bg-[#1e2b3b] text-slate-300 hover:text-white text-[11px] font-bold rounded-lg flex items-center justify-center gap-1 transition active:scale-95 border border-white/5 cursor-pointer"
+                  >
+                    <ImageIcon className="h-3 w-3 text-slate-400" />
+                    <span>De Galería</span>
+                  </button>
+                </div>
+
+                {rawAiText && (
+                  <div className="pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowRawText(!showRawText)}
+                      className="text-[10px] text-slate-400 hover:text-cyan-300 flex items-center gap-1 font-medium cursor-pointer"
+                    >
+                      <Eye className="h-3 w-3" />
+                      <span>{showRawText ? 'Ocultar lectura de IA' : 'Ver lectura de AuraCore IA'}</span>
+                    </button>
+                    {showRawText && (
+                      <pre className="mt-1 p-2 bg-[#080d14] border border-white/10 rounded-xl text-[9px] font-mono text-slate-300 max-h-20 overflow-x-auto whitespace-pre-wrap">
+                        {rawAiText}
+                      </pre>
+                    )}
                   </div>
                 )}
-
-                <textarea
-                  value={pasteText}
-                  onChange={(e) => setPasteText(e.target.value)}
-                  rows={3}
-                  placeholder="Pega aquí las filas de despacho (de Excel o WhatsApp)..."
-                  className="w-full bg-[#080d14] border border-white/10 rounded-xl p-2.5 text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 shadow-inner resize-none"
-                />
-
-                <button
-                  type="button"
-                  onClick={handleParsePaste}
-                  disabled={scanning || !pasteText.trim()}
-                  className="w-full py-2 bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 text-white font-black text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>Interpretar y Cargar al Recuadro</span>
-                </button>
               </div>
+            )}
 
-              {/* RECUADRO DE RESULTADOS */}
-              {renderResultsBox()}
-            </div>
-          )}
+            {/* RECUADRO DE RESULTADOS */}
+            {renderResultsBox()}
+          </div>
         </div>
 
         {/* 5. Footer Cockpit */}
         <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-3 shrink-0">
           <button
             type="button"
+            disabled={saving}
             onClick={onClose}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-xs font-bold transition active:scale-95 cursor-pointer border border-white/10 shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-xs font-bold transition active:scale-95 cursor-pointer border border-white/10 shadow-sm disabled:opacity-50"
           >
             Cancelar
           </button>
@@ -793,7 +540,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
 
       {/* Modal Pantalla Completa para la Hoja de Despacho */}
       {showFullPhoto && previewUrl && (
-        <div 
+        <div
           className="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center p-3 animate-fade-in"
           onClick={() => setShowFullPhoto(false)}
         >
@@ -807,17 +554,17 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
               <span>Cerrar</span>
             </button>
           </div>
-          <img 
-            src={previewUrl} 
-            alt="Hoja Completa" 
-            className="max-w-full max-h-[88vh] object-contain rounded-xl border border-white/10 shadow-2xl" 
+          <img
+            src={previewUrl}
+            alt="Hoja Completa"
+            className="max-w-full max-h-[88vh] object-contain rounded-xl border border-white/10 shadow-2xl"
           />
         </div>
       )}
     </div>
   );
 
-  // Renderizador del Recuadro de Resultados (Con buen alto vertical y visualización cómoda)
+  // Renderizador del Recuadro de Resultados
   function renderResultsBox() {
     if (extractedOrders.length === 0) {
       return (
@@ -828,9 +575,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
           <div>
             <h4 className="text-xs font-bold text-white">Recuadro de Órdenes Vacío</h4>
             <p className="text-[11px] text-slate-400 max-w-xs mt-0.5 leading-snug">
-              {mode === 'photo'
-                ? 'Toma o sube una foto de tu hoja de despacho o lista de trabajos para que AuraCore IA la lea automáticamente.'
-                : 'Pega las líneas de despacho o presiona "Ejemplo Real" para cargarlas.'}
+              Toma o sube una foto de tu hoja de despacho o lista de trabajos para que AuraCore IA la lea automáticamente.
             </p>
           </div>
           <button
@@ -871,7 +616,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech,
           </button>
         </div>
 
-        {/* Lista de Filas en el Recuadro con altura cómoda */}
+        {/* Lista de Filas en el Recuadro */}
         <div className="space-y-2 py-2 flex-1 min-h-0">
           {extractedOrders.map((o, idx) => (
             <div

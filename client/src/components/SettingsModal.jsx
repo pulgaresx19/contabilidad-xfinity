@@ -323,7 +323,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="h-4 w-4" />
-                <span>AuraCore IA (Foto y Voz)</span>
+                <span>AuraCore IA (Escaneo de Fotos)</span>
               </span>
               {auraHealth && (
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 whitespace-nowrap shrink-0 ${

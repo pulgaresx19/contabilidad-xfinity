@@ -7,16 +7,18 @@ export function getLocalDateStr(date = new Date()) {
   return `${y}-${m}-${d}`;
 }
 
-// Normalizes date string to YYYY-MM-DD (handling MM-DD-YYYY or YYYY-MM-DD)
+// Normalizes date string to YYYY-MM-DD (handling MM-DD-YYYY, MM/DD/YYYY, or YYYY-MM-DD)
 export function normalizeDateStr(str) {
   if (!str) return '';
   const clean = String(str).trim().split('T')[0];
-  if (clean.includes('-')) {
-    const parts = clean.split('-');
+  const sep = clean.includes('-') ? '-' : (clean.includes('/') ? '/' : null);
+  if (sep) {
+    const parts = clean.split(sep);
     if (parts.length === 3) {
-      if (parts[0].length === 4) return clean; // YYYY-MM-DD
+      if (parts[0].length === 4) {
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      }
       if (parts[2].length === 4) {
-        // MM-DD-YYYY -> YYYY-MM-DD
         return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
       }
     }

@@ -171,11 +171,13 @@ export default function UberDriverView({
   const userHasPannedMapRef = useRef(false);
   const framedOrderIdRef = useRef(null);
 
-  // Reset free exploration and framed order when activeDate changes
+  // Reset free exploration, filters, and framed order when activeDate changes
   useEffect(() => {
     userHasPannedMapRef.current = false;
     setIsUserPanned(false);
     framedOrderIdRef.current = null;
+    setStatusFilter('ALL');
+    setOverlayStatusFilter('ALL');
   }, [activeDate]);
 
   // Date picker ref for direct calendar jump
@@ -2662,14 +2664,27 @@ export default function UberDriverView({
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
             <MapPin className="h-8 w-8 text-slate-500 mb-2" />
             <p className="text-sm font-bold text-white">No hay órdenes para este día</p>
-            <p className="text-xs text-slate-400 mt-1 mb-3">Toca "+ Trabajo" para agregar una nueva orden.</p>
-            <button
-              onClick={onOpenAddJob}
-              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-2xl text-xs font-bold shadow-md flex items-center gap-1.5 active:scale-95 transition"
-            >
-              <Plus className="h-4 w-4 stroke-[3]" />
-              <span>Trabajo</span>
-            </button>
+            <p className="text-xs text-slate-400 mt-1 mb-3">Escanea la foto de tu hoja o añade un trabajo manual.</p>
+            <div className="flex items-center justify-center gap-2">
+              {onOpenScan && (
+                <button
+                  type="button"
+                  onClick={onOpenScan}
+                  className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 rounded-2xl text-xs font-black shadow-md flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
+                >
+                  <Camera className="h-4 w-4 stroke-[2.5]" />
+                  <span>Escanear Foto</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onOpenAddJob}
+                className="px-4 py-2 bg-[#182332] hover:bg-[#243140] text-slate-100 border border-white/10 rounded-2xl text-xs font-bold shadow-md flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
+              >
+                <Plus className="h-4 w-4 stroke-[3] text-cyan-400" />
+                <span>Trabajo</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -3047,18 +3062,33 @@ export default function UberDriverView({
             </div>
 
             {/* Footer: Añadir a la izquierda, Guardar Orden a la derecha (Cerrar se retiró pues ya está la X arriba) */}
-            <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDayJobsOverlay(false);
-                  if (onOpenAddJob) onOpenAddJob();
-                }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white text-xs font-bold transition active:scale-95 cursor-pointer border border-white/10 shadow-sm"
-              >
-                <Plus className="h-4 w-4 stroke-[3]" />
-                <span>Añadir</span>
-              </button>
+            <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-1.5">
+                {onOpenScan && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDayJobsOverlay(false);
+                      onOpenScan();
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 text-xs font-black transition active:scale-95 cursor-pointer shadow-sm"
+                  >
+                    <Camera className="h-3.5 w-3.5 stroke-[2.5]" />
+                    <span>Foto</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDayJobsOverlay(false);
+                    if (onOpenAddJob) onOpenAddJob();
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white text-xs font-bold transition active:scale-95 cursor-pointer border border-white/10 shadow-sm"
+                >
+                  <Plus className="h-3.5 w-3.5 stroke-[3]" />
+                  <span>Añadir</span>
+                </button>
+              </div>
 
               <button
                 type="button"

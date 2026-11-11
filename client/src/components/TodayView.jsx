@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Camera, Check, X, Phone, MapPin, Share2, Clock, Copy,
   CheckCircle2, AlertCircle, Plus, Sparkles, AlertTriangle, Shield,
@@ -21,7 +21,8 @@ export default function TodayView({
   onOrderUpdated, 
   onUpdateOrders,
   viewMode: propViewMode,
-  hideModeToggle = false
+  hideModeToggle = false,
+  focusDateRequest = null
 }) {
   // Uses local device time (ET/CT/MT/PT) - never jumps to tomorrow in late evening hours
   const todayReal = getLocalDateStr();
@@ -41,6 +42,34 @@ export default function TodayView({
   });
 
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'Pendiente' | 'Completado' | 'No Realizado'
+
+  // Honor initial-load intent once async IndexedDB orders finish loading
+  const hasAutoFocusedInitialRef = useRef(orders.length > 0);
+  useEffect(() => {
+    if (!hasAutoFocusedInitialRef.current && orders.length > 0 && !focusDateRequest?.date) {
+      hasAutoFocusedInitialRef.current = true;
+      const hasToday = orders.some(o => normalizeDateStr(o.work_date) === todayReal);
+      if (!hasToday) {
+        const sorted = [...orders].sort((a, b) =>
+          normalizeDateStr(b.work_date).localeCompare(normalizeDateStr(a.work_date))
+        );
+        const recent = normalizeDateStr(sorted[0]?.work_date);
+        if (recent) setActiveDate(recent);
+      }
+    }
+  }, [orders, todayReal, focusDateRequest]);
+
+  // Auto-switch to the scanned sheet date when confirming scanned orders
+  useEffect(() => {
+    if (focusDateRequest?.date) {
+      hasAutoFocusedInitialRef.current = true;
+      const target = normalizeDateStr(focusDateRequest.date);
+      if (target) {
+        setActiveDate(target);
+        setStatusFilter('ALL');
+      }
+    }
+  }, [focusDateRequest]);
   const [internalViewMode, setInternalViewMode] = useState(() => {
     return propViewMode || localStorage.getItem('xfinity_view_mode') || 'classic';
   });
