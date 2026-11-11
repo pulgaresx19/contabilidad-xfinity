@@ -2,22 +2,23 @@ import { compressImage, fileToDataUrl } from './imageUtils';
 
 const STORAGE_KEY_URL = 'XFINITY_AURACORE_URL';
 
-function resolveDefaultAuraUrl() {
+export function resolveDefaultAuraUrl() {
   const envUrl =
     typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_AURACORE_URL;
   if (envUrl && String(envUrl).trim()) {
     return String(envUrl).trim().replace(/\/+$/, '');
   }
   if (typeof window !== 'undefined' && window.location) {
-    const { protocol, hostname } = window.location;
+    const { origin, protocol, hostname, port } = window.location;
+    if (hostname && hostname.endsWith('.trycloudflare.com')) {
+      return `${origin}/auracore`;
+    }
     if (protocol === 'http:' && hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return `http://${hostname}:3100`;
+      return port === '5000' ? `${origin}/auracore` : `http://${hostname}:3100`;
     }
   }
   return 'http://localhost:3100';
 }
-
-export const DEFAULT_AURACORE_URL = resolveDefaultAuraUrl();
 
 export function getAuraCoreUrl() {
   try {
@@ -28,22 +29,32 @@ export function getAuraCoreUrl() {
   } catch {
     // Ignore storage access errors
   }
-  return DEFAULT_AURACORE_URL;
+  return resolveDefaultAuraUrl();
 }
 
 export function setAuraCoreUrl(nextUrl) {
   const cleaned = String(nextUrl || '').trim().replace(/\/+$/, '');
+  const fallback = resolveDefaultAuraUrl();
   try {
-    if (!cleaned || cleaned === DEFAULT_AURACORE_URL) {
+    if (!cleaned || cleaned === fallback) {
       localStorage.removeItem(STORAGE_KEY_URL);
-      return DEFAULT_AURACORE_URL;
+      return fallback;
     }
     const normalized = /^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`;
     localStorage.setItem(STORAGE_KEY_URL, normalized);
     return normalized;
   } catch {
-    return cleaned || DEFAULT_AURACORE_URL;
+    return cleaned || fallback;
   }
+}
+
+export function resetAuraCoreUrl() {
+  try {
+    localStorage.removeItem(STORAGE_KEY_URL);
+  } catch {
+    // Ignore storage access errors
+  }
+  return resolveDefaultAuraUrl();
 }
 
 function splitDataUrl(dataUrl, fallbackMime = 'image/jpeg') {
@@ -77,18 +88,33 @@ export async function blobToInlineAudio(blob) {
 export async function checkAuraCoreHealth() {
   const baseUrl = getAuraCoreUrl();
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 3500);
+  const timer = setTimeout(() => ctrl.abort(), 5000);
   try {
     const res = await fetch(`${baseUrl}/api/health`, { signal: ctrl.signal });
     const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return {
+        ok: false,
+        configured: false,
+        model: '',
+        url: baseUrl,
+        error: json.error || `HTTP ${res.status} (${res.status === 402 || res.status === 403 ? 'Sitio/créditos pausados en Netlify' : 'No respondió /api/health'})`
+      };
+    }
     return {
-      ok: Boolean(res.ok && json.ok),
+      ok: Boolean(json.ok),
       configured: Boolean(json.gemini?.configured ?? json.configured),
       model: json.gemini?.model || json.model || '',
       url: baseUrl
     };
   } catch (err) {
-    return { ok: false, configured: false, model: '', url: baseUrl, error: err?.message || 'Sin conexión' };
+    const msg = String(err?.message || '');
+    const friendly = err?.name === 'AbortError'
+      ? 'Tiempo agotado (el servidor no respondió a tiempo)'
+      : /load failed|failed to fetch/i.test(msg)
+      ? 'No se pudo conectar (URL incorrecta, bloqueada o créditos de Netlify agotados)'
+      : msg || 'Sin conexión';
+    return { ok: false, configured: false, model: '', url: baseUrl, error: friendly };
   } finally {
     clearTimeout(timer);
   }
@@ -161,15 +187,15 @@ export async function interactWithAuraCore({
 
     const json = await res.json().catch(() => ({}));
     if (!res.ok || !json.ok) {
-      throw new Error(json.error || `Error de AuraCore (${res.status})`);
+      throw new Error(json.error || `Error de AuraCore (HTTP ${res.status})`);
     }
     return json;
   } catch (err) {
     if (err?.name === 'AbortError') {
       throw new Error(`Tiempo agotado esperando respuesta de AuraCore (${baseUrl}).`);
     }
-    if (err?.message?.includes('Failed to fetch')) {
-      throw new Error(`No se pudo conectar con AuraCore en ${baseUrl}.`);
+    if (/failed to fetch|load failed|networkerror/i.test(err?.message || '')) {
+      throw new Error(`No se pudo conectar con ${baseUrl}. Si tus créditos de Netlify están vencidos o la URL falló, toca Ajustes (⚙️) → "Auto".`);
     }
     throw err;
   } finally {

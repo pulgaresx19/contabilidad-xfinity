@@ -1659,6 +1659,22 @@ app.delete('/api/dispatch-sheets/:id', (req, res) => {
   }
 });
 
+// Same-origin proxy hacia AuraCore-AI local (permite usar el QR/túnel desde iPhone/Android sin CORS ni créditos externos)
+app.use('/auracore', async (req, res) => {
+  try {
+    const targetUrl = `http://127.0.0.1:3100${req.url}`;
+    const upstream = await fetch(targetUrl, {
+      method: req.method,
+      headers: { 'Content-Type': 'application/json' },
+      body: req.method === 'POST' || req.method === 'PUT' ? JSON.stringify(req.body || {}) : undefined
+    });
+    const bodyText = await upstream.text();
+    res.status(upstream.status).set('Content-Type', upstream.headers.get('content-type') || 'application/json').send(bodyText);
+  } catch (err) {
+    res.status(502).json({ ok: false, error: 'AuraCore local (puerto 3100) no respondió: ' + err.message });
+  }
+});
+
 // Serve frontend build if present
 const clientDist = path.join(__dirname, 'client', 'dist');
 if (fs.existsSync(clientDist)) {

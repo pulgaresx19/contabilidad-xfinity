@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Settings, Save, Check, Calendar, DollarSign, ShieldCheck, Sun, Moon, Monitor, Sparkles, Wifi } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { getAuraCoreUrl, setAuraCoreUrl, checkAuraCoreHealth } from '../services/auraService';
+import { getAuraCoreUrl, setAuraCoreUrl, resetAuraCoreUrl, checkAuraCoreHealth } from '../services/auraService';
 
 const WEEK_DAYS = [
   { id: '1', short: 'Lun', full: 'Lunes', cycle: 'Martes a Lunes' },
@@ -345,24 +345,41 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
               )}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
               <input
                 type="url"
-                placeholder="http://localhost:3100 o https://tu-auracore.onrender.com"
+                placeholder="https://tu-auracore.netlify.app o Auto"
                 value={auraUrl}
                 onChange={(e) => setAuraUrl(e.target.value)}
-                className="flex-1 bg-[#0f1722] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500 shadow-inner"
+                className="flex-1 min-w-0 bg-[#0f1722] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500 shadow-inner"
               />
               <button
                 type="button"
                 onClick={() => testAuraConnection(auraUrl)}
-                className="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 text-xs font-bold transition cursor-pointer shrink-0"
+                className="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 text-xs font-bold transition cursor-pointer shrink-0"
               >
                 Probar
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const auto = resetAuraCoreUrl();
+                  setAuraUrl(auto);
+                  testAuraConnection(auto);
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold transition cursor-pointer shrink-0"
+                title="Restaurar URL automática hacia esta PC"
+              >
+                Auto
+              </button>
             </div>
+            {auraHealth && !auraHealth.checking && !auraHealth.ok && auraHealth.error && (
+              <p className="text-[10px] text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-lg px-2 py-1 leading-snug">
+                {auraHealth.error}
+              </p>
+            )}
             <p className="text-[10px] text-slate-400 leading-tight">
-              Usa <code className="text-cyan-300">http://localhost:3100</code> en esta PC o pega tu URL HTTPS en la nube (Render/Railway) para usar la IA 24/7 sin tener la computadora encendida.
+              Toca <strong className="text-amber-300">Auto</strong> para probar directo con la IA de tu computadora por el túnel QR, o pega tu enlace HTTPS de Netlify/Render cuando esté activo.
             </p>
           </div>
 
