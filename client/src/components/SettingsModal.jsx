@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Settings, Save, Check, Calendar, DollarSign, ShieldCheck, Sun, Moon, Monitor } from 'lucide-react';
+import { X, Settings, Save, Check, Calendar, DollarSign, ShieldCheck, Sun, Moon, Monitor, Sparkles, Wifi } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { getAuraCoreUrl, setAuraCoreUrl, checkAuraCoreHealth } from '../services/auraService';
 
 const WEEK_DAYS = [
   { id: '1', short: 'Lun', full: 'Lunes', cycle: 'Martes a Lunes' },
@@ -24,9 +25,20 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
   });
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [auraUrl, setAuraUrl] = useState(() => getAuraCoreUrl());
+  const [auraHealth, setAuraHealth] = useState(null);
+
+  const testAuraConnection = async (customUrl) => {
+    if (customUrl !== undefined) setAuraCoreUrl(customUrl);
+    setAuraHealth({ checking: true });
+    const res = await checkAuraCoreHealth();
+    setAuraHealth({ checking: false, ...res });
+  };
 
   useEffect(() => {
     if (isOpen) {
+      setAuraUrl(getAuraCoreUrl());
+      testAuraConnection();
       fetch('/api/settings')
         .then((res) => res.json())
         .then((data) => {
@@ -64,6 +76,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
     e.preventDefault();
     setLoading(true);
     setSaved(false);
+    setAuraCoreUrl(auraUrl);
 
     try {
       const res = await fetch('/api/settings', {
@@ -303,6 +316,54 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
                 Al pasar de {settings.footage_base || '300'} ft, se pagan +${settings.footage_extra_rate || '25'} automáticamente por cada 100 ft extra.
               </p>
             </div>
+          </div>
+
+          {/* 2B. SERVIDOR AURACORE IA */}
+          <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4" />
+                <span>AuraCore IA (Foto y Voz)</span>
+              </span>
+              {auraHealth && (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 whitespace-nowrap shrink-0 ${
+                  auraHealth.checking
+                    ? 'bg-slate-800 border-white/10 text-slate-300'
+                    : auraHealth.ok
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                    : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                }`}>
+                  <Wifi className="w-2.5 h-2.5" />
+                  <span>
+                    {auraHealth.checking
+                      ? 'Probando...'
+                      : auraHealth.ok
+                      ? `En línea · ${auraHealth.model || 'Gemini'}`
+                      : 'Sin conexión'}
+                  </span>
+                </span>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="url"
+                placeholder="http://localhost:3100 o https://tu-auracore.onrender.com"
+                value={auraUrl}
+                onChange={(e) => setAuraUrl(e.target.value)}
+                className="flex-1 bg-[#0f1722] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500 shadow-inner"
+              />
+              <button
+                type="button"
+                onClick={() => testAuraConnection(auraUrl)}
+                className="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 text-xs font-bold transition cursor-pointer shrink-0"
+              >
+                Probar
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-400 leading-tight">
+              Usa <code className="text-cyan-300">http://localhost:3100</code> en esta PC o pega tu URL HTTPS en la nube (Render/Railway) para usar la IA 24/7 sin tener la computadora encendida.
+            </p>
           </div>
 
           {/* 3. DÍA DE CIERRE SEMANAL (SEMANARIO LINEAL) */}

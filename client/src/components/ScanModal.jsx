@@ -1,24 +1,33 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Camera, Check, AlertCircle, Trash2, Plus, Sparkles, X, Eye, 
   Image as ImageIcon, Calendar, MapPin, Phone, Ruler, Maximize2, 
-  HelpCircle, FileText
+  HelpCircle, FileText, Mic, Square, Loader2, Send
 } from 'lucide-react';
 import { getLocalDateStr } from '../utils/dateUtils';
-import { preprocessImageForOcr } from '../services/imageUtils';
-import { recognizeDispatchSheet } from '../services/ocrService';
+import { interactWithAuraCore } from '../services/auraService';
+import { useAuraVoiceInput } from '../hooks/useAuraVoiceInput';
 
-export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech }) {
+export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech, orders = [], summaryData = null, initialMode = 'photo' }) {
   const [sheetDate, setSheetDate] = useState(() => getLocalDateStr());
   const [techId, setTechId] = useState(defaultTech || 'Javier (P0G1)');
-  const [mode, setMode] = useState('photo'); // 'photo' | 'paste'
+  const [mode, setMode] = useState(initialMode); // 'photo' | 'paste' | 'ai'
+  const [aiQueryText, setAiQueryText] = useState('');
+  const [aiReply, setAiReply] = useState(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const {
+    isListening,
+    liveTranscript,
+    startListening,
+    stopListening,
+    clearTranscript
+  } = useAuraVoiceInput();
 
-  // Photo & OCR state
+  // Photo & AuraCore IA state
   const [previewUrl, setPreviewUrl] = useState(null);
   const [scanning, setScanning] = useState(false);
-  const [ocrProgress, setOcrProgress] = useState(0);
   const [extractedOrders, setExtractedOrders] = useState([]);
-  const [rawOcrText, setRawOcrText] = useState('');
+  const [rawAiText, setRawAiText] = useState('');
   const [showRawText, setShowRawText] = useState(false);
   const [showFullPhoto, setShowFullPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -31,6 +40,16 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
   // Paste state
   const [pasteText, setPasteText] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode || 'photo');
+      setTechId(defaultTech || 'Javier (P0G1)');
+    } else {
+      stopListening();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialMode, defaultTech]);
 
   if (!isOpen) return null;
 
@@ -66,67 +85,55 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
     const file = e.target.files[0];
     if (!file) return;
 
-    // Reset input value so re-selecting the same file works smoothly
     e.target.value = '';
 
     setPreviewUrl(URL.createObjectURL(file));
     setScanning(true);
-    setOcrProgress(5);
     setMessage(null);
     setExtractedOrders([]);
+    setRawAiText('');
 
     let ordersFound = [];
     let extractedText = '';
+    let auraModel = '';
+    let aiErrorMsg = '';
+    let aiNote = '';
+    let aiNeedsConfirmation = false;
 
-    // 1. Try server-side OCR first (Node.js + Sharp Libvips)
+    // Lectura directa 100% por IA multimodal (AuraCore -> Gemini Vision)
     try {
-      const formData = new FormData();
-      formData.append('sheetPhoto', file);
-      formData.append('sheet_photo', file);
-      formData.append('sheetDate', sheetDate);
-      formData.append('sheet_date', sheetDate);
-      formData.append('techId', techId);
-
-      const res = await fetch('/api/dispatch-sheets/scan', {
-        method: 'POST',
-        body: formData,
+      const auraRes = await interactWithAuraCore({
+        imageFile: file,
+        text: 'Lee esta foto de hoja de despacho o lista de trabajos Xfinity y extrae TODAS las filas en el arreglo orders.',
+        defaultTech: techId,
+        defaultDate: sheetDate,
+        orders,
+        summaryData
       });
-
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (data.parsedOrders && data.parsedOrders.length > 0) {
-          ordersFound = data.parsedOrders;
-          extractedText = data.extractedText || '';
-        }
-      }
-    } catch (apiErr) {
-      console.warn('Backend OCR notice (falling back to client engine):', apiErr);
-    }
-
-    // 2. Client-side Local OCR engine (runs 100% in browser on phone/Netlify)
-    if (!ordersFound || ordersFound.length === 0) {
-      try {
-        setOcrProgress(15);
-        const localResult = await recognizeDispatchSheet(file, sheetDate, techId, (pct) => {
-          setOcrProgress(Math.max(15, pct));
-        });
-        if (localResult && localResult.parsedOrders) {
-          ordersFound = localResult.parsedOrders;
-          extractedText = localResult.text || '';
-        }
-      } catch (clientErr) {
-        console.error('Client OCR error:', clientErr);
-      }
+      ordersFound = auraRes?.data?.orders || [];
+      extractedText = auraRes?.data?.transcript || auraRes?.data?.replyText || '';
+      auraModel = auraRes?.modelUsed || 'Gemini';
+      aiNote = auraRes?.data?.ambiguityNote || '';
+      aiNeedsConfirmation = Boolean(auraRes?.data?.needsConfirmation);
+    } catch (auraErr) {
+      aiErrorMsg = auraErr.message || 'No se pudo conectar con AuraCore IA.';
     }
 
     setScanning(false);
-    setOcrProgress(0);
+
+    if (aiErrorMsg) {
+      setMessage({
+        type: 'error',
+        text: `Error de AuraCore IA: ${aiErrorMsg} Revisa la URL del servidor en Ajustes (⚙️).`
+      });
+      return;
+    }
 
     if (!ordersFound || ordersFound.length === 0) {
+      setRawAiText(extractedText);
       setMessage({
         type: 'warning',
-        text: 'Foto guardada. No se reconocieron números de orden automáticamente. Puedes completar los datos en el recuadro o pulsar "Agregar Fila".'
+        text: 'AuraCore IA analizó la foto pero no encontró órdenes válidas. Intenta con una foto más clara o usa "Agregar Fila".'
       });
       setExtractedOrders([
         {
@@ -152,7 +159,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
       if (detectedDate && detectedDate !== sheetDate) {
         setSheetDate(detectedDate);
       }
-      setRawOcrText(extractedText);
+      setRawAiText(extractedText);
       setExtractedOrders(
         ordersFound.map((o) => ({
           ...o,
@@ -163,8 +170,8 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
         }))
       );
       setMessage({
-        type: 'success',
-        text: `¡Foto analizada con éxito! Se detectaron ${ordersFound.length} orden(es). Revisa y confirma abajo.`
+        type: aiNeedsConfirmation ? 'warning' : 'success',
+        text: `¡Foto analizada con AuraCore IA (${auraModel})! Se detectaron ${ordersFound.length} orden(es).${aiNote ? ' Revisar: ' + aiNote : ' Revisa y confirma abajo.'}`
       });
     }
   };
@@ -273,6 +280,63 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
     }
   };
 
+  const runAuraPrompt = async ({ textPrompt = '', audioBlob = null } = {}) => {
+    const cleanText = String(textPrompt || aiQueryText || '').trim();
+    if (!cleanText && !audioBlob) return;
+
+    setAiBusy(true);
+    setMessage(null);
+    try {
+      const res = await interactWithAuraCore({
+        text: cleanText,
+        audioBlob,
+        defaultTech: techId,
+        defaultDate: sheetDate,
+        orders,
+        summaryData
+      });
+      const d = res?.data || {};
+      setAiReply({
+        intent: d.intent || 'CONSULTA',
+        text: d.replyText || 'Listo.',
+        transcript: d.transcript || cleanText,
+        modelUsed: res.modelUsed || 'Gemini'
+      });
+      if (Array.isArray(d.orders) && d.orders.length > 0) {
+        const normalized = d.orders.map((o) => ({
+          ...o,
+          work_date: o.work_date || sheetDate,
+          tech_id: o.tech_id || techId,
+          rate_calculated: calcOrderRate(o.drop_footage, o.bore_type),
+          status: 'Pendiente',
+          payment_status: 'Pendiente'
+        }));
+        setExtractedOrders((prev) => [...prev, ...normalized]);
+        setMessage({
+          type: d.needsConfirmation ? 'warning' : 'success',
+          text: `AuraCore agregó ${normalized.length} orden(es) al recuadro de revisión.${d.ambiguityNote ? ' ' + d.ambiguityNote : ''}`
+        });
+      }
+      if (cleanText && !audioBlob) setAiQueryText('');
+      clearTranscript();
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const handleToggleScanVoice = () => {
+    setMessage(null);
+    startListening({
+      onError: (msg) => setMessage({ type: 'error', text: msg }),
+      onComplete: ({ transcript, audioBlob }) => {
+        if (transcript) setAiQueryText(transcript);
+        runAuraPrompt({ textPrompt: transcript, audioBlob });
+      }
+    });
+  };
+
   const handleInsertSampleText = () => {
     const sample = `10-30-2026\tOSDENINY (P0G2)\t748966\t1308 MINTCREST DR,\tGOSHEN\t46526-6282\tP#:5749038080/DROP:71.37/Type:RG-6/BORE:N/TEMP:Y/Obstacles:N/Premise ACS:N/NBR:N
 10-30-2026\tOSDENINY (P0G2)\t833906\t21935 KIMBERLY DR,\tGOSHEN\t46526-8755\tP#:5743500180/DROP:200.57/Type:RG-6/BORE:N/TEMP:Y/Obstacles:N/Premise ACS:N/NBR:N
@@ -322,22 +386,22 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
               <Camera className="h-4 w-4 stroke-[2.5]" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm font-black text-slate-900 dark:text-white truncate tracking-wide">
-                Escanear Hoja de Despacho
+              <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate tracking-wide">
+                Escanear IA
               </h3>
-              <p className="text-[10.5px] text-slate-600 dark:text-slate-400 font-mono font-semibold truncate">
-                OCR automático y lectura de órdenes
+              <p className="text-[10px] text-slate-600 dark:text-slate-400 font-mono font-semibold truncate">
+                Foto y Voz IA
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Mode Switch (Foto / Texto) */}
-            <div className="flex bg-[#16202c] p-0.5 rounded-lg border border-white/10 text-[10px]">
+            {/* Mode Switch (Foto / Texto / IA Voz) */}
+            <div className="flex bg-[#16202c] p-0.5 rounded-lg border border-white/10 text-[10px] whitespace-nowrap shrink-0">
               <button
                 type="button"
                 onClick={() => setMode('photo')}
-                className={`px-2 py-0.5 rounded font-bold transition cursor-pointer flex items-center gap-1 ${
+                className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer flex items-center gap-1 ${
                   mode === 'photo' 
                     ? 'bg-cyan-500 text-slate-950 shadow-xs' 
                     : 'text-slate-400 hover:text-white'
@@ -349,7 +413,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
               <button
                 type="button"
                 onClick={() => setMode('paste')}
-                className={`px-2 py-0.5 rounded font-bold transition cursor-pointer flex items-center gap-1 ${
+                className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer flex items-center gap-1 ${
                   mode === 'paste' 
                     ? 'bg-cyan-500 text-slate-950 shadow-xs' 
                     : 'text-slate-400 hover:text-white'
@@ -357,6 +421,18 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
               >
                 <FileText className="w-3 h-3" />
                 <span>Texto</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('ai')}
+                className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer flex items-center gap-1 ${
+                  mode === 'ai' 
+                    ? 'bg-amber-400 text-slate-950 shadow-xs' 
+                    : 'text-amber-300 hover:text-white'
+                }`}
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Voz</span>
               </button>
             </div>
 
@@ -393,7 +469,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
               Modo Activo
             </span>
             <span className="text-xs font-black text-white uppercase tracking-tight block">
-              {mode === 'photo' ? 'Cámara OCR' : 'Texto / Tabla'}
+              {mode === 'photo' ? 'AuraCore IA' : mode === 'ai' ? 'IA Voz / Chat' : 'Texto / Tabla'}
             </span>
           </div>
           <div className="bg-[#16202c] py-1.5 px-1 rounded-xl border border-white/5 flex flex-col justify-center">
@@ -452,11 +528,11 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
             </div>
           )}
 
-          {/* Spinner de procesamiento OCR */}
+          {/* Spinner de procesamiento AuraCore IA */}
           {scanning && (
             <div className="p-3 bg-cyan-500/15 border border-cyan-500/30 rounded-xl flex items-center justify-center gap-2.5 text-cyan-300 text-xs">
               <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin shrink-0"></div>
-              <span className="font-bold">{ocrProgress > 0 ? `Analizando hoja con OCR inteligente (${ocrProgress}%)...` : "Analizando hoja con OCR y reconociendo órdenes..."}</span>
+              <span className="font-bold">Analizando foto con AuraCore IA...</span>
             </div>
           )}
 
@@ -516,7 +592,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                     </button>
                   </div>
 
-                  {rawOcrText && (
+                  {rawAiText && (
                     <div className="pt-0.5">
                       <button
                         type="button"
@@ -524,11 +600,11 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                         className="text-[10px] text-slate-400 hover:text-cyan-300 flex items-center gap-1 font-medium cursor-pointer"
                       >
                         <Eye className="h-3 w-3" />
-                        <span>{showRawText ? 'Ocultar texto OCR' : 'Ver texto OCR leído'}</span>
+                        <span>{showRawText ? 'Ocultar lectura de IA' : 'Ver lectura de AuraCore IA'}</span>
                       </button>
                       {showRawText && (
-                        <pre className="mt-1 p-2 bg-[#080d14] border border-white/10 rounded-xl text-[9px] font-mono text-slate-300 max-h-20 overflow-x-auto">
-                          {rawOcrText}
+                        <pre className="mt-1 p-2 bg-[#080d14] border border-white/10 rounded-xl text-[9px] font-mono text-slate-300 max-h-20 overflow-x-auto whitespace-pre-wrap">
+                          {rawAiText}
                         </pre>
                       )}
                     </div>
@@ -538,6 +614,93 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
               {/* RECUADRO DE RESULTADOS: Ocupa todo el espacio vertical disponible */}
               {renderResultsBox()}
+            </div>
+          )}
+
+          {/* MODO IA VOZ / CONSULTAS */}
+          {mode === 'ai' && (
+            <div className="space-y-3">
+              <div className="bg-[#0e1622] border border-amber-500/25 rounded-2xl p-3 space-y-2.5 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10.5px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Dictar Trabajos o Preguntar Datos</span>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={aiBusy}
+                    onClick={handleToggleScanVoice}
+                    className={`px-3 py-1 rounded-xl border text-[11px] font-black flex items-center gap-1.5 transition active:scale-95 cursor-pointer disabled:opacity-50 ${
+                      isListening
+                        ? 'bg-rose-500/25 border-rose-400 text-rose-200 animate-pulse'
+                        : 'bg-amber-500 text-slate-950 border-amber-300'
+                    }`}
+                  >
+                    {isListening ? <Square className="w-3 h-3 fill-current" /> : <Mic className="w-3.5 h-3.5" />}
+                    <span>{isListening ? 'Detener Mic' : 'Hablar'}</span>
+                  </button>
+                </div>
+
+                {(isListening || liveTranscript) && (
+                  <div className="p-2.5 bg-black/40 border border-amber-400/25 rounded-xl text-[11px] text-amber-100 leading-snug">
+                    <span className="font-bold text-amber-400 mr-1">{isListening ? 'Escuchando:' : 'Texto:'}</span>
+                    <span className="font-mono">{liveTranscript || 'Habla ahora...'}</span>
+                  </div>
+                )}
+
+                <div className="flex gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => runAuraPrompt({ textPrompt: '¿Cuánto llevo ganado en total y cuántas órdenes pendientes tengo?' })}
+                    className="text-[10px] px-2 py-1 rounded-lg bg-[#16202c] hover:bg-[#1e2b3b] border border-white/10 text-slate-300 font-semibold cursor-pointer"
+                  >
+                    ¿Cuánto llevo ganado?
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runAuraPrompt({ textPrompt: 'Resume las últimas órdenes pendientes con su dirección.' })}
+                    className="text-[10px] px-2 py-1 rounded-lg bg-[#16202c] hover:bg-[#1e2b3b] border border-white/10 text-slate-300 font-semibold cursor-pointer"
+                  >
+                    ¿Qué trabajos faltan?
+                  </button>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={aiQueryText}
+                    onChange={(e) => setAiQueryText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        runAuraPrompt();
+                      }
+                    }}
+                    placeholder='Ej: "Agrega orden 626746 en 23322 Ironwood Dr drop 104 RG-11"' 
+                    className="flex-1 bg-[#080d14] border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                  />
+                  <button
+                    type="button"
+                    disabled={aiBusy || !aiQueryText.trim()}
+                    onClick={() => runAuraPrompt()}
+                    className="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-xs flex items-center gap-1 active:scale-95 transition cursor-pointer disabled:opacity-50"
+                  >
+                    {aiBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+
+                {aiReply && (
+                  <div className="p-2.5 bg-[#080d14] border border-cyan-500/25 rounded-xl space-y-1">
+                    <div className="flex items-center justify-between text-[9.5px] font-mono text-cyan-400">
+                      <span>AuraCore IA ({aiReply.modelUsed})</span>
+                      <span>{aiReply.intent}</span>
+                    </div>
+                    <p className="text-xs text-slate-100 leading-relaxed whitespace-pre-wrap">{aiReply.text}</p>
+                  </div>
+                )}
+              </div>
+
+              {extractedOrders.length > 0 && renderResultsBox()}
             </div>
           )}
 
@@ -666,7 +829,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
             <h4 className="text-xs font-bold text-white">Recuadro de Órdenes Vacío</h4>
             <p className="text-[11px] text-slate-400 max-w-xs mt-0.5 leading-snug">
               {mode === 'photo'
-                ? 'Toma o sube una foto de tu hoja de despacho para que el OCR detecte automáticamente todas las órdenes.'
+                ? 'Toma o sube una foto de tu hoja de despacho o lista de trabajos para que AuraCore IA la lea automáticamente.'
                 : 'Pega las líneas de despacho o presiona "Ejemplo Real" para cargarlas.'}
             </p>
           </div>

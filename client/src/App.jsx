@@ -7,7 +7,7 @@ import ProfileView from './components/ProfileView';
 import ScanModal from './components/ScanModal';
 import PhotoModal from './components/PhotoModal';
 import SettingsModal from './components/SettingsModal';
-import { Cable, ShieldCheck, Settings, Sun, Moon } from 'lucide-react';
+import { Cable, ShieldCheck, Settings, Sun, Moon, Sparkles } from 'lucide-react';
 import { useTheme } from './context/ThemeContext';
 import { getLocalDateStr } from './utils/dateUtils';
 
@@ -21,6 +21,7 @@ export default function App() {
 
   // Modals
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [scanInitialMode, setScanInitialMode] = useState('photo');
   const [selectedPhotoOrder, setSelectedPhotoOrder] = useState(null);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -200,6 +201,19 @@ export default function App() {
               <span className="text-[10px] text-slate-300 font-mono font-semibold">{techName}</span>
             </div>
 
+            {/* Botón rápido AuraCore IA (Foto / Voz / Consultas) */}
+            <button
+              onClick={() => {
+                setScanInitialMode('ai');
+                setIsScanModalOpen(true);
+              }}
+              className="px-2 py-1 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 hover:text-amber-300 border border-amber-500/30 transition active:scale-95 cursor-pointer flex items-center gap-1 text-[10.5px] font-black"
+              title="AuraCore IA: Foto, Voz y Consultas"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>IA</span>
+            </button>
+
             {/* Botón rápido Modo Claro / Modo Oscuro */}
             <button
               onClick={toggleTheme}
@@ -236,7 +250,7 @@ export default function App() {
               <TodayView
                 orders={orders}
                 summaryData={summaryData}
-                onOpenScan={() => setIsScanModalOpen(true)}
+                onOpenScan={() => { setScanInitialMode('photo'); setIsScanModalOpen(true); }}
                 onOpenPhotos={handleOpenPhotos}
                 onOrderUpdated={refreshAll}
                 onUpdateOrders={setOrders}
@@ -251,7 +265,7 @@ export default function App() {
                 summaryData={summaryData}
                 onRefresh={refreshAll}
                 onOpenPhotos={handleOpenPhotos}
-                onOpenScan={() => setIsScanModalOpen(true)}
+                onOpenScan={() => { setScanInitialMode('photo'); setIsScanModalOpen(true); }}
                 onOrderUpdated={refreshAll}
                 onUpdateOrders={setOrders}
               />
@@ -285,6 +299,9 @@ export default function App() {
           setActiveTab('today');
         }}
         defaultTech={techName}
+        orders={orders}
+        summaryData={summaryData}
+        initialMode={scanInitialMode}
       />
 
       {/* Photo Modal for job evidence */}
