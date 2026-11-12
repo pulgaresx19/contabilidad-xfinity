@@ -1015,8 +1015,28 @@ export async function batchImportOrders(ordersList = []) {
     try {
       const existing = await getOrderByJobId(o.job_id);
       if (existing) {
-        // Update existing record to reflect scanned details & preserve/update fields
-        await updateOrder(existing.id, o);
+        // Preserve already completed, cancelled, or paid orders on accidental re-scans
+        const isLockedState =
+          existing.status === 'Completado' ||
+          existing.status === 'No Realizado' ||
+          existing.payment_status === 'Cobrado';
+        const mergedInput = isLockedState
+          ? {
+              ...o,
+              status: existing.status,
+              payment_status: existing.payment_status,
+              manual_adjustment: existing.manual_adjustment,
+              adjustment_reason: existing.adjustment_reason,
+              cancel_reason: existing.cancel_reason,
+              route_order: existing.route_order
+            }
+          : {
+              ...o,
+              manual_adjustment: existing.manual_adjustment || o.manual_adjustment || 0,
+              adjustment_reason: existing.adjustment_reason || o.adjustment_reason || '',
+              route_order: existing.route_order || o.route_order || 0
+            };
+        await updateOrder(existing.id, mergedInput);
         results.updated++;
       } else {
         await createOrder(o);

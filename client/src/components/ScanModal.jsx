@@ -9,6 +9,12 @@ import { interactWithAuraCore } from '../services/auraService';
 export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech }) {
   const [sheetDate, setSheetDate] = useState(() => getLocalDateStr());
   const [techId, setTechId] = useState(defaultTech || 'Javier (P0G1)');
+  const [rateConfig, setRateConfig] = useState({
+    base_rate: 100,
+    bore_dw_bonus: 30,
+    footage_base: 300,
+    footage_extra_rate: 25
+  });
 
   // Photo & AuraCore IA state
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -50,6 +56,19 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
   useEffect(() => {
     if (isOpen) {
       setTechId(defaultTech || 'Javier (P0G1)');
+      fetch('/api/settings')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((s) => {
+          if (s) {
+            setRateConfig({
+              base_rate: parseFloat(s.base_rate) || 100,
+              bore_dw_bonus: parseFloat(s.bore_dw_bonus) || 30,
+              footage_base: parseFloat(s.footage_base) || 300,
+              footage_extra_rate: parseFloat(s.footage_extra_rate) || 25
+            });
+          }
+        })
+        .catch(() => {});
     } else {
       resetScanState();
     }
@@ -65,16 +84,16 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
   if (!isOpen) return null;
 
-  // Rate calculator helper
+  // Rate calculator helper (synced with Ajustes)
   const calcOrderRate = (footage, bore) => {
-    let rate = 100;
-    if (bore && typeof bore === 'string' && bore.includes('DW')) {
-      rate += 30;
+    let rate = rateConfig.base_rate;
+    if (bore && typeof bore === 'string' && /DW/i.test(bore)) {
+      rate += rateConfig.bore_dw_bonus;
     }
     const num = parseFloat(footage) || 0;
-    if (num > 300) {
-      const extraBlocks = Math.floor((num - 300) / 100);
-      if (extraBlocks > 0) rate += extraBlocks * 25;
+    if (num > rateConfig.footage_base) {
+      const extraBlocks = Math.floor((num - rateConfig.footage_base) / 100);
+      if (extraBlocks > 0) rate += extraBlocks * rateConfig.footage_extra_rate;
     }
     return rate;
   };
@@ -693,9 +712,9 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                     className="w-12 bg-transparent text-amber-300 font-mono font-bold focus:outline-none text-[10.5px]"
                   />
                   <span className="text-slate-500 font-mono">ft</span>
-                  {o.drop_footage > 300 && (
+                  {o.drop_footage > rateConfig.footage_base && (
                     <span className="text-[9px] text-emerald-400 font-bold font-mono">
-                      (+$${Math.floor((o.drop_footage - 300) / 100) * 25})
+                      (+${Math.floor((o.drop_footage - rateConfig.footage_base) / 100) * rateConfig.footage_extra_rate})
                     </span>
                   )}
                 </div>
@@ -725,7 +744,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                   className="bg-[#0b1017] border border-white/10 rounded-lg px-1.5 py-0.5 text-[10px] text-slate-200 focus:outline-none cursor-pointer"
                 >
                   <option value="N">Sin Bore ($0)</option>
-                  <option value="DW:1">Driveway (+$30)</option>
+                  <option value="DW:1">Driveway (+${rateConfig.bore_dw_bonus})</option>
                   <option value="SW:1">Sidewalk ($0)</option>
                 </select>
 
