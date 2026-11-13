@@ -256,43 +256,41 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           </button>
         </div>
 
-        {/* 2. Quick KPI / Specs Bar (Idéntico a Travesía del Día y PhotoModal) */}
-        <div className="grid grid-cols-3 gap-2 px-4 py-2.5 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
-          <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
-            <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
-              {isCancelled ? 'Motivo' : 'Metraje / Cable'}
-            </span>
-            <span className={`text-sm font-black font-mono truncate block ${isCancelled ? 'text-rose-400' : 'text-cyan-400'}`}>
-              {isCancelled 
-                ? (order.cancel_reason ? order.cancel_reason.slice(0, 15) : 'Inconveniente') 
-                : `${order.drop_footage || 0} ft • ${order.cable_type || 'RG-6'}`}
-            </span>
+        {/* 2. Quick KPI / Specs Bar (Solo en trabajos completados; en no realizado se ahorra el espacio para ver el mensaje completo) */}
+        {!isCancelled && (
+          <div className="grid grid-cols-3 gap-2 px-4 py-2.5 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
+            <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
+              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+                Metraje / Cable
+              </span>
+              <span className="text-sm font-black font-mono truncate block text-cyan-400">
+                {order.drop_footage || 0} ft • {order.cable_type || 'RG-6'}
+              </span>
+            </div>
+            <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
+              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+                Evidencias
+              </span>
+              <span className="text-sm font-black text-white font-mono">
+                {orderPhotos.length} {orderPhotos.length === 1 ? 'adjunta' : 'adjuntas'}
+              </span>
+            </div>
+            <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
+              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
+                Driveway
+              </span>
+              <span className={`text-sm font-black font-mono ${hasDriveway ? 'text-cyan-400' : 'text-slate-400'}`}>
+                {hasDriveway ? 'Sí' : 'No'}
+              </span>
+            </div>
           </div>
-          <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
-            <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
-              Evidencias
-            </span>
-            <span className="text-sm font-black text-white font-mono">
-              {orderPhotos.length} {orderPhotos.length === 1 ? 'adjunta' : 'adjuntas'}
-            </span>
-          </div>
-          <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
-            <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
-              {isCancelled ? 'Estado' : 'Driveway'}
-            </span>
-            <span className={`text-sm font-black font-mono ${
-              isCancelled ? 'text-rose-400' : hasDriveway ? 'text-cyan-400' : 'text-slate-400'
-            }`}>
-              {isCancelled ? 'No Realizado' : hasDriveway ? 'Sí' : 'No'}
-            </span>
-          </div>
-        </div>
+        )}
 
         {/* 3. Cuerpo del Modal Scrollable */}
         <div className="p-4 overflow-y-auto space-y-3.5 flex-1 scrollbar-none bg-[#101722]">
           
           {/* Detalles Técnicos Extra si aplican (Driveway) */}
-          {hasDriveway && (
+          {hasDriveway && !isCancelled && (
             <div className="bg-[#16202c] border border-white/5 rounded-2xl p-2.5 flex items-center gap-2 flex-wrap text-xs">
               <span className="px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40 text-[10px] flex items-center gap-1 font-mono">
                 🚗 Driveway Bore: Sí
@@ -303,9 +301,14 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           {/* Texto del Reporte Editable */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                {isCancelled ? 'Mensaje de Constancia (Editable)' : 'Mensaje del Reporte (Editable)'}
-              </label>
+              <div className="flex items-center gap-1.5">
+                {isCancelled && (
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                )}
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  {isCancelled ? 'Mensaje de Constancia (Editable)' : 'Mensaje del Reporte (Editable)'}
+                </label>
+              </div>
               <button
                 type="button"
                 onClick={handleCopyText}
@@ -317,12 +320,12 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             </div>
 
             <textarea
-              rows={isCancelled ? 7 : 6}
+              rows={isCancelled ? 8 : 6}
               value={reportText}
               onChange={(e) => setReportText(e.target.value)}
               placeholder="Escribe o modifica los detalles del reporte..."
-              className={`w-full bg-[#0d141e] border border-white/10 rounded-2xl p-3 text-xs font-mono text-slate-200 focus:outline-none leading-relaxed shadow-inner resize-none ${
-                isCancelled ? 'focus:border-rose-500' : 'focus:border-cyan-400'
+              className={`w-full bg-[#0d141e] border rounded-2xl p-3 text-xs font-mono text-slate-200 focus:outline-none leading-relaxed shadow-inner resize-none ${
+                isCancelled ? 'border-rose-500/40 focus:border-rose-400 min-h-[175px]' : 'border-white/10 focus:border-cyan-400'
               }`}
             />
             <span className="text-[10px] text-slate-500 block px-0.5">
