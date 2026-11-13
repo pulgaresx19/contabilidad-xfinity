@@ -303,6 +303,29 @@ export default function UberDriverView({
   const travesiaAbortControllerRef = useRef(null);
   const travesiaGeometryRef = useRef(null);
 
+  // Intelligent Travesía Calculation: Mapbox real route with instant fallback (Never stuck on 'Calculando...')
+  const computedTravesia = useMemo(() => {
+    if (travesiaSummary.totalMinutes > 0 && travesiaSummary.totalMiles > 0) {
+      return travesiaSummary;
+    }
+    const list = (tempOrdersList.length > 0 ? tempOrdersList : activeOrders).filter(o => o.latitude && o.longitude);
+    if (list.length >= 2) {
+      let miles = 0;
+      for (let i = 0; i < list.length - 1; i++) {
+        miles += getEstimatedDrivingMiles(list[i].latitude, list[i].longitude, list[i + 1].latitude, list[i + 1].longitude) || 1.8;
+      }
+      const minutes = Math.max(1, Math.round(miles * 2.2));
+      return { totalMiles: miles, totalMinutes: minutes };
+    }
+    const allStops = tempOrdersList.length > 0 ? tempOrdersList : activeOrders;
+    if (allStops.length >= 2) {
+      const estimatedMiles = (allStops.length - 1) * 3.5;
+      const estimatedMinutes = Math.round(estimatedMiles * 2.2);
+      return { totalMiles: estimatedMiles, totalMinutes: estimatedMinutes };
+    }
+    return { totalMiles: 0, totalMinutes: 0 };
+  }, [travesiaSummary, tempOrdersList, activeOrders]);
+
   // Job On-Site Timers
   const [jobTimers, setJobTimers] = useState(() => {
     try {
@@ -744,13 +767,13 @@ export default function UberDriverView({
         return {
           minutes: activeRouteInfo.minutes,
           miles: activeRouteInfo.miles,
-          text: `A ${activeRouteInfo.minutes} min (~${activeRouteInfo.miles.toFixed(1)} mi) desde tu punto`,
+          text: `A ${activeRouteInfo.minutes} min (${activeRouteInfo.miles.toFixed(1)} mi)`,
           shortText: `A ${activeRouteInfo.minutes} min`,
           isFirst: true
         };
       }
       return {
-        text: 'Punto de partida del día',
+        text: 'Punto de partida',
         shortText: 'Punto 1',
         isFirst: true
       };
@@ -763,13 +786,34 @@ export default function UberDriverView({
         minutes: leg.minutes,
         miles: leg.miles,
         prevStopNum,
-        text: `🚗 +${leg.minutes} min (~${leg.miles.toFixed(1)} mi) de #${prevStopNum}`,
-        shortText: `+${leg.minutes} min de #${prevStopNum}`,
+        text: `+${leg.minutes} min (${leg.miles.toFixed(1)} mi) de #${prevStopNum}`,
+        shortText: `+${leg.minutes} min`,
         isFirst: false
       };
     }
 
-    return null;
+    const prevOrder = (tempOrdersList.length > 0 ? tempOrdersList : activeOrders)[indexInList - 1];
+    if (prevOrder && prevOrder.latitude && prevOrder.longitude && order.latitude && order.longitude) {
+      const miles = getEstimatedDrivingMiles(prevOrder.latitude, prevOrder.longitude, order.latitude, order.longitude) || 1.8;
+      const minutes = Math.max(1, Math.round(miles * 2.2));
+      return {
+        minutes,
+        miles,
+        prevStopNum: indexInList,
+        text: `+${minutes} min (${miles.toFixed(1)} mi) de #${indexInList}`,
+        shortText: `+${minutes} min`,
+        isFirst: false
+      };
+    }
+
+    return {
+      minutes: 8,
+      miles: 3.0,
+      prevStopNum: indexInList,
+      text: `~8 min de #${indexInList}`,
+      shortText: '~8 min',
+      isFirst: false
+    };
   };
 
   // 4. SELECT A JOB: INSTANTLY DRAWS ROUTE (NO BLANK TIME)
@@ -2714,7 +2758,7 @@ export default function UberDriverView({
                   </h3>
                   <p className="text-[10.5px] text-slate-600 dark:text-slate-400 font-semibold truncate">
                     {formatDateFriendly(activeDate)} • {tempOrdersList.length} {tempOrdersList.length === 1 ? 'parada' : 'paradas'}
-                    {travesiaSummary.totalMinutes > 0 && ` • 🚗 ${formatRouteDuration(travesiaSummary.totalMinutes, false)} (${travesiaSummary.totalMiles.toFixed(1)} mi)`}
+                    {computedTravesia.totalMinutes > 0 && ` • 🚗 ${formatRouteDuration(computedTravesia.totalMinutes, false)} (${computedTravesia.totalMiles.toFixed(1)} mi)`}
                   </p>
                 </div>
               </div>
@@ -2743,10 +2787,18 @@ export default function UberDriverView({
                   Travesía Total
                 </span>
                 <span className="text-xs sm:text-[13px] font-black text-sky-300 font-mono truncate block">
-                  {travesiaSummary.totalMinutes > 0 ? formatRouteDuration(travesiaSummary.totalMinutes, false) : 'Calculando...'}
+                  {computedTravesia.totalMinutes > 0
+                    ? formatRouteDuration(computedTravesia.totalMinutes, false)
+                    : tempOrdersList.length > 1
+                    ? `${Math.round(tempOrdersList.length * 8)} min`
+                    : '0 min'}
                 </span>
                 <span className="text-[9.5px] text-slate-400 font-mono block mt-0.5">
-                  {travesiaSummary.totalMiles > 0 ? `${travesiaSummary.totalMiles.toFixed(1)} mi` : '0 mi'}
+                  {computedTravesia.totalMiles > 0
+                    ? `${computedTravesia.totalMiles.toFixed(1)} mi`
+                    : tempOrdersList.length > 1
+                    ? `${(tempOrdersList.length * 3.2).toFixed(1)} mi`
+                    : '0.0 mi'}
                 </span>
               </div>
               <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
@@ -2760,63 +2812,46 @@ export default function UberDriverView({
             </div>
 
             {/* Auto Optimize Shortest / Furthest Route Action Bar */}
-            <div className="px-4 py-2.5 bg-[#0e1622] border-b border-white/5 shrink-0 space-y-2">
-              <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold px-0.5">
-                <span className="uppercase tracking-wider">Modo de Organización</span>
-                <span className="font-mono text-cyan-400 font-bold">
-                  {optimizationMode === 'nearest'
-                    ? '⚡ Más cercano primero'
-                    : optimizationMode === 'furthest'
-                    ? '📍 Más lejano primero'
-                    : '🖐️ Manual (Flechas o arrastrar)'}
-                </span>
-              </div>
-
+            <div className="px-4 py-2 bg-[#0e1622] border-b border-white/5 shrink-0 space-y-1.5">
               <div className="grid grid-cols-2 gap-2">
-                {/* Botón 1: Más cercano primero (Ruta más corta) */}
+                {/* Botón 1: Más cercano primero */}
                 <button
                   type="button"
                   onClick={() => handleToggleOptimization('nearest')}
-                  className={`py-2 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-sm select-none ${
+                  className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shadow-sm select-none ${
                     optimizationMode === 'nearest'
-                      ? 'bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 text-white border border-cyan-400/50 shadow-cyan-500/25 ring-1 ring-cyan-400/40'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/20'
                       : 'bg-[#16202c] hover:bg-[#1e2a3a] text-slate-300 hover:text-white border border-white/10'
                   }`}
-                  title="Organizar por la ruta más corta (del más cercano en adelante). Toca otra vez para deseleccionar y dejar manual."
+                  title="Organizar por la ruta más corta"
                 >
-                  <Route className="h-3.5 w-3.5 stroke-[2.2] shrink-0 text-cyan-300" />
-                  <span className="truncate">⚡ Más cercano</span>
-                  {optimizationMode === 'nearest' && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 ml-auto animate-pulse" />
-                  )}
+                  <Route className="h-4 w-4 shrink-0" />
+                  <span>Más cercano</span>
                 </button>
 
-                {/* Botón 2: Más lejano primero (Inversa / De largo a corto) */}
+                {/* Botón 2: Más lejano primero */}
                 <button
                   type="button"
                   onClick={() => handleToggleOptimization('furthest')}
-                  className={`py-2 px-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-sm select-none ${
+                  className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shadow-sm select-none ${
                     optimizationMode === 'furthest'
-                      ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white border border-purple-400/50 shadow-purple-500/25 ring-1 ring-purple-400/40'
+                      ? 'bg-indigo-500 text-white font-black shadow-md shadow-indigo-500/20'
                       : 'bg-[#16202c] hover:bg-[#1e2a3a] text-slate-300 hover:text-white border border-white/10'
                   }`}
-                  title="Organizar del más lejano/largo al más corto. Toca otra vez para deseleccionar y dejar manual."
+                  title="Organizar del más lejano al más cercano"
                 >
-                  <ArrowUpDown className="h-3.5 w-3.5 stroke-[2.2] shrink-0 text-purple-300" />
-                  <span className="truncate">📍 Más lejano</span>
-                  {optimizationMode === 'furthest' && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-purple-300 shrink-0 ml-auto animate-pulse" />
-                  )}
+                  <ArrowUpDown className="h-4 w-4 shrink-0" />
+                  <span>Más lejano</span>
                 </button>
               </div>
 
               {optimizedNotice && (
-                <div className="p-2 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-[10.5px] text-emerald-300 font-bold flex items-center gap-2">
-                  <CheckCheck className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <span>
-                    {optimizedNotice.mode === 'nearest'
-                      ? `¡Ruta más corta organizada! Ahorras ~${optimizedNotice.savedMiles} mi (${formatRouteDuration(optimizedNotice.savedMinutes, true)}). Total: ${optimizedNotice.totalMiles} mi.`
-                      : `¡Ruta inversa organizada! Comienzas por el punto más distante y terminas cerca de casa. Total: ${optimizedNotice.totalMiles} mi.`}
+                <div className="px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-500/30 text-[11px] text-emerald-300 font-bold flex items-center justify-between gap-2">
+                  <span className="truncate">
+                    {optimizedNotice.mode === 'nearest' ? 'Ruta más corta organizada' : 'Ruta inversa organizada'}
+                  </span>
+                  <span className="font-mono text-emerald-200 shrink-0 text-xs">
+                    {optimizedNotice.totalMiles} mi
                   </span>
                 </div>
               )}
@@ -2846,9 +2881,9 @@ export default function UberDriverView({
             </div>
 
             {/* Drag & Reorder Instruction Tip */}
-            <div className="px-4 py-1.5 bg-[#0a0f16] border-b border-white/5 text-[9.5px] font-bold text-slate-400 flex items-center justify-between uppercase tracking-wider">
-              <span>{overlayStatusFilter === 'ALL' ? 'Arrastra (⋮⋮) o usa ↑ / ↓ para ordenar' : 'Filtrando por estado'}</span>
-              <span>Toca un trabajo para ver en mapa</span>
+            <div className="px-4 py-1.5 bg-[#0a0f16] border-b border-white/5 text-[10px] text-slate-400 flex items-center justify-between">
+              <span className="truncate">Arrastra (⋮⋮) o usa flechas (↑↓) para ordenar</span>
+              <span className="text-cyan-400 font-semibold shrink-0">Toca para centrar</span>
             </div>
 
             {/* Jobs List (Scrollable with Drag & Drop & Direct Tactile Position Control) */}
@@ -3021,9 +3056,9 @@ export default function UberDriverView({
 
                       {/* Bottom Sub-row: Inter-Stop Travel Time & Distance + "Ver en Mapa" Button */}
                       <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/5">
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 overflow-hidden">
                           {legInfo ? (
-                            <div className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-lg truncate ${
+                            <div className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-lg max-w-[200px] sm:max-w-xs truncate ${
                               legInfo.isFirst 
                                 ? 'text-cyan-300 bg-cyan-500/10 border border-cyan-500/20' 
                                 : 'text-sky-300 bg-sky-500/15 border border-sky-400/30'
@@ -3032,7 +3067,7 @@ export default function UberDriverView({
                               <span className="truncate">{legInfo.text}</span>
                             </div>
                           ) : (
-                            <span className="text-[10px] text-slate-500">Calculando tiempo...</span>
+                            <span className="text-[10px] text-slate-400 font-mono">Punto de ruta</span>
                           )}
                         </div>
 
@@ -3043,11 +3078,11 @@ export default function UberDriverView({
                             handleSelectJob(ord);
                             setShowDayJobsOverlay(false);
                           }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-400/30 text-[10.5px] font-bold transition active:scale-95 cursor-pointer shrink-0 shadow-xs"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-400/30 text-[10.5px] font-bold transition active:scale-95 cursor-pointer shrink-0 shadow-xs whitespace-nowrap"
                           title="Ver y centrar esta parada en el mapa"
                         >
-                          <Navigation className="h-3 w-3 fill-cyan-400/20 text-cyan-400" />
-                          <span>Ver en Mapa</span>
+                          <Navigation className="h-3 w-3 fill-cyan-400/20 text-cyan-400 shrink-0" />
+                          <span>Ver mapa</span>
                         </button>
                       </div>
                     </div>
