@@ -401,7 +401,7 @@ export async function getOrderById(id) {
       if (!order) return resolve(null);
 
       const photos = (photosReq.result || []).filter((p) => Number(p.work_order_id) === Number(id));
-      photos.sort((a, b) => (b.id || 0) - (a.id || 0));
+      photos.sort((a, b) => (a.id || 0) - (b.id || 0));
 
       resolve({
         ...order,

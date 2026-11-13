@@ -57,14 +57,15 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
     setReportText(initialText);
     setCopiedText(false);
 
-    // Cargar fotos de la orden con el filtro adecuado según el estado
+    // Cargar fotos de la orden ordenadas cronológicamente (primer disparo primero)
     const filterPhotos = (photos) => {
       if (!Array.isArray(photos)) return [];
+      const sorted = [...photos].sort((a, b) => (a.id || 0) - (b.id || 0));
       if (isOrderCancelled) {
-        const cancelPhotos = photos.filter((p) => p.category === 'Constancia No Realizado');
-        return cancelPhotos.length > 0 ? cancelPhotos : photos;
+        const cancelPhotos = sorted.filter((p) => p.category === 'Constancia No Realizado');
+        return cancelPhotos.length > 0 ? cancelPhotos : sorted;
       }
-      return photos.filter((p) => p.category !== 'Constancia No Realizado');
+      return sorted.filter((p) => p.category !== 'Constancia No Realizado');
     };
 
     if (order.photos && Array.isArray(order.photos) && order.photos.length > 0) {
@@ -362,9 +363,12 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
                       <ExternalLink className="h-3.5 w-3.5 text-white" />
                     </div>
-                    <span className="absolute bottom-0.5 left-0.5 bg-black/80 backdrop-blur-xs text-[8px] text-cyan-300 border border-cyan-400/20 px-1 py-0.2 rounded font-mono truncate max-w-[90%]">
-                      {p.category || `#${idx + 1}`}
-                    </span>
+                    {/* Enunciado / Categoría de la foto en la esquina superior arriba para visualización clara */}
+                    <div className="absolute top-1 left-1 max-w-[92%] z-10 pointer-events-none">
+                      <span className="inline-block bg-black/90 backdrop-blur-xs text-[9px] font-black text-cyan-300 border border-cyan-400/40 px-1.5 py-0.5 rounded-md shadow-lg truncate leading-tight">
+                        {p.category || `#${idx + 1}`}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>

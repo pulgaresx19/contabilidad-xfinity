@@ -621,7 +621,7 @@ app.get('/api/orders', (req, res) => {
     query += ` ORDER BY o.work_date DESC, (CASE WHEN o.route_order > 0 THEN o.route_order ELSE 999 END) ASC, o.id ASC`;
 
     const orders = db.prepare(query).all(...params);
-    const photosStmt = db.prepare('SELECT id, work_order_id, filename, original_name, category, created_at FROM job_photos WHERE work_order_id = ? ORDER BY id DESC');
+    const photosStmt = db.prepare('SELECT id, work_order_id, filename, original_name, category, created_at FROM job_photos WHERE work_order_id = ? ORDER BY id ASC');
     for (const ord of orders) {
       ord.photos = photosStmt.all(ord.id);
     }
@@ -637,7 +637,7 @@ app.get('/api/orders/:id', (req, res) => {
     const order = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(req.params.id);
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-    const photos = db.prepare('SELECT * FROM job_photos WHERE work_order_id = ? ORDER BY id DESC').all(req.params.id);
+    const photos = db.prepare('SELECT * FROM job_photos WHERE work_order_id = ? ORDER BY id ASC').all(req.params.id);
     res.json({ ...order, photos });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -647,7 +647,7 @@ app.get('/api/orders/:id', (req, res) => {
 // 2b. Get just photos for an order (lightweight)
 app.get('/api/orders/:id/photos', (req, res) => {
   try {
-    const photos = db.prepare('SELECT * FROM job_photos WHERE work_order_id = ? ORDER BY id DESC').all(req.params.id);
+    const photos = db.prepare('SELECT * FROM job_photos WHERE work_order_id = ? ORDER BY id ASC').all(req.params.id);
     res.json({ photos });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1149,7 +1149,7 @@ app.post('/api/batch-import', (req, res) => {
 app.get('/api/weekly-summary', (req, res) => {
   try {
     const allOrders = db.prepare('SELECT * FROM work_orders ORDER BY work_date DESC, (CASE WHEN route_order > 0 THEN route_order ELSE 999 END) ASC, id ASC').all();
-    const photosStmt = db.prepare('SELECT id, filename, original_name, category, created_at FROM job_photos WHERE work_order_id = ? ORDER BY id DESC');
+    const photosStmt = db.prepare('SELECT id, filename, original_name, category, created_at FROM job_photos WHERE work_order_id = ? ORDER BY id ASC');
 
     // Group orders by week based on configured closing day
     const cutoffSetting = getCutoffDaySetting();
@@ -1302,7 +1302,7 @@ app.post('/api/weeks/:key/status', (req, res) => {
 app.get('/api/monthly-summary', (req, res) => {
   try {
     const allOrders = db.prepare('SELECT * FROM work_orders ORDER BY work_date DESC, (CASE WHEN route_order > 0 THEN route_order ELSE 999 END) ASC, id ASC').all();
-    const photosStmt = db.prepare('SELECT id, filename, original_name, category, created_at FROM job_photos WHERE work_order_id = ? ORDER BY id DESC');
+    const photosStmt = db.prepare('SELECT id, filename, original_name, category, created_at FROM job_photos WHERE work_order_id = ? ORDER BY id ASC');
     const cutoffSetting = getCutoffDaySetting();
 
     // Group orders into weeks

@@ -292,6 +292,110 @@ export async function compressImageFile(file, { maxDim = 1600, quality = 0.80 } 
   }
 }
 
+/**
+ * Build the exact 6-line array matching the user's Timestamp Camera reference format:
+ * Line 1: Red: oct 30, 2026, 8:55:45 a.m. EDT
+ * Line 2: Local: oct 30, 2026, 8:55:45 a.m. EDT
+ * Line 3: N 41° 38' 7.607", W 85° 55' 14.220"
+ * Line 4: [Calle o carretera real obtenida por GPS]
+ * Line 5: [Ciudad, Estado, Código Postal]
+ * Line 6: Estados Unidos
+ */
+export function buildWatermarkLines({
+  date = new Date(),
+  gps = null,
+  physicalAddress = null,
+  fallbackAddress = '',
+  fallbackCity = '',
+  fallbackZip = '',
+  fallbackState = '',
+  fallbackLat = null,
+  fallbackLng = null
+} = {}) {
+  const timeFormatted = formatTimestampText(date);
+  const lines = [
+    `Red: ${timeFormatted}`,
+    `Local: ${timeFormatted}`
+  ];
+
+  const activeLat = gps?.lat ?? fallbackLat;
+  const activeLng = gps?.lng ?? fallbackLng;
+
+  if (activeLat != null && activeLng != null && !isNaN(activeLat) && !isNaN(activeLng)) {
+    const latDMS = formatDMS(activeLat, true);
+    const lngDMS = formatDMS(activeLng, false);
+    if (latDMS && lngDMS) {
+      lines.push(`${latDMS}, ${lngDMS}`);
+    }
+  }
+
+  // Dirección física real del punto GPS donde se tomó la foto
+  if (physicalAddress && (physicalAddress.street || physicalAddress.cityStateZip)) {
+    if (physicalAddress.street) {
+      lines.push(physicalAddress.street);
+    }
+    if (physicalAddress.cityStateZip) {
+      lines.push(physicalAddress.cityStateZip);
+    }
+    lines.push(physicalAddress.country || 'Estados Unidos');
+  } else {
+    // Respaldo de seguridad solo si no hubo GPS ni conexión a reverse geocode
+    const street = (fallbackAddress || '').trim();
+    const cityStateZip = [
+      fallbackCity || '',
+      fallbackState || (fallbackCity ? 'IN' : ''),
+      fallbackZip || ''
+    ].filter(Boolean).join(' ').trim();
+
+    if (street) lines.push(street);
+    if (cityStateZip) lines.push(cityStateZip);
+    lines.push('Estados Unidos');
+  }
+
+  return lines;
+}
+
+/**
+ * Draws watermark text lines onto any canvas context with dark outline and shadow
+ */
+export function drawWatermarkOnCanvas(ctx, width, height, lines, options = {}) {
+  if (!lines || lines.length === 0) return;
+
+  const baseFontSize = Math.max(16, Math.round(width * 0.026));
+  const lineHeight = Math.round(baseFontSize * 1.34);
+
+  // Margins from photo edges
+  const marginX = Math.round(width * 0.045);
+  const marginY = Math.round(height * 0.06);
+
+  const textX = width - marginX;
+  const totalBlockHeight = lines.length * lineHeight;
+  const startY = height - marginY - totalBlockHeight;
+
+  ctx.save();
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  ctx.font = `600 ${baseFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+
+  // Draw text with dark outline and drop-shadow for 100% legibility on ANY photo surface
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(2.5, Math.round(baseFontSize * 0.15));
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.90)';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+  ctx.shadowBlur = Math.round(baseFontSize * 0.22);
+  ctx.shadowOffsetX = 1;
+  ctx.shadowOffsetY = 1;
+
+  lines.forEach((line, idx) => {
+    const y = startY + (idx * lineHeight);
+    ctx.strokeText(line, textX, y);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(line, textX, y);
+  });
+
+  ctx.restore();
+}
+
 export async function stampPhotoWithWatermark(file, meta = {}) {
   // If not an image file, return as is
   if (!file || !file.type.startsWith('image/')) {
@@ -299,8 +403,12 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
   }
 
   try {
-    // 1. Obtener coordenadas GPS del teléfono en tiempo real en paralelo a la carga de la imagen
-    const gpsPromise = getDeviceLocation(5000).catch(() => null);
+    // 1. Obtener coordenadas GPS del teléfono en tiempo real en paralelo a la carga de la imagen (si no se pasaron ya)
+    let gps = meta.gps || null;
+    let gpsPromise = null;
+    if (!gps) {
+      gpsPromise = getDeviceLocation(5000).catch(() => null);
+    }
 
     // 2. Load file into HTML Image
     const img = await new Promise((resolve, reject) => {
@@ -315,7 +423,10 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
       reader.readAsDataURL(file);
     });
 
-    let gps = await gpsPromise;
+    if (!gps && gpsPromise) {
+      gps = await gpsPromise;
+    }
+
     // Si el GPS del móvil no respondió (ej. sin cobertura/sótano), usar respaldo si existe
     if (!gps && meta.fallbackLat && meta.fallbackLng) {
       gps = { lat: meta.fallbackLat, lng: meta.fallbackLng };
@@ -324,8 +435,8 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
     }
 
     // 3. Geocodificación inversa de las coordenadas GPS reales de donde se tiró la foto
-    let physicalAddress = null;
-    if (gps && gps.lat && gps.lng) {
+    let physicalAddress = meta.physicalAddress || null;
+    if (!physicalAddress && gps && gps.lat && gps.lng) {
       try {
         physicalAddress = await getPhysicalAddressFromLocation(gps.lat, gps.lng);
       } catch (e) {
@@ -338,7 +449,7 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
     let width = img.naturalWidth || img.width;
     let height = img.naturalHeight || img.height;
 
-    // Cap max dimension to 2400px to maintain speed while keeping crisp detail
+    // Cap max dimension to maintain speed while keeping crisp detail
     const maxDim = meta.maxDim || 1600;
     if (width > maxDim || height > maxDim) {
       if (width > height) {
@@ -357,87 +468,23 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
     // Draw base photo
     ctx.drawImage(img, 0, 0, width, height);
 
-    // 5. Build text lines matching exactly the user's Timestamp Camera reference format:
-    // Red: oct 30, 2026, 8:55:45 a.m. EDT
-    // Local: oct 30, 2026, 8:55:45 a.m. EDT
-    // N 41° 38' 7.607", W 85° 55' 14.220"
-    // 23700–23718 Carretera 33 S
-    // Elkhart IN 46517
-    // Estados Unidos
-    const now = new Date();
-    const timeFormatted = formatTimestampText(now);
-
-    const lines = [];
-    lines.push(`Red: ${timeFormatted}`);
-    lines.push(`Local: ${timeFormatted}`);
-
-    if (gps && gps.lat && gps.lng) {
-      const latDMS = formatDMS(gps.lat, true);
-      const lngDMS = formatDMS(gps.lng, false);
-      lines.push(`${latDMS}, ${lngDMS}`);
-    } else if (meta.coordinates) {
-      lines.push(meta.coordinates);
-    }
-
-    // Dirección física real del punto GPS donde se tomó la foto
-    if (physicalAddress && (physicalAddress.street || physicalAddress.cityStateZip)) {
-      if (physicalAddress.street) {
-        lines.push(physicalAddress.street);
-      }
-      if (physicalAddress.cityStateZip) {
-        lines.push(physicalAddress.cityStateZip);
-      }
-      lines.push(physicalAddress.country || 'Estados Unidos');
-    } else {
-      // Respaldo de seguridad solo si no hubo GPS ni conexión a reverse geocode
-      const fallbackStreet = (meta.fallbackAddress || meta.address || '').trim();
-      const fallbackCityStateZip = [
-        meta.fallbackCity || meta.city || '',
-        meta.fallbackState || meta.state || (meta.fallbackCity || meta.city ? 'IN' : ''),
-        meta.fallbackZip || meta.zipCode || meta.zip_code || ''
-      ].filter(Boolean).join(' ').trim();
-
-      if (fallbackStreet) lines.push(fallbackStreet);
-      if (fallbackCityStateZip) lines.push(fallbackCityStateZip);
-      lines.push('Estados Unidos');
-    }
-
-    // 6. Calculate typography sizing & spacing
-    const baseFontSize = Math.max(16, Math.round(width * 0.026));
-    const lineHeight = Math.round(baseFontSize * 1.34);
-
-    // Margins from photo edges
-    const marginX = Math.round(width * 0.045);
-    const marginY = Math.round(height * 0.06);
-
-    const textX = width - marginX;
-    const totalBlockHeight = lines.length * lineHeight;
-    const startY = height - marginY - totalBlockHeight;
-
-    ctx.save();
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'top';
-    ctx.font = `600 ${baseFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
-
-    // 7. Draw text with dark outline and drop-shadow for 100% legibility on ANY photo surface
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = Math.max(2.5, Math.round(baseFontSize * 0.15));
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.90)';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
-    ctx.shadowBlur = Math.round(baseFontSize * 0.22);
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
-
-    lines.forEach((line, idx) => {
-      const y = startY + (idx * lineHeight);
-      ctx.strokeText(line, textX, y);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText(line, textX, y);
+    // 5. Build text lines matching exactly the user's Timestamp Camera reference format
+    const lines = meta.lines || buildWatermarkLines({
+      date: meta.date || new Date(),
+      gps,
+      physicalAddress,
+      fallbackAddress: meta.fallbackAddress || meta.address,
+      fallbackCity: meta.fallbackCity || meta.city,
+      fallbackZip: meta.fallbackZip || meta.zipCode || meta.zip_code,
+      fallbackState: meta.fallbackState || meta.state,
+      fallbackLat: meta.fallbackLat,
+      fallbackLng: meta.fallbackLng
     });
 
-    ctx.restore();
+    // 6. Draw watermark
+    drawWatermarkOnCanvas(ctx, width, height, lines);
 
-    // 8. Output stamped blob as File
+    // 7. Output stamped blob as File
     const blob = await new Promise((resolve) => {
       canvas.toBlob(resolve, 'image/jpeg', meta.quality || 0.80);
     });
