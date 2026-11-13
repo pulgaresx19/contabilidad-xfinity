@@ -176,7 +176,7 @@ export default function App() {
   const pendingCount = orders.filter(o => o.status === 'Pendiente').length;
 
   return (
-    <div className="fixed inset-0 h-[100dvh] max-h-[100dvh] w-full bg-slate-950 text-slate-100 flex flex-col items-center overflow-hidden font-sans select-none selection:bg-cyan-500 selection:text-slate-950">
+    <div className="fixed inset-0 w-full bg-slate-950 text-slate-100 flex flex-col items-center overflow-hidden font-sans select-none selection:bg-cyan-500 selection:text-slate-950">
       <div className="w-full max-w-md h-full flex flex-col min-h-0 overflow-hidden relative">
         {/* Top Mobile Header with Safe Area Inset to clear phone status bar / notch / dynamic island */}
         <header 
