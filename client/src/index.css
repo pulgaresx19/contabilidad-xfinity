@@ -20,11 +20,11 @@
 
 /* Responsive top header padding for mobile notch and status bar clearance */
 header.app-top-header {
-  padding-top: max(env(safe-area-inset-top, 0px), 0.75rem);
+  padding-top: max(calc(env(safe-area-inset-top, 0px) + 8px), 1rem);
 }
 @media (max-width: 640px) {
   header.app-top-header {
-    padding-top: max(env(safe-area-inset-top, 0px), 2.5rem);
+    padding-top: max(calc(env(safe-area-inset-top, 0px) + 14px), 2.85rem);
   }
 }
 

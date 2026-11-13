@@ -462,15 +462,15 @@ export default function LiveCameraModal({
 
       {/* 1. Barra Superior del Visor con Protección de Notch / Safe-Area */}
       <div
-        className="relative z-20 px-3 pb-2.5 bg-gradient-to-b from-black via-black/95 to-black/80 flex items-center justify-between gap-2 shrink-0 border-b border-white/10 shadow-lg"
+        className="relative z-20 px-3 pb-3 bg-slate-950 flex items-center justify-between gap-2 shrink-0 border-b border-white/10 shadow-xl"
         style={{
-          paddingTop: 'max(env(safe-area-inset-top, 0px) + 10px, 1.25rem)'
+          paddingTop: 'max(calc(env(safe-area-inset-top, 0px) + 22px), 2.85rem)'
         }}
       >
         <button
           type="button"
           onClick={onClose}
-          className="w-10 h-10 rounded-full bg-slate-900/80 backdrop-blur-md text-white hover:bg-slate-800 flex items-center justify-center transition border border-white/20 active:scale-95 cursor-pointer shrink-0"
+          className="w-10 h-10 rounded-full bg-slate-900 border border-white/20 text-white hover:bg-slate-800 flex items-center justify-center transition active:scale-95 cursor-pointer shrink-0"
           title="Cerrar cámara"
         >
           <X className="h-5 w-5" />
@@ -515,7 +515,7 @@ export default function LiveCameraModal({
               type="button"
               onClick={toggleTorch}
               className={`w-10 h-10 rounded-full flex items-center justify-center transition border border-white/20 active:scale-95 cursor-pointer ${
-                torchOn ? 'bg-amber-400 text-slate-950 font-bold shadow-lg shadow-amber-400/30' : 'bg-slate-900/80 text-white'
+                torchOn ? 'bg-amber-400 text-slate-950 font-bold shadow-lg shadow-amber-400/30' : 'bg-slate-900 text-white'
               }`}
               title={torchOn ? 'Apagar linterna' : 'Encender linterna'}
             >
@@ -527,7 +527,7 @@ export default function LiveCameraModal({
             type="button"
             onClick={() => setShowGrid(!showGrid)}
             className={`w-10 h-10 rounded-full flex items-center justify-center transition border border-white/20 active:scale-95 cursor-pointer ${
-              showGrid ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-900/80 text-white'
+              showGrid ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-900 text-white'
             }`}
             title="Cuadrícula de encuadre"
           >
@@ -538,7 +538,7 @@ export default function LiveCameraModal({
             <button
               type="button"
               onClick={toggleFacingMode}
-              className="w-10 h-10 rounded-full bg-slate-900/80 backdrop-blur-md text-white hover:bg-slate-800 flex items-center justify-center transition border border-white/20 active:scale-95 cursor-pointer"
+              className="w-10 h-10 rounded-full bg-slate-900 border border-white/20 text-white hover:bg-slate-800 flex items-center justify-center transition active:scale-95 cursor-pointer"
               title="Cambiar de cámara"
             >
               <RefreshCw className="h-4 w-4" />
@@ -548,9 +548,9 @@ export default function LiveCameraModal({
       </div>
 
       {/* 2. Selector Rápido de Categoría / Paso (Superior) */}
-      <div className="relative z-20 px-3 py-2 bg-slate-950/95 backdrop-blur-md flex items-center gap-2 overflow-x-auto scrollbar-none border-b border-white/10 shrink-0 shadow-md">
-        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-0.5">
-          Foto:
+      <div className="relative z-20 px-3 py-2 bg-slate-900 border-b border-white/10 flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0 shadow-md">
+        <span className="text-[11px] font-black uppercase tracking-wider text-cyan-400 shrink-0 mr-0.5">
+          Paso:
         </span>
         {PHOTO_STEPS.map((step) => {
           const isSelected = category === step.id;
