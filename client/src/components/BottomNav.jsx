@@ -10,10 +10,10 @@ export default function BottomNav({ activeTab, setActiveTab, pendingCount }) {
 
   return (
     <nav 
-      className="shrink-0 z-40 w-full bg-slate-950/98 border-t border-slate-800/80 backdrop-blur-md select-none"
+      className="shrink-0 z-40 w-full bg-slate-900/95 border-t border-slate-800/80 backdrop-blur-md select-none"
       style={{
-        paddingBottom: 'max(calc(env(safe-area-inset-bottom, 0px) - 18px), 6px)',
-        paddingTop: '6px'
+        paddingBottom: 'max(calc(env(safe-area-inset-bottom, 0px) - 24px), 3px)',
+        paddingTop: '4px'
       }}
     >
       <div className="w-full max-w-md mx-auto px-4 flex items-center justify-between gap-2">
@@ -25,10 +25,10 @@ export default function BottomNav({ activeTab, setActiveTab, pendingCount }) {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`relative flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition-all duration-200 select-none flex-1 cursor-pointer active:scale-95 ${
+              className={`relative flex flex-col items-center justify-center py-0.5 px-3 rounded-2xl transition-all duration-200 select-none flex-1 cursor-pointer active:scale-95 ${
                 isActive
                   ? 'text-cyan-400 bg-cyan-950/40 border border-cyan-500/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
               }`}
             >
               <div className="relative flex items-center justify-center mb-0.5">
