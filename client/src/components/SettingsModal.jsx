@@ -109,17 +109,18 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
       style={{
-        paddingTop: 'max(env(safe-area-inset-top, 0px) + 16px, 1.25rem)',
-        paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
+        paddingTop: 'max(env(safe-area-inset-top, 0px) + 24px, 1.75rem)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 24px, 1.75rem)'
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div 
-        className="bg-[#101722] border border-white/10 w-full max-w-sm sm:max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact text-white transition-all"
+      <form 
+        onSubmit={handleSubmit}
+        className="bg-[#101722] border border-white/10 w-full max-w-sm sm:max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[74dvh] sm:max-h-[76dvh] modal-sheet-compact text-white transition-all my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Unificado (Estilo Cockpit idéntico a Evidencias y Compartir) */}
@@ -148,8 +149,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
           </button>
         </div>
 
-        {/* Form con scroll suave y altura compacta */}
-        <form onSubmit={handleSubmit} className="p-3.5 sm:p-4 space-y-3 overflow-y-auto flex-1 scrollbar-none">
+        {/* Cuerpo Scrolleable con Opciones */}
+        <div className="p-3.5 sm:p-4 space-y-3 overflow-y-auto flex-1 min-h-0 scrollbar-none">
           {/* APARIENCIA / MODO CLARO Y OSCURO */}
           <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
             <div className="flex items-center justify-between">
@@ -445,28 +446,28 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
               <span>¡Configuración y ciclo de cierre actualizados con éxito!</span>
             </div>
           )}
+        </div>
 
-          {/* Botones de acción */}
-          <div className="pt-2 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 px-4 bg-[#16202c] hover:bg-[#1e2a3a] border border-white/10 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-xs font-bold rounded-xl transition cursor-pointer active:scale-95"
-            >
-              Cancelar
-            </button>
+        {/* Footer Fijo con Botones Cancelar y Guardar Ajustes */}
+        <div className="px-4 py-3 border-t border-white/10 bg-slate-900/90 flex items-center justify-between gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2.5 px-4 bg-[#16202c] hover:bg-[#1e2a3a] border border-white/10 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition cursor-pointer active:scale-95 text-center"
+          >
+            Cancelar
+          </button>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/25 active:scale-95 transition cursor-pointer"
-            >
-              <Save className="h-4 w-4 stroke-[2.5]" />
-              <span>{loading ? 'Guardando...' : 'Guardar Ajustes'}</span>
-            </button>
-          </div>
-        </form>
-      </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/25 active:scale-95 transition cursor-pointer disabled:opacity-50"
+          >
+            <Save className="h-4 w-4 stroke-[2.5]" />
+            <span>{loading ? 'Guardando...' : 'Guardar Ajustes'}</span>
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

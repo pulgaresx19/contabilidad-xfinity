@@ -101,9 +101,9 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
   const displayAmount = !isNaN(numParsed) && numParsed > 0 ? `$${numParsed.toFixed(2)}` : '$0.00';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe">
       <div 
-        className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-white"
+        className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Cockpit */}

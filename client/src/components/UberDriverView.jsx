@@ -486,20 +486,20 @@ export default function UberDriverView({
     return { coords: DEFAULT_LNG_LAT, label: 'Base Comcast' };
   };
 
-  // Helper to fetch and cache shortest route
+  // Helper to fetch and cache shortest route (Mapbox primary + OSRM secondary fallback)
   const fetchShortestRoute = async (startCoords, destCoords, signal) => {
     const cacheKey = `${startCoords[0].toFixed(5)},${startCoords[1].toFixed(5)}->${destCoords[0].toFixed(5)},${destCoords[1].toFixed(5)}`;
     if (routeCacheRef.current.has(cacheKey)) {
       return routeCacheRef.current.get(cacheKey);
     }
 
+    // 1. Primary: Mapbox Directions API
     try {
       const dirUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords[0]},${startCoords[1]};${destCoords[0]},${destCoords[1]}?alternatives=true&overview=full&geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`;
       const res = await fetch(dirUrl, { signal });
       if (res.ok) {
         const data = await res.json();
         if (data.routes && data.routes.length > 0) {
-          // Sort candidate routes by distance ascending so [0] is the physically shortest path
           const parsed = data.routes.map((r, idx) => ({
             index: idx,
             coordinates: r.geometry.coordinates,
@@ -517,12 +517,52 @@ export default function UberDriverView({
         }
       }
     } catch (e) {
-      if (e.name !== 'AbortError') console.warn('Directions fetch note:', e.message);
+      if (e.name === 'AbortError' || signal?.aborted) return null;
+      console.warn('Mapbox directions note:', e.message);
     }
 
-    // Straight-line fallback
+    if (signal?.aborted) return null;
+
+    // 2. Secondary Fallback: OSRM Public Routing (Navigates around lakes, highways & long distances seamlessly)
+    try {
+      const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${startCoords[0]},${startCoords[1]};${destCoords[0]},${destCoords[1]}?overview=full&geometries=geojson`;
+      const res = await fetch(osrmUrl, { signal });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.routes && data.routes.length > 0) {
+          const r = data.routes[0];
+          const miles = r.distance / 1609.34;
+          const minutes = Math.max(1, Math.round(r.duration / 60));
+          const result = {
+            shortest: {
+              index: 0,
+              coordinates: r.geometry.coordinates,
+              miles,
+              minutes,
+              summary: r.legs?.[0]?.summary || 'Vía ruta óptima'
+            },
+            allRoutes: [{
+              index: 0,
+              coordinates: r.geometry.coordinates,
+              miles,
+              minutes,
+              summary: r.legs?.[0]?.summary || 'Vía ruta óptima'
+            }]
+          };
+          routeCacheRef.current.set(cacheKey, result);
+          return result;
+        }
+      }
+    } catch (e) {
+      if (e.name === 'AbortError' || signal?.aborted) return null;
+      console.warn('OSRM directions fallback note:', e.message);
+    }
+
+    if (signal?.aborted) return null;
+
+    // 3. Absolute last resort temporary fallback (Do NOT cache permanently so future network attempts can succeed)
     const fallbackMiles = getEstimatedDrivingMiles(startCoords[1], startCoords[0], destCoords[1], destCoords[0]) || 0.8;
-    const fallback = {
+    return {
       shortest: {
         index: 0,
         coordinates: [startCoords, destCoords],
@@ -532,8 +572,6 @@ export default function UberDriverView({
       },
       allRoutes: []
     };
-    routeCacheRef.current.set(cacheKey, fallback);
-    return fallback;
   };
 
   // 3. BACKGROUND PRE-FETCH FOR INSTANT (0 MS) SWITCHING
@@ -627,9 +665,64 @@ export default function UberDriverView({
     const controller = new AbortController();
     travesiaAbortControllerRef.current = controller;
 
+    // 1. Primary Attempt: Mapbox Multi-Stop Directions API (up to 25 waypoints)
+    if (validStops.length <= 25) {
+      try {
+        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsStr}?overview=full&geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.routes && data.routes[0]) {
+            const r = data.routes[0];
+            const coordinates = r.geometry.coordinates;
+            const totalMiles = r.distance / 1609.34;
+            const totalMinutes = Math.max(1, Math.round(r.duration / 60));
+            const legs = (r.legs || []).map((leg, idx) => ({
+              fromOrder: validStops[idx],
+              toOrder: validStops[idx + 1],
+              fromIndex: idx,
+              toIndex: idx + 1,
+              miles: leg.distance / 1609.34,
+              minutes: Math.max(1, Math.round(leg.duration / 60))
+            }));
+
+            const result = {
+              coordinates,
+              legs,
+              summary: { totalMiles, totalMinutes }
+            };
+
+            routeCacheRef.current.set(cacheKey, result);
+            setTravesiaLegs(legs);
+            setTravesiaSummary({ totalMiles, totalMinutes });
+            travesiaGeometryRef.current = coordinates;
+
+            const map = mapInstanceRef.current;
+            if (map && map.getSource('route-travesia')) {
+              map.getSource('route-travesia').setData({
+                type: 'Feature',
+                properties: {},
+                geometry: { type: 'LineString', coordinates }
+              });
+            }
+            if (map) {
+              renderTravesiaLegBadges(map, legs);
+            }
+            return;
+          }
+        }
+      } catch (e) {
+        if (e.name === 'AbortError' || controller.signal.aborted) return;
+        console.warn('Mapbox travesia directions note:', e.message);
+      }
+    }
+
+    if (controller.signal.aborted) return;
+
+    // 2. Secondary Attempt: OSRM Multi-Stop Driving API (Free OSM road routing, seamlessly navigates around lakes and highways)
     try {
-      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsStr}?overview=full&geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`;
-      const res = await fetch(url, { signal: controller.signal });
+      const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
+      const res = await fetch(osrmUrl, { signal: controller.signal });
       if (res.ok) {
         const data = await res.json();
         if (data.routes && data.routes[0]) {
@@ -672,12 +765,82 @@ export default function UberDriverView({
         }
       }
     } catch (e) {
-      if (e.name !== 'AbortError') {
-        console.warn('Travesia directions note:', e.message);
-      }
+      if (e.name === 'AbortError' || controller.signal.aborted) return;
+      console.warn('OSRM multi-stop travesia note:', e.message);
     }
 
-    // Fallback: calculate estimated straight/road distance per leg
+    if (controller.signal.aborted) return;
+
+    // 3. Tertiary Attempt: Leg-by-leg routing fallback (Stitches each pair of stops so a single long or isolated stop never breaks the rest of the day's route)
+    try {
+      const stitchedCoordinates = [];
+      const stitchedLegs = [];
+      let accumulatedMiles = 0;
+      let accumulatedMinutes = 0;
+
+      for (let i = 0; i < validStops.length - 1; i++) {
+        if (controller.signal.aborted) return;
+        const s1 = validStops[i];
+        const s2 = validStops[i + 1];
+        const p1 = [s1.longitude, s1.latitude];
+        const p2 = [s2.longitude, s2.latitude];
+        const legRoute = await fetchShortestRoute(p1, p2, controller.signal);
+
+        if (legRoute && legRoute.shortest && legRoute.shortest.coordinates) {
+          const coords = legRoute.shortest.coordinates;
+          if (stitchedCoordinates.length > 0 && coords.length > 0) {
+            stitchedCoordinates.push(...coords.slice(1));
+          } else {
+            stitchedCoordinates.push(...coords);
+          }
+          const legMiles = legRoute.shortest.miles;
+          const legMinutes = legRoute.shortest.minutes;
+          accumulatedMiles += legMiles;
+          accumulatedMinutes += legMinutes;
+          stitchedLegs.push({
+            fromOrder: s1,
+            toOrder: s2,
+            fromIndex: i,
+            toIndex: i + 1,
+            miles: legMiles,
+            minutes: legMinutes
+          });
+        }
+      }
+
+      if (stitchedCoordinates.length >= 2 && !controller.signal.aborted) {
+        const result = {
+          coordinates: stitchedCoordinates,
+          legs: stitchedLegs,
+          summary: { totalMiles: accumulatedMiles, totalMinutes: accumulatedMinutes }
+        };
+
+        routeCacheRef.current.set(cacheKey, result);
+        setTravesiaLegs(stitchedLegs);
+        setTravesiaSummary({ totalMiles: accumulatedMiles, totalMinutes: accumulatedMinutes });
+        travesiaGeometryRef.current = stitchedCoordinates;
+
+        const map = mapInstanceRef.current;
+        if (map && map.getSource('route-travesia')) {
+          map.getSource('route-travesia').setData({
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'LineString', coordinates: stitchedCoordinates }
+          });
+        }
+        if (map) {
+          renderTravesiaLegBadges(map, stitchedLegs);
+        }
+        return;
+      }
+    } catch (legErr) {
+      if (legErr.name === 'AbortError' || controller.signal.aborted) return;
+      console.warn('Leg-by-leg routing note:', legErr.message);
+    }
+
+    if (controller.signal.aborted) return;
+
+    // 4. Absolute Last Resort Fallback (Only reached if all three routing systems fail and request wasn't cancelled)
     let totalMilesFallback = 0;
     const fallbackCoordinates = validStops.map(o => [o.longitude, o.latitude]);
     const fallbackLegs = [];
@@ -882,6 +1045,20 @@ export default function UberDriverView({
             geometry: { type: 'LineString', coordinates: [startCoords, destCoords] }
           });
         }
+
+        // Fetch real road route asynchronously (Mapbox primary + OSRM fallback) and upgrade map to real streets!
+        fetchShortestRoute(startCoords, destCoords).then(routeData => {
+          if (!routeData || !routeData.shortest || framedOrderIdRef.current !== target.id) return;
+          setActiveRouteInfo(routeData.shortest);
+          setAvailableRoutes(routeData.allRoutes);
+          if (map.getSource('route-nav')) {
+            map.getSource('route-nav').setData({
+              type: 'Feature',
+              properties: {},
+              geometry: { type: 'LineString', coordinates: routeData.shortest.coordinates }
+            });
+          }
+        });
       }
 
       map.flyTo({
@@ -1607,8 +1784,12 @@ export default function UberDriverView({
       }
     }
 
-    // 4. Invalidate directions route cache so polyline re-draws for new sequence
-    routeCacheRef.current.clear();
+    // 4. Invalidate only multi-stop travesía cache while preserving point-to-point road geometries
+    for (const key of Array.from(routeCacheRef.current.keys())) {
+      if (key.startsWith('travesia:')) {
+        routeCacheRef.current.delete(key);
+      }
+    }
 
     // 5. Instantly recalculate & draw the new travesía line and leg times!
     updateTravesiaRoute(newSequenceList);
@@ -2882,7 +3063,7 @@ export default function UberDriverView({
 
             {/* Drag & Reorder Instruction Tip */}
             <div className="px-4 py-1.5 bg-[#0a0f16] border-b border-white/5 text-[10px] text-slate-400 flex items-center justify-between">
-              <span className="truncate">Arrastra (⋮⋮) o usa flechas (↑↓) para ordenar</span>
+              <span className="truncate">Arrastra (⋮⋮) para ordenar la travesía</span>
               <span className="text-cyan-400 font-semibold shrink-0">Toca para centrar</span>
             </div>
 
@@ -2947,32 +3128,20 @@ export default function UberDriverView({
                             <GripVertical className="h-4 w-4 stroke-[2.5]" />
                           </div>
 
-                          {/* Direct Position Selector Dropdown (Toca para elegir posición 1..N directamente) */}
+                          {/* Direct Position Indicator Badge */}
                           <div
-                            className="relative shrink-0 flex items-center justify-center"
-                            title="Cambiar posición o número de parada directamente"
+                            className={`w-7 h-7 rounded-full font-black text-xs font-mono flex items-center justify-center text-center shrink-0 shadow-sm ${
+                              isCompleted
+                                ? 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/40 ring-1 ring-emerald-500/20'
+                                : isCancelled
+                                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                                : isTarget
+                                ? 'bg-[#007AFF] text-white border border-blue-400 shadow-md ring-2 ring-blue-400/30'
+                                : 'bg-[#007AFF]/25 text-[#007AFF] border border-[#007AFF]/40 ring-1 ring-[#007AFF]/20'
+                            }`}
+                            title={`Parada #${stopNumber}`}
                           >
-                            <select
-                              value={stopNumber}
-                              onChange={(e) => {
-                                handleMoveToPosition(ord.id, e.target.value);
-                              }}
-                              className={`w-8 h-8 rounded-full font-black text-xs cursor-pointer transition shadow-sm font-mono flex items-center justify-center text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-cyan-400 ${
-                                isCompleted
-                                  ? 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/40 ring-1 ring-emerald-500/20'
-                                  : isCancelled
-                                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
-                                  : isTarget
-                                  ? 'bg-[#007AFF] text-white border border-blue-400 ring-2 ring-blue-400/30'
-                                  : 'bg-[#007AFF]/25 text-[#007AFF] border border-[#007AFF]/40 ring-1 ring-[#007AFF]/20'
-                              }`}
-                            >
-                              {tempOrdersList.map((_, pIdx) => (
-                                <option key={pIdx + 1} value={pIdx + 1} className="bg-slate-900 text-white font-bold">
-                                  {pIdx + 1}
-                                </option>
-                              ))}
-                            </select>
+                            {stopNumber}
                           </div>
 
                           {/* Job Details */}
@@ -3003,7 +3172,7 @@ export default function UberDriverView({
                           </div>
                         </div>
 
-                        {/* Right: Rate, Status Chip & Up/Down Move Controls */}
+                        {/* Right: Rate & Status Chip */}
                         <div className="flex items-center gap-2 shrink-0">
                           <div className="text-right flex flex-col items-end">
                             <div className="text-xs font-mono font-black text-emerald-400">
@@ -3020,36 +3189,6 @@ export default function UberDriverView({
                             }`}>
                               {isReported ? 'Reportado' : (ord.status || 'Pendiente')}
                             </span>
-                          </div>
-
-                          {/* Direct Tactile Up / Down Buttons */}
-                          <div className="flex flex-col gap-0.5">
-                            <button
-                              type="button"
-                              onClick={() => handleMoveStopUp(ord.id)}
-                              disabled={isFirst}
-                              className={`w-6 h-5 rounded-md flex items-center justify-center border text-[10px] font-bold transition ${
-                                isFirst
-                                  ? 'opacity-20 border-slate-800 text-slate-600'
-                                  : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90 cursor-pointer'
-                              }`}
-                              title="Subir parada"
-                            >
-                              <MoveUp className="h-3 w-3" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleMoveStopDown(ord.id)}
-                              disabled={isLast}
-                              className={`w-6 h-5 rounded-md flex items-center justify-center border text-[10px] font-bold transition ${
-                                isLast
-                                  ? 'opacity-20 border-slate-800 text-slate-600'
-                                  : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90 cursor-pointer'
-                              }`}
-                              title="Bajar parada"
-                            >
-                              <MoveDown className="h-3 w-3" />
-                            </button>
                           </div>
                         </div>
                       </div>

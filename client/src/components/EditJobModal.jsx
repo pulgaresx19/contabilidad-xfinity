@@ -168,7 +168,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
       }}
     >
       <div 
-        className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[92dvh] sm:max-h-[90dvh] flex flex-col overflow-hidden shadow-2xl text-white"
+        className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Cockpit */}

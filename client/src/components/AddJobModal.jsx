@@ -176,13 +176,18 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-2.5 sm:p-4 animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-5 animate-fade-in modal-overlay-safe"
+      style={{
+        paddingTop: 'max(env(safe-area-inset-top, 0px) + 24px, 1.75rem)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 24px, 1.75rem)'
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div 
-        className="bg-[#101722] border border-white/10 w-full max-w-sm sm:max-w-md rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[96dvh] overflow-hidden transition-all mx-auto text-white"
+      <form 
+        onSubmit={handleSubmit}
+        className="bg-[#101722] border border-white/10 w-full max-w-sm sm:max-w-md rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact overflow-hidden transition-all mx-auto text-white my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         
@@ -212,8 +217,8 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
           </button>
         </div>
 
-        {/* Formulario Principal Compacto (Sin scroll forzado) */}
-        <form onSubmit={handleSubmit} className="p-3 space-y-2 flex-1 text-xs overflow-y-auto scrollbar-none">
+        {/* Formulario Principal con Scroll */}
+        <div className="p-3 space-y-2 flex-1 min-h-0 text-xs overflow-y-auto scrollbar-none">
           {error && (
             <div className="p-2 bg-rose-500/15 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center gap-2">
               <AlertCircle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
@@ -507,28 +512,28 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
               className="w-full h-8.5 bg-[#16202c] border border-white/10 focus:border-cyan-400 rounded-xl px-2.5 text-xs text-white placeholder-slate-500 focus:outline-none shadow-xs"
             />
           </div>
+        </div>
 
-          {/* Botones de Acción */}
-          <div className="pt-2 flex items-center justify-between gap-2 border-t border-white/10 shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3.5 py-2 bg-[#16202c] hover:bg-white/10 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition border border-white/5 active:scale-95"
-            >
-              Cancelar
-            </button>
+        {/* Footer Fijo con Botones de Acción */}
+        <div className="p-3 bg-slate-900/90 flex items-center justify-between gap-2 border-t border-white/10 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3.5 py-2 bg-[#16202c] hover:bg-white/10 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition border border-white/5 active:scale-95 cursor-pointer"
+          >
+            Cancelar
+          </button>
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/25 active:scale-95 transition cursor-pointer disabled:opacity-50"
-            >
-              <Check className="h-4 w-4 stroke-[3]" />
-              <span>{saving ? 'Guardando...' : `Añadir Trabajo ($${currentTotal})`}</span>
-            </button>
-          </div>
-        </form>
-      </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/25 active:scale-95 transition cursor-pointer disabled:opacity-50"
+          >
+            <Check className="h-4 w-4 stroke-[3]" />
+            <span>{saving ? 'Guardando...' : `Añadir Trabajo ($${currentTotal})`}</span>
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
