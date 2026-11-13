@@ -460,23 +460,28 @@ export default function LiveCameraModal({
         className="hidden"
       />
 
-      {/* 1. Barra Superior del Visor */}
-      <div className="relative z-20 px-3 py-2 bg-gradient-to-b from-black/80 via-black/40 to-transparent flex items-center justify-between gap-2 shrink-0">
+      {/* 1. Barra Superior del Visor con Protección de Notch / Safe-Area */}
+      <div
+        className="relative z-20 px-3 pb-2.5 bg-gradient-to-b from-black via-black/95 to-black/80 flex items-center justify-between gap-2 shrink-0 border-b border-white/10 shadow-lg"
+        style={{
+          paddingTop: 'max(env(safe-area-inset-top, 0px) + 10px, 1.25rem)'
+        }}
+      >
         <button
           type="button"
           onClick={onClose}
-          className="w-9 h-9 rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-black/90 flex items-center justify-center transition border border-white/20 active:scale-95 cursor-pointer"
+          className="w-10 h-10 rounded-full bg-slate-900/80 backdrop-blur-md text-white hover:bg-slate-800 flex items-center justify-center transition border border-white/20 active:scale-95 cursor-pointer shrink-0"
           title="Cerrar cámara"
         >
           <X className="h-5 w-5" />
         </button>
 
         {/* Indicador de Orden y Estado GPS */}
-        <div className="flex flex-col items-center min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-white truncate">
-            <span className="text-cyan-400 font-mono">#{order?.job_id}</span>
-            <span className="text-slate-400">•</span>
-            <span className="truncate max-w-[160px] sm:max-w-xs">{order?.address}</span>
+        <div className="flex flex-col items-center min-w-0 flex-1 px-1">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-white truncate max-w-full">
+            <span className="text-cyan-400 font-mono shrink-0">#{order?.job_id}</span>
+            <span className="text-slate-400 shrink-0">•</span>
+            <span className="truncate">{order?.address}</span>
           </div>
 
           <div className="flex items-center gap-1.5 mt-0.5">
@@ -504,13 +509,13 @@ export default function LiveCameraModal({
         </div>
 
         {/* Botones de Control de Cámara */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           {hasTorch && (
             <button
               type="button"
               onClick={toggleTorch}
-              className={`w-9 h-9 rounded-full flex items-center justify-center transition border border-white/20 active:scale-95 cursor-pointer ${
-                torchOn ? 'bg-amber-400 text-slate-950 font-bold shadow-lg shadow-amber-400/30' : 'bg-black/60 text-white'
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition border border-white/20 active:scale-95 cursor-pointer ${
+                torchOn ? 'bg-amber-400 text-slate-950 font-bold shadow-lg shadow-amber-400/30' : 'bg-slate-900/80 text-white'
               }`}
               title={torchOn ? 'Apagar linterna' : 'Encender linterna'}
             >
@@ -521,8 +526,8 @@ export default function LiveCameraModal({
           <button
             type="button"
             onClick={() => setShowGrid(!showGrid)}
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition border border-white/20 active:scale-95 cursor-pointer ${
-              showGrid ? 'bg-cyan-500 text-slate-950' : 'bg-black/60 text-white'
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition border border-white/20 active:scale-95 cursor-pointer ${
+              showGrid ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-900/80 text-white'
             }`}
             title="Cuadrícula de encuadre"
           >
@@ -533,7 +538,7 @@ export default function LiveCameraModal({
             <button
               type="button"
               onClick={toggleFacingMode}
-              className="w-9 h-9 rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-black/90 flex items-center justify-center transition border border-white/20 active:scale-95 cursor-pointer"
+              className="w-10 h-10 rounded-full bg-slate-900/80 backdrop-blur-md text-white hover:bg-slate-800 flex items-center justify-center transition border border-white/20 active:scale-95 cursor-pointer"
               title="Cambiar de cámara"
             >
               <RefreshCw className="h-4 w-4" />
@@ -543,7 +548,10 @@ export default function LiveCameraModal({
       </div>
 
       {/* 2. Selector Rápido de Categoría / Paso (Superior) */}
-      <div className="relative z-20 px-3 py-1 bg-black/50 backdrop-blur-xs flex items-center gap-1.5 overflow-x-auto scrollbar-none border-b border-white/10 shrink-0">
+      <div className="relative z-20 px-3 py-2 bg-slate-950/95 backdrop-blur-md flex items-center gap-2 overflow-x-auto scrollbar-none border-b border-white/10 shrink-0 shadow-md">
+        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-0.5">
+          Foto:
+        </span>
         {PHOTO_STEPS.map((step) => {
           const isSelected = category === step.id;
           return (
@@ -551,13 +559,13 @@ export default function LiveCameraModal({
               key={step.id}
               type="button"
               onClick={() => setCategory(step.id)}
-              className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition whitespace-nowrap cursor-pointer flex items-center gap-1 shrink-0 ${
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95 ${
                 isSelected
-                  ? 'bg-cyan-400 text-slate-950 shadow-md font-black ring-2 ring-cyan-400/50'
-                  : 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/15 border border-white/5'
+                  ? 'bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-400/30 font-black ring-2 ring-cyan-300'
+                  : 'bg-white/10 text-slate-200 hover:text-white hover:bg-white/15 border border-white/10'
               }`}
             >
-              <span>{step.icon}</span>
+              <span className="text-sm">{step.icon}</span>
               <span>{step.short}</span>
             </button>
           );
@@ -658,7 +666,12 @@ export default function LiveCameraModal({
       </div>
 
       {/* 4. Barra Inferior de Disparo y Acciones */}
-      <div className="relative z-20 px-4 py-3 bg-gradient-to-t from-black/95 via-black/80 to-transparent flex items-center justify-between gap-4 shrink-0">
+      <div
+        className="relative z-20 px-4 pt-3 bg-gradient-to-t from-black via-black/95 to-transparent flex items-center justify-between gap-4 shrink-0"
+        style={{
+          paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 12px, 1.25rem)'
+        }}
+      >
         {/* Esquina Izquierda: Botón Automático */}
         <div className="flex-1 flex justify-start">
           {onAutoAdvanceToggle && (
