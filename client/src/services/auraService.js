@@ -114,7 +114,7 @@ export async function checkAuraCoreHealth() {
         configured: false,
         model: '',
         url: baseUrl,
-        error: json.error || `HTTP ${res.status} (${res.status === 402 || res.status === 403 ? 'Sitio/créditos pausados en Netlify' : 'No respondió /api/health'})`
+        error: json.error || `HTTP ${res.status} (${res.status === 402 || res.status === 403 ? 'Despliegue pausado en Vercel' : 'No respondió /api/health'})`
       };
     }
     return {
@@ -211,7 +211,7 @@ export async function interactWithAuraCore({
       throw new Error(`Tiempo agotado esperando respuesta de AuraCore (${baseUrl}).`);
     }
     if (/failed to fetch|load failed|networkerror/i.test(err?.message || '')) {
-      throw new Error(`No se pudo conectar con ${baseUrl}. Si tus créditos de Netlify están vencidos o la URL falló, toca Ajustes (⚙️) → "Auto".`);
+      throw new Error(`No se pudo conectar con ${baseUrl}. Si tu URL de Vercel falló, toca Ajustes (⚙️) → "Auto".`);
     }
     throw err;
   } finally {

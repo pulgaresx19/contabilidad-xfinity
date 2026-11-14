@@ -349,7 +349,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             <div className="flex gap-1.5">
               <input
                 type="url"
-                placeholder="https://tu-auracore.netlify.app o Auto"
+                placeholder="https://tu-auracore.vercel.app o Auto"
                 value={auraUrl}
                 onChange={(e) => setAuraUrl(e.target.value)}
                 className="flex-1 min-w-0 bg-[#0f1722] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500 shadow-inner"
@@ -380,7 +380,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
               </p>
             )}
             <p className="text-[10px] text-slate-400 leading-tight">
-              Toca <strong className="text-amber-300">Auto</strong> para probar directo con la IA de tu computadora por el túnel QR, o pega tu enlace HTTPS de Netlify/Render cuando esté activo.
+              Toca <strong className="text-amber-300">Auto</strong> para probar directo con la IA de tu computadora por el túnel QR, o pega tu enlace HTTPS de Vercel cuando esté activo.
             </p>
           </div>
 
