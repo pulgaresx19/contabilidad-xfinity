@@ -237,11 +237,11 @@ export async function getPhysicalAddressFromLocation(lat, lng) {
 
 /**
  * Fast client-side image compression using HTML Canvas.
- * Resizes large camera photos (often 4000x3000, 5-15 MB) to a maximum dimension of 1600px
- * and compresses with JPEG quality 0.80.
- * Produces crisp ~200-350 KB photos that upload in <0.5s over cellular networks.
+ * Resizes large camera photos (often 4000x3000, 5-15 MB) to a standard dimension of 1280px
+ * and compresses with JPEG quality 0.75.
+ * Produces crisp ~180-280 KB photos that upload in <0.3s over cellular networks.
  */
-export async function compressImageFile(file, { maxDim = 1600, quality = 0.80 } = {}) {
+export async function compressImageFile(file, { maxDim = 1280, quality = 0.75 } = {}) {
   if (!file || !file.type || !file.type.startsWith('image/')) {
     return file;
   }
@@ -449,8 +449,8 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
     let width = img.naturalWidth || img.width;
     let height = img.naturalHeight || img.height;
 
-    // Cap max dimension to maintain speed while keeping crisp detail
-    const maxDim = meta.maxDim || 1600;
+    // Cap max dimension to 1280px to avoid heavy HD files and keep photos ~180-280 KB
+    const maxDim = meta.maxDim || 1280;
     if (width > maxDim || height > maxDim) {
       if (width > height) {
         height = Math.round((height * maxDim) / width);
@@ -484,9 +484,9 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
     // 6. Draw watermark
     drawWatermarkOnCanvas(ctx, width, height, lines);
 
-    // 7. Output stamped blob as File
+    // 7. Output stamped blob as File with 0.75 quality for lightweight storage
     const blob = await new Promise((resolve) => {
-      canvas.toBlob(resolve, 'image/jpeg', meta.quality || 0.80);
+      canvas.toBlob(resolve, 'image/jpeg', meta.quality || 0.75);
     });
 
     if (!blob) return file;
@@ -496,6 +496,6 @@ export async function stampPhotoWithWatermark(file, meta = {}) {
 
   } catch (err) {
     console.warn('Failed to apply watermark, falling back to fast compression:', err);
-    return await compressImageFile(file, { maxDim: 1600, quality: 0.80 });
+    return await compressImageFile(file, { maxDim: 1280, quality: 0.75 });
   }
 }

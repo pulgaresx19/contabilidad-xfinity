@@ -62,8 +62,8 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
       if (!Array.isArray(photos)) return [];
       const sorted = [...photos].sort((a, b) => (a.id || 0) - (b.id || 0));
       if (isOrderCancelled) {
-        const cancelPhotos = sorted.filter((p) => p.category === 'Constancia No Realizado');
-        return cancelPhotos.length > 0 ? cancelPhotos : sorted;
+        // En trabajo no realizado, SOLO se muestran las fotos de constancia/obstáculo, NUNCA las de instalación normal
+        return sorted.filter((p) => p.category === 'Constancia No Realizado');
       }
       return sorted.filter((p) => p.category !== 'Constancia No Realizado');
     };
@@ -224,7 +224,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
       }}
     >
       <div 
-        className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all"
+        className="bg-[#101722] border border-white/10 rounded-3xl w-full max-w-sm sm:max-w-md h-[80dvh] sm:h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 1. Header (Misma estructura idéntica de Travesía del Día y PhotoModal) */}
@@ -287,7 +287,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         )}
 
         {/* 3. Cuerpo del Modal Scrollable */}
-        <div className="p-4 overflow-y-auto space-y-3.5 flex-1 scrollbar-none bg-[#101722]">
+        <div className="p-3.5 sm:p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0 scrollbar-none bg-[#101722]">
           
           {/* Detalles Técnicos Extra si aplican (Driveway) */}
           {hasDriveway && !isCancelled && (

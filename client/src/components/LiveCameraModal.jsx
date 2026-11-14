@@ -329,10 +329,24 @@ export default function LiveCameraModal({
       }
 
       // 2. Si no se obtuvo con ImageCapture, capturar fotograma del video
-      const canvas = document.createElement('canvas');
-      const width = sourceImage ? sourceImage.naturalWidth : (video?.videoWidth || 1920);
-      const height = sourceImage ? sourceImage.naturalHeight : (video?.videoHeight || 1080);
+      const rawW = sourceImage ? (sourceImage.naturalWidth || sourceImage.width) : (video?.videoWidth || 1280);
+      const rawH = sourceImage ? (sourceImage.naturalHeight || sourceImage.height) : (video?.videoHeight || 720);
 
+      // Limitar a máximo 1280px para evitar fotos pesadas HD (estándar ligero ~180-280 KB)
+      const maxDim = 1280;
+      let width = rawW;
+      let height = rawH;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
@@ -349,9 +363,9 @@ export default function LiveCameraModal({
       // 3. Estampar la marca de agua con las líneas exactas que el usuario ve en pantalla
       drawWatermarkOnCanvas(ctx, width, height, hudLines);
 
-      // 4. Convertir a Blob JPEG de alta calidad
+      // 4. Convertir a Blob JPEG optimizado (~180-280 KB)
       const stampedBlob = await new Promise((resolve) => {
-        canvas.toBlob(resolve, 'image/jpeg', 0.85);
+        canvas.toBlob(resolve, 'image/jpeg', 0.75);
       });
 
       if (!stampedBlob) {
@@ -373,8 +387,8 @@ export default function LiveCameraModal({
       setToastMessage(`✓ Foto de "${category}" guardada`);
       setTimeout(() => setToastMessage(null), 2500);
 
-      // 6. Auto-avanzar al siguiente paso si está habilitado
-      if (autoAdvance) {
+      // 6. Auto-avanzar al siguiente paso si está habilitado (no auto-avanzar si es Constancia No Realizado)
+      if (autoAdvance && category !== 'Constancia No Realizado') {
         const currentIdx = PHOTO_STEPS.findIndex((s) => s.id === category);
         if (currentIdx !== -1 && currentIdx < PHOTO_STEPS.length - 1) {
           setCategory(PHOTO_STEPS[currentIdx + 1].id);
@@ -408,16 +422,31 @@ export default function LiveCameraModal({
         reader.readAsDataURL(file);
       });
 
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth || 1920;
-      canvas.height = img.naturalHeight || 1080;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const rawW = img.naturalWidth || 1280;
+      const rawH = img.naturalHeight || 720;
+      const maxDim = 1280;
+      let width = rawW;
+      let height = rawH;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
 
-      drawWatermarkOnCanvas(ctx, canvas.width, canvas.height, hudLines);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      drawWatermarkOnCanvas(ctx, width, height, hudLines);
 
       const blob = await new Promise((resolve) => {
-        canvas.toBlob(resolve, 'image/jpeg', 0.85);
+        canvas.toBlob(resolve, 'image/jpeg', 0.75);
       });
 
       const stampedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '') + '-stamped.jpg', {
@@ -432,7 +461,7 @@ export default function LiveCameraModal({
       setToastMessage(`✓ Foto de "${category}" guardada`);
       setTimeout(() => setToastMessage(null), 2500);
 
-      if (autoAdvance) {
+      if (autoAdvance && category !== 'Constancia No Realizado') {
         const currentIdx = PHOTO_STEPS.findIndex((s) => s.id === category);
         if (currentIdx !== -1 && currentIdx < PHOTO_STEPS.length - 1) {
           setCategory(PHOTO_STEPS[currentIdx + 1].id);
@@ -548,28 +577,42 @@ export default function LiveCameraModal({
       </div>
 
       {/* 2. Selector Rápido de Categoría / Paso (Superior) */}
-      <div className="relative z-20 px-3 py-2 bg-slate-900 border-b border-white/10 flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0 shadow-md">
-        <span className="text-[11px] font-black uppercase tracking-wider text-cyan-400 shrink-0 mr-0.5">
-          Paso:
-        </span>
-        {PHOTO_STEPS.map((step) => {
-          const isSelected = category === step.id;
-          return (
-            <button
-              key={step.id}
-              type="button"
-              onClick={() => setCategory(step.id)}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95 ${
-                isSelected
-                  ? 'bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-400/30 font-black ring-2 ring-cyan-300'
-                  : 'bg-white/10 text-slate-200 hover:text-white hover:bg-white/15 border border-white/10'
-              }`}
-            >
-              <span className="text-sm">{step.icon}</span>
-              <span>{step.short}</span>
-            </button>
-          );
-        })}
+      <div className="relative z-20 px-3 py-2 bg-slate-900 border-b border-white/10 flex items-center justify-between gap-2 overflow-x-auto scrollbar-none shrink-0 shadow-md">
+        {category === 'Constancia No Realizado' ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-black uppercase tracking-wider text-rose-400 shrink-0">
+              Modo:
+            </span>
+            <div className="px-3 py-1 text-xs font-black rounded-xl bg-rose-600 text-white flex items-center gap-1.5 shadow-md shadow-rose-600/30">
+              <span>🚫</span>
+              <span>Constancia de Obstáculo (GPS + Hora)</span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+            <span className="text-[11px] font-black uppercase tracking-wider text-cyan-400 shrink-0 mr-0.5">
+              Paso:
+            </span>
+            {PHOTO_STEPS.map((step) => {
+              const isSelected = category === step.id;
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => setCategory(step.id)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95 ${
+                    isSelected
+                      ? 'bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-400/30 font-black ring-2 ring-cyan-300'
+                      : 'bg-white/10 text-slate-200 hover:text-white hover:bg-white/15 border border-white/10'
+                  }`}
+                >
+                  <span className="text-sm">{step.icon}</span>
+                  <span>{step.short}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* 3. Área Central del Visor con el Stream y HUD en Tiempo Real */}

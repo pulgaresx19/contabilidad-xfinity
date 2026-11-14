@@ -16,6 +16,12 @@ export function resolveDefaultAuraUrl() {
     if (protocol === 'http:' && hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
       return port === '5000' ? `${origin}/auracore` : `http://${hostname}:3100`;
     }
+    if (protocol === 'https:' && hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return `${origin}/auracore`;
+    }
+    if (port === '5000') {
+      return `${origin}/auracore`;
+    }
   }
   return 'http://localhost:3100';
 }
@@ -70,7 +76,7 @@ function splitDataUrl(dataUrl, fallbackMime = 'image/jpeg') {
 export async function fileToInlineImage(fileOrBlob) {
   if (!fileOrBlob) return null;
   try {
-    const compressed = await compressImage(fileOrBlob, 1400, 1400, 0.82);
+    const compressed = await compressImage(fileOrBlob, 2048, 2048, 0.85);
     const dataUrl = compressed?.dataUrl || (await fileToDataUrl(fileOrBlob));
     return splitDataUrl(dataUrl, fileOrBlob.type || 'image/jpeg');
   } catch {
@@ -88,9 +94,19 @@ export async function blobToInlineAudio(blob) {
 export async function checkAuraCoreHealth() {
   const baseUrl = getAuraCoreUrl();
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 5000);
+  const timer = setTimeout(() => ctrl.abort(), 6000);
   try {
     const res = await fetch(`${baseUrl}/api/health`, { signal: ctrl.signal });
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return {
+        ok: false,
+        configured: false,
+        model: '',
+        url: baseUrl,
+        error: 'La dirección respondió con HTML en vez de AuraCore IA. Verifica la URL en Ajustes.'
+      };
+    }
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       return {
@@ -112,7 +128,7 @@ export async function checkAuraCoreHealth() {
     const friendly = err?.name === 'AbortError'
       ? 'Tiempo agotado (el servidor no respondió a tiempo)'
       : /load failed|failed to fetch/i.test(msg)
-      ? 'No se pudo conectar (URL incorrecta, bloqueada o créditos de Netlify agotados)'
+      ? 'No se pudo conectar (URL incorrecta, bloqueada o AuraCore apagado)'
       : msg || 'Sin conexión';
     return { ok: false, configured: false, model: '', url: baseUrl, error: friendly };
   } finally {

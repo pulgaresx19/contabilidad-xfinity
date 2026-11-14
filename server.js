@@ -991,15 +991,15 @@ app.post('/api/orders/:id/photos', upload.array('photos', 10), async (req, res) 
     `);
 
     for (const file of req.files) {
-      // Backend auto-compression with sharp: guarantees every stored photo stays crisp and lightweight (~200-350KB)
+      // Backend auto-compression with sharp: guarantees every stored photo stays crisp and lightweight (~180-280KB)
       const filePath = path.join(uploadsDir, file.filename);
       try {
         const meta = await sharp(filePath).metadata();
-        if ((meta.width && meta.width > 1600) || (meta.height && meta.height > 1600) || file.size > 500 * 1024) {
+        if ((meta.width && meta.width > 1280) || (meta.height && meta.height > 1280) || file.size > 350 * 1024) {
           const tempPath = filePath + '.opt.jpg';
           await sharp(filePath)
-            .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
-            .jpeg({ quality: 80, mozjpeg: true })
+            .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 75, mozjpeg: true })
             .toFile(tempPath);
           fs.renameSync(tempPath, filePath);
         }
@@ -1659,15 +1659,67 @@ app.delete('/api/dispatch-sheets/:id', (req, res) => {
   }
 });
 
+// Auto-lanzador y gestor del servidor AuraCore-AI local en puerto 3100
+const auraDir = path.resolve(__dirname, '..', 'AuraCore-AI');
+let auraChildProcess = null;
+
+function startAuraCoreIfInstalled() {
+  const serverPath = path.join(auraDir, 'src', 'server.js');
+  if (!fs.existsSync(serverPath)) return;
+
+  fetch('http://127.0.0.1:3100/api/health', { signal: AbortSignal.timeout(1200) })
+    .then((r) => {
+      if (r.ok) console.log('⚡ AuraCore-AI ya está respondiendo en http://127.0.0.1:3100');
+    })
+    .catch(() => {
+      console.log('🚀 Iniciando AuraCore-AI automáticamente en segundo plano (puerto 3100)...');
+      try {
+        const { spawn } = require('child_process');
+        auraChildProcess = spawn(process.execPath, ['src/server.js'], {
+          cwd: auraDir,
+          stdio: 'inherit',
+          windowsHide: true,
+          env: { ...process.env, PORT: '3100' }
+        });
+        auraChildProcess.on('error', (err) => {
+          console.error('⚠️ Error en proceso AuraCore-AI:', err.message);
+        });
+      } catch (e) {
+        console.error('⚠️ No se pudo iniciar AuraCore-AI:', e.message);
+      }
+    });
+}
+
+const killAuraChild = () => {
+  if (auraChildProcess && !auraChildProcess.killed) {
+    try { auraChildProcess.kill(); } catch {}
+  }
+};
+process.on('exit', killAuraChild);
+process.on('SIGINT', () => { killAuraChild(); process.exit(); });
+process.on('SIGTERM', () => { killAuraChild(); process.exit(); });
+
 // Same-origin proxy hacia AuraCore-AI local (permite usar el QR/túnel desde iPhone/Android sin CORS ni créditos externos)
 app.use('/auracore', async (req, res) => {
-  try {
-    const targetUrl = `http://127.0.0.1:3100${req.url}`;
-    const upstream = await fetch(targetUrl, {
+  const targetUrl = `http://127.0.0.1:3100${req.url}`;
+  const forwardRequest = async () => {
+    return await fetch(targetUrl, {
       method: req.method,
       headers: { 'Content-Type': 'application/json' },
-      body: req.method === 'POST' || req.method === 'PUT' ? JSON.stringify(req.body || {}) : undefined
+      body: req.method === 'POST' || req.method === 'PUT' ? JSON.stringify(req.body || {}) : undefined,
+      signal: AbortSignal.timeout(45000)
     });
+  };
+
+  try {
+    let upstream;
+    try {
+      upstream = await forwardRequest();
+    } catch (firstErr) {
+      // Si el servidor apenas está arrancando, reintentar una vez tras 1.2s
+      await new Promise((r) => setTimeout(r, 1200));
+      upstream = await forwardRequest();
+    }
     const bodyText = await upstream.text();
     res.status(upstream.status).set('Content-Type', upstream.headers.get('content-type') || 'application/json').send(bodyText);
   } catch (err) {
@@ -1696,4 +1748,5 @@ if (fs.existsSync(clientDist)) {
 // Start Server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor de Contabilidad Xfinity corriendo en http://localhost:${PORT}`);
+  startAuraCoreIfInstalled();
 });

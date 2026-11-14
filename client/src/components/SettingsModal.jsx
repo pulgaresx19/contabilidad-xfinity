@@ -120,7 +120,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
     >
       <form 
         onSubmit={handleSubmit}
-        className="bg-[#101722] border border-white/10 w-full max-w-sm sm:max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[74dvh] sm:max-h-[76dvh] modal-sheet-compact text-white transition-all my-auto"
+        className="bg-[#101722] border border-white/10 rounded-3xl w-full max-w-sm sm:max-w-md h-[80dvh] sm:h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Unificado (Estilo Cockpit idéntico a Evidencias y Compartir) */}

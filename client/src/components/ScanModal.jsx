@@ -141,6 +141,26 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
         defaultDate: sheetDate
       });
       ordersFound = auraRes?.data?.orders || [];
+      if (ordersFound.length === 0 && auraRes?.data?.record?.direccion) {
+        const rec = auraRes.data.record;
+        ordersFound = [{
+          work_date: rec.fecha || sheetDate,
+          tech_id: techId,
+          job_id: '',
+          address: rec.direccion,
+          city: '',
+          zip_code: '',
+          phone: rec.telefono || '',
+          drop_footage: 100,
+          cable_type: 'RG-6',
+          bore_type: 'N',
+          obstacles: 'N',
+          rate_calculated: Number(rec.monto) || 100,
+          status: 'Pendiente',
+          payment_status: 'Pendiente',
+          raw_notes: rec.descripcionTrabajo || ''
+        }];
+      }
       extractedText = auraRes?.data?.transcript || auraRes?.data?.replyText || '';
       auraModel = auraRes?.modelUsed || 'Gemini';
       aiNote = auraRes?.data?.ambiguityNote || '';
@@ -161,9 +181,10 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
     if (!ordersFound || ordersFound.length === 0) {
       setRawAiText(extractedText);
+      const detailNote = extractedText ? ` (${extractedText.slice(0, 120)}...)` : '';
       setMessage({
         type: 'warning',
-        text: 'AuraCore IA analizó la foto pero no encontró órdenes válidas. Intenta con una foto más clara o usa "Agregar Fila".'
+        text: `AuraCore IA analizó la foto pero no detectó filas de órdenes válidas${detailNote}. Intenta con una toma más cercana, con buena luz o añade una fila manual.`
       });
       setExtractedOrders([
         {

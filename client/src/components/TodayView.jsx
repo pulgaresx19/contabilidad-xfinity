@@ -3,13 +3,14 @@ import {
   Camera, Check, X, Phone, MapPin, Share2, Clock, Copy,
   CheckCircle2, AlertCircle, Plus, Sparkles, AlertTriangle, Shield,
   SlidersHorizontal, Edit3, Minus, DollarSign, Calendar, ChevronLeft, ChevronRight, Pencil, Info,
-  Image as ImageIcon, Map, List, Navigation
+  Image as ImageIcon, Map, List, Navigation, Trash2, ExternalLink
 } from 'lucide-react';
 import AddJobModal from './AddJobModal';
 import EditJobModal from './EditJobModal';
 import ShareReportModal from './ShareReportModal';
 import DayMapView from './DayMapView';
 import UberDriverView from './UberDriverView';
+import LiveCameraModal from './LiveCameraModal';
 import { stampPhotoWithWatermark } from '../utils/watermark';
 import { getLocalDateStr, normalizeDateStr, formatDateFriendly } from '../utils/dateUtils';
 
@@ -90,6 +91,7 @@ export default function TodayView({
   const [cancelDetailOrder, setCancelDetailOrder] = useState(null);
   const [cancelDetailPhotos, setCancelDetailPhotos] = useState([]);
   const [loadingCancelPhotos, setLoadingCancelPhotos] = useState(false);
+  const [isLiveCameraOpenForCancel, setIsLiveCameraOpenForCancel] = useState(false);
   const [isAddJobOpen, setIsAddJobOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [targetFocusOrderId, setTargetFocusOrderId] = useState(null);
@@ -376,13 +378,56 @@ export default function TodayView({
       const res = await fetch(`/api/orders/${order.id}`);
       if (res.ok) {
         const full = await res.json();
+        // En trabajo no realizado, SOLO se muestran fotos de constancia del obstáculo
         const cPhotos = (full.photos || []).filter(p => p.category === 'Constancia No Realizado');
-        setCancelDetailPhotos(cPhotos.length > 0 ? cPhotos : (full.photos || []));
+        setCancelDetailPhotos(cPhotos);
       }
     } catch (err) {
       console.error('Error fetching cancel detail photos:', err);
     } finally {
       setLoadingCancelPhotos(false);
+    }
+  };
+
+  const handleLivePhotoSavedForCancel = async (file) => {
+    if (!cancelDetailOrder) return;
+    try {
+      const formData = new FormData();
+      formData.append('category', 'Constancia No Realizado');
+      formData.append('photos', file);
+      const res = await fetch(`/api/orders/${cancelDetailOrder.id}/photos`, {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) {
+        const updatedRes = await fetch(`/api/orders/${cancelDetailOrder.id}`);
+        if (updatedRes.ok) {
+          const updated = await updatedRes.json();
+          const cPhotos = (updated.photos || []).filter(p => p.category === 'Constancia No Realizado');
+          setCancelDetailPhotos(cPhotos);
+          onOrderUpdated();
+        }
+      }
+    } catch (err) {
+      alert('Error al guardar foto de obstáculo: ' + err.message);
+    }
+  };
+
+  const handleDeleteCancelDetailPhoto = async (photoId) => {
+    if (!confirm('¿Eliminar esta foto de constancia?')) return;
+    try {
+      const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
+      if (res.ok) {
+        const updatedRes = await fetch(`/api/orders/${cancelDetailOrder.id}`);
+        if (updatedRes.ok) {
+          const updated = await updatedRes.json();
+          const cPhotos = (updated.photos || []).filter(p => p.category === 'Constancia No Realizado');
+          setCancelDetailPhotos(cPhotos);
+          onOrderUpdated();
+        }
+      }
+    } catch (err) {
+      alert('Error eliminando foto: ' + err.message);
     }
   };
 
@@ -411,7 +456,7 @@ export default function TodayView({
         if (updatedRes.ok) {
           const updated = await updatedRes.json();
           const cPhotos = (updated.photos || []).filter(p => p.category === 'Constancia No Realizado');
-          setCancelDetailPhotos(cPhotos.length > 0 ? cPhotos : (updated.photos || []));
+          setCancelDetailPhotos(cPhotos);
           onOrderUpdated();
         }
       }
@@ -1359,24 +1404,30 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
       {/* MODAL: Marcar como No Realizado */}
       {cancelModalOrder && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in modal-overlay-safe"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
           style={{
             paddingTop: 'max(env(safe-area-inset-top, 0px) + 16px, 1.25rem)',
             paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
           }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setCancelModalOrder(null);
+          }}
         >
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-2xl space-y-3.5 max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact overflow-y-auto my-auto">
+          <div 
+            className="bg-[#101722] border border-white/10 rounded-3xl w-full max-w-sm sm:max-w-md h-[80dvh] sm:h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl">
+            <div className="px-4 sm:px-5 py-3 border-b border-white/10 flex items-center justify-between bg-slate-900/70 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-500 to-amber-600 flex items-center justify-center text-white shrink-0 shadow-md shadow-rose-500/20">
                   <AlertTriangle className="h-4 w-4 stroke-[2.5]" />
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-black text-white truncate">
                     Trabajo No Realizado
                   </h3>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  <p className="text-[10.5px] text-slate-400 font-semibold truncate">
                     Registrar motivo de cancelación
                   </p>
                 </div>
@@ -1384,184 +1435,193 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
               <button
                 type="button"
                 onClick={() => setCancelModalOrder(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+                title="Cerrar"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Detalles del Trabajo */}
-            <div className="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-mono font-bold text-cyan-700 dark:text-cyan-400">
+            {/* Sub-bar con detalles del trabajo */}
+            <div className="px-4 py-2 bg-[#0d141e] border-b border-white/5 flex items-center justify-between text-[11px] text-slate-300 shrink-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="font-mono font-bold text-cyan-400">
                   #{cancelModalOrder.job_id}
                 </span>
-                <span className="text-[10px] bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-900 px-1.5 py-0.2 rounded font-semibold">
-                  Se marcará No Realizado
+                <span className="truncate max-w-[190px] text-[10.5px]">
+                  • {cancelModalOrder.address}
                 </span>
               </div>
-              <p className="font-bold text-slate-900 dark:text-white mt-1">{cancelModalOrder.address}</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400">{cancelModalOrder.city} {cancelModalOrder.zip_code}</p>
+              <span className="text-[9.5px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded-lg font-bold shrink-0">
+                No Realizado
+              </span>
             </div>
 
-            {/* Sugerencias Rápidas de Motivos */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Opciones rápidas (Opcional):
-                </label>
-                {cancelReason && (
-                  <button
-                    type="button"
-                    onClick={() => setCancelReason('')}
-                    className="text-[10px] text-slate-400 hover:text-rose-500 flex items-center gap-0.5 transition font-semibold"
-                  >
-                    <X className="h-3 w-3" />
-                    <span>Deseleccionar</span>
-                  </button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  'Sin acceso: cliente ausente o reja cerrada',
-                  'Perro suelto en patio / Sin acceso seguro',
-                  'Cancelado por el cliente en el sitio',
-                  'Conflicto de servicios públicos (Gas/Agua)',
-                  'Terreno inundado / Imposible perforar'
-                ].map((reason) => {
-                  const isSelected = cancelReason === reason;
-                  return (
+            {/* Body */}
+            <div className="p-3.5 sm:p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0 scrollbar-none bg-[#101722]">
+              {/* Sugerencias Rápidas de Motivos */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
+                    Opciones rápidas (Opcional):
+                  </label>
+                  {cancelReason && (
                     <button
                       type="button"
-                      key={reason}
-                      onClick={() => setCancelReason(isSelected ? '' : reason)}
-                      className={`text-[10px] px-2 py-1 rounded-lg border text-left transition flex items-center gap-1 ${
-                        isSelected
-                          ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-400 dark:border-rose-500 font-bold shadow-sm'
-                          : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
-                      }`}
+                      onClick={() => setCancelReason('')}
+                      className="text-[10px] text-slate-400 hover:text-rose-400 flex items-center gap-0.5 transition font-semibold"
                     >
-                      <span>{reason}</span>
-                      {isSelected && <X className="h-2.5 w-2.5 opacity-70" />}
+                      <X className="h-3 w-3" />
+                      <span>Deseleccionar</span>
                     </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Campo de Texto Personalizado con botón de Limpiar X */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Escribir motivo manualmente:
-                </label>
-                {cancelReason && (
-                  <button
-                    type="button"
-                    onClick={() => setCancelReason('')}
-                    className="text-[10px] text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 font-bold"
-                  >
-                    <X className="h-3 w-3" />
-                    <span>Limpiar texto</span>
-                  </button>
-                )}
-              </div>
-
-              <div className="relative">
-                <textarea
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  rows={3}
-                  placeholder="Escribe la razón aquí manualmente..."
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 pr-8 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-rose-500"
-                />
-                {cancelReason && (
-                  <button
-                    type="button"
-                    onClick={() => setCancelReason('')}
-                    className="absolute top-2.5 right-2.5 p-1 rounded-full bg-slate-200/90 hover:bg-rose-500 hover:text-white dark:bg-slate-800 dark:hover:bg-rose-500 text-slate-500 dark:text-slate-400 transition"
-                    title="Borrar texto para escribir manualmente"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Fotos de Constancia del Obstáculo */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Fotos de Constancia del Obstáculo (Opcional):
-                </label>
-                {cancelPhotoPreviews.length > 0 && (
-                  <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                    {cancelPhotoPreviews.length} {cancelPhotoPreviews.length === 1 ? 'foto' : 'fotos'}
-                  </span>
-                )}
-              </div>
-
-              {/* Botones Siempre Arriba a Primera Vista */}
-              <div className="grid grid-cols-2 gap-2">
-                {/* Botón Cámara */}
-                <label className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl border border-dashed border-rose-300 dark:border-rose-700/60 hover:border-rose-500 bg-rose-50/50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 text-xs font-bold cursor-pointer transition active:scale-95 text-center">
-                  <Camera className="h-4 w-4 shrink-0" />
-                  <span>Cámara</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleCancelPhotoSelect}
-                    className="hidden"
-                  />
-                </label>
-
-                {/* Botón Galería */}
-                <label className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-rose-500 bg-slate-50 dark:bg-slate-950/40 text-slate-700 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 text-xs font-bold cursor-pointer transition active:scale-95 text-center">
-                  <ImageIcon className="h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" />
-                  <span>Galería / Fotos</span>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/heic,image/heif,image/webp,.jpg,.jpeg,.png,.heic"
-                    multiple
-                    onChange={handleCancelPhotoSelect}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-
-              {/* Tira de Fotos Añadidas Abajo */}
-              {cancelPhotoPreviews.length > 0 && (
-                <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin">
-                  {cancelPhotoPreviews.map((src, idx) => (
-                    <div
-                      key={idx}
-                      className="relative w-24 h-16 flex-shrink-0 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-black/40 shadow-sm"
-                    >
-                      <img src={src} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Sin acceso: cliente ausente o reja cerrada',
+                    'Perro suelto en patio / Sin acceso seguro',
+                    'Cancelado por el cliente en el sitio',
+                    'Conflicto de servicios públicos (Gas/Agua)',
+                    'Terreno inundado / Imposible perforar'
+                  ].map((reason) => {
+                    const isSelected = cancelReason === reason;
+                    return (
                       <button
                         type="button"
-                        onClick={() => handleRemoveCancelPhoto(idx)}
-                        className="absolute top-1 right-1 p-1 rounded-full bg-rose-600/90 hover:bg-rose-500 text-white shadow active:scale-90 transition"
-                        title="Quitar foto"
+                        key={reason}
+                        onClick={() => setCancelReason(isSelected ? '' : reason)}
+                        className={`text-[10.5px] px-2.5 py-1.5 rounded-xl border text-left transition flex items-center gap-1 cursor-pointer ${
+                          isSelected
+                            ? 'bg-rose-600 text-white border-rose-500 font-bold shadow-sm'
+                            : 'bg-[#16202c] text-slate-300 border-white/10 hover:border-rose-400/50'
+                        }`}
                       >
-                        <X className="h-3 w-3 stroke-[2.5]" />
+                        <span>{reason}</span>
+                        {isSelected && <X className="h-2.5 w-2.5 opacity-70" />}
                       </button>
-                      <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-white/90">
-                        #{idx + 1}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+
+              {/* Campo de Texto Personalizado con botón de Limpiar X */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
+                    Escribir motivo manualmente:
+                  </label>
+                  {cancelReason && (
+                    <button
+                      type="button"
+                      onClick={() => setCancelReason('')}
+                      className="text-[10px] text-rose-400 hover:underline flex items-center gap-1 font-bold"
+                    >
+                      <X className="h-3 w-3" />
+                      <span>Limpiar texto</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <textarea
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    rows={2}
+                    placeholder="Escribe la razón aquí manualmente..."
+                    className="w-full bg-[#0d141e] border border-white/10 rounded-xl p-2.5 pr-8 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                  />
+                  {cancelReason && (
+                    <button
+                      type="button"
+                      onClick={() => setCancelReason('')}
+                      className="absolute top-2.5 right-2.5 p-1 rounded-full bg-slate-800 hover:bg-rose-600 text-slate-400 hover:text-white transition"
+                      title="Borrar texto"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Fotos de Constancia del Obstáculo */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
+                    Fotos del Obstáculo (Sello GPS & Hora):
+                  </label>
+                  {cancelPhotoPreviews.length > 0 && (
+                    <span className="text-[10px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 rounded-lg">
+                      {cancelPhotoPreviews.length} {cancelPhotoPreviews.length === 1 ? 'foto lista' : 'fotos listas'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Botones de Cámara y Galería */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Botón Cámara */}
+                  <label className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl border border-dashed border-rose-500/40 hover:border-rose-400 bg-rose-950/20 text-rose-300 text-xs font-bold cursor-pointer transition active:scale-95 text-center">
+                    <Camera className="h-4 w-4 shrink-0 text-rose-400" />
+                    <span>Cámara GPS</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleCancelPhotoSelect}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {/* Botón Galería */}
+                  <label className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl border border-dashed border-white/10 hover:border-rose-400 bg-[#16202c] hover:bg-[#1e2b3b] text-slate-200 text-xs font-bold cursor-pointer transition active:scale-95 text-center">
+                    <ImageIcon className="h-4 w-4 shrink-0 text-rose-400" />
+                    <span>Galería / Fotos</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/heic,image/heif,image/webp,.jpg,.jpeg,.png,.heic"
+                      multiple
+                      onChange={handleCancelPhotoSelect}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {/* Tira de Fotos Añadidas Abajo */}
+                {cancelPhotoPreviews.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    {cancelPhotoPreviews.map((src, idx) => (
+                      <div
+                        key={idx}
+                        className="relative rounded-xl overflow-hidden border border-rose-500/30 aspect-video bg-black/40 shadow-xs"
+                      >
+                        <img src={src} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCancelPhoto(idx)}
+                          className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/70 hover:bg-rose-600 text-white shadow active:scale-90 transition cursor-pointer"
+                          title="Quitar foto"
+                        >
+                          <X className="h-3 w-3 stroke-[2.5]" />
+                        </button>
+                        <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 text-[9px] font-mono text-rose-300 border border-rose-500/30">
+                          Obstáculo #{idx + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10.5px] text-slate-400 italic text-center py-2 bg-black/20 rounded-xl border border-white/5">
+                    📸 Fotos con sello de coordenadas GPS y fecha/hora exacta.
+                  </p>
+                )}
+              </div>
             </div>
 
-            {/* Botones de Acción */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+            {/* Footer con Botones de Acción */}
+            <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setCancelModalOrder(null)}
-                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition text-center"
+                className="px-3.5 py-2 bg-white/10 hover:bg-white/15 text-slate-300 text-xs font-bold rounded-xl transition text-center cursor-pointer"
               >
                 Volver
               </button>
@@ -1570,7 +1630,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   type="button"
                   disabled={savingCancel}
                   onClick={() => handleConfirmCancelled(false)}
-                  className="px-3 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition active:scale-95 text-center"
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition active:scale-95 text-center cursor-pointer border border-white/10"
                   title="Solo guardar constancia sin abrir WhatsApp"
                 >
                   Solo Guardar
@@ -1579,7 +1639,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   type="button"
                   disabled={savingCancel}
                   onClick={() => handleConfirmCancelled(true)}
-                  className="flex-1 sm:flex-none py-2 px-3.5 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black text-xs rounded-xl shadow-md shadow-rose-600/25 active:scale-95 transition flex items-center justify-center gap-1.5"
+                  className="py-2 px-3.5 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black text-xs rounded-xl shadow-md shadow-rose-600/25 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer"
                   title="Guardar constancia y abrir de inmediato para enviar por WhatsApp"
                 >
                   <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
@@ -1594,127 +1654,175 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
       {/* MODAL: Ver Constancia y Foto del Motivo Cancelado */}
       {cancelDetailOrder && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in modal-overlay-safe"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
           style={{
             paddingTop: 'max(env(safe-area-inset-top, 0px) + 16px, 1.25rem)',
             paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
           }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setCancelDetailOrder(null);
+          }}
         >
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-2xl space-y-3.5 max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact overflow-y-auto my-auto">
+          <div 
+            className="bg-[#101722] border border-white/10 rounded-3xl w-full max-w-sm sm:max-w-md h-[80dvh] sm:h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl">
+            <div className="px-4 sm:px-5 py-3 border-b border-white/10 flex items-center justify-between bg-slate-900/70 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-500 to-amber-600 flex items-center justify-center text-white shrink-0 shadow-md shadow-rose-500/20">
                   <AlertTriangle className="h-4 w-4 stroke-[2.5]" />
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Constancia No Realizado
+                <div className="min-w-0">
+                  <h3 className="text-sm font-black text-white truncate">
+                    Constancia de trabajo no realizado
                   </h3>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Job #{cancelDetailOrder.job_id} • {cancelDetailOrder.address}
+                  <p className="text-[10.5px] text-slate-400 font-semibold truncate">
+                    #{cancelDetailOrder.job_id} • {cancelDetailOrder.address}{cancelDetailOrder.city ? `, ${cancelDetailOrder.city}` : ''}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setCancelDetailOrder(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+                title="Cerrar"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Motivo Detallado */}
-            <div className="p-3 rounded-2xl bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 space-y-1">
-              <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider block">
-                Motivo Registrado:
-              </span>
-              <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-relaxed">
-                {cancelDetailOrder.cancel_reason || 'Sin motivo detallado'}
-              </p>
+            {/* GPS & Hora Status Sub-bar */}
+            <div className="px-4 py-2 bg-[#0d141e] border-b border-white/5 flex items-center justify-between text-[11px] text-slate-300 shrink-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <MapPin className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                <span className="truncate max-w-[210px] text-[10.5px]">
+                  {cancelDetailOrder.address}{cancelDetailOrder.city ? `, ${cancelDetailOrder.city}` : ''}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-cyan-400 shrink-0 font-mono text-[10px] bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded-lg">
+                <Clock className="h-3 w-3" />
+                <span>GPS + Hora Activos</span>
+              </div>
             </div>
 
-            {/* Foto de Evidencia / Constancia */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Foto de Constancia:
+            {/* Body */}
+            <div className="p-3.5 sm:p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0 scrollbar-none bg-[#101722]">
+              {/* Motivo Registrado */}
+              <div className="p-3.5 rounded-2xl bg-rose-950/25 border border-rose-500/30 space-y-1">
+                <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block">
+                  Motivo Registrado:
                 </span>
-                {cancelDetailPhotos.length > 0 && (
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                    ✓ {cancelDetailPhotos.length} {cancelDetailPhotos.length === 1 ? 'foto registrada' : 'fotos registradas'}
+                <p className="text-xs font-semibold text-rose-100 leading-relaxed">
+                  "{cancelDetailOrder.cancel_reason || 'Inconveniente en la propiedad'}"
+                </p>
+              </div>
+
+              {/* Sección de Fotos de Constancia / Obstáculo */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
+                    Fotos del Obstáculo ({cancelDetailPhotos.length}):
                   </span>
+                  {cancelDetailPhotos.length > 0 && (
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-lg">
+                      ✓ {cancelDetailPhotos.length} {cancelDetailPhotos.length === 1 ? 'foto con sello GPS' : 'fotos con sello GPS'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Botones de Captura (Cámara en Vivo con GPS & Hora + Galería) */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsLiveCameraOpenForCancel(true)}
+                    className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black text-xs shadow-md shadow-rose-600/20 flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
+                    title="Tomar foto de obstáculo con visor de cámara en vivo y sello GPS"
+                  >
+                    <Camera className="h-4 w-4 stroke-[2.2]" />
+                    <span>Cámara GPS</span>
+                  </button>
+
+                  <label className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border border-dashed border-rose-500/40 hover:border-rose-400 bg-[#16202c] hover:bg-[#1e2b3b] text-slate-200 text-xs font-bold cursor-pointer transition active:scale-95 text-center">
+                    <ImageIcon className="h-4 w-4 text-rose-400" />
+                    <span>Galería</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleAddPhotoToCancelled}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {/* Galería de Fotos del Obstáculo (compacta y adaptable para múltiples fotos) */}
+                {loadingCancelPhotos ? (
+                  <div className="py-6 text-center text-xs text-slate-400">Cargando constancia...</div>
+                ) : cancelDetailPhotos.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-44 overflow-y-auto scrollbar-none pt-0.5">
+                    {cancelDetailPhotos.map((photo, idx) => (
+                      <div
+                        key={photo.id}
+                        onClick={() => setPreviewFullPhoto(photo.photo_data || `/uploads/${photo.filename}`)}
+                        className="group relative bg-[#0e1622] border border-rose-500/35 hover:border-rose-400 rounded-xl overflow-hidden aspect-video shadow-xs transition cursor-pointer"
+                      >
+                        <img
+                          src={photo.photo_data || `/uploads/${photo.filename}`}
+                          alt={`Obstáculo ${idx + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-between p-1.5">
+                          <div className="flex justify-between items-center" onClick={(e) => e.stopPropagation()}>
+                            <span className="text-[9px] bg-black/80 backdrop-blur-xs text-rose-300 border border-rose-500/30 px-1.5 py-0.5 rounded-md font-bold truncate max-w-[75%]">
+                              Foto #{idx + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCancelDetailPhoto(photo.id)}
+                              title="Eliminar foto"
+                              className="p-1 bg-black/70 hover:bg-rose-600 text-slate-300 hover:text-white rounded-md transition shadow active:scale-90 cursor-pointer"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <span className="text-[9.5px] text-slate-300 flex items-center gap-1 font-medium">
+                            <span>Ver</span>
+                            <ExternalLink className="h-2 w-2" />
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="h-28 rounded-xl border border-dashed border-rose-500/35 bg-black/25 flex flex-col items-center justify-center p-3 text-center space-y-1">
+                    <Camera className="h-6 w-6 text-rose-400/50 mb-0.5" />
+                    <p className="text-xs font-bold text-rose-200">
+                      Espacio para fotos del obstáculo
+                    </p>
+                    <p className="text-[10.5px] text-slate-400 max-w-xs">
+                      Toca "Cámara GPS" para registrar la evidencia con sello de coordenadas y hora.
+                    </p>
+                  </div>
                 )}
               </div>
-
-              {/* Botones Siempre Arriba a Primera Vista */}
-              <div className="grid grid-cols-2 gap-2">
-                {/* Botón Cámara */}
-                <label className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl border border-dashed border-rose-300 dark:border-rose-700/60 hover:border-rose-500 bg-rose-50/50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 text-xs font-bold cursor-pointer transition active:scale-95 text-center">
-                  <Camera className="h-4 w-4 shrink-0" />
-                  <span>Cámara</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleAddPhotoToCancelled}
-                    className="hidden"
-                  />
-                </label>
-
-                {/* Botón Galería */}
-                <label className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-rose-500 bg-slate-50 dark:bg-slate-950/40 text-slate-700 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 text-xs font-bold cursor-pointer transition active:scale-95 text-center">
-                  <ImageIcon className="h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" />
-                  <span>Galería / Fotos</span>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/heic,image/heif,image/webp,.jpg,.jpeg,.png,.heic"
-                    multiple
-                    onChange={handleAddPhotoToCancelled}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-
-              {/* Contenido de Fotos Abajo */}
-              {loadingCancelPhotos ? (
-                <div className="py-4 text-center text-xs text-slate-400">Cargando constancia...</div>
-              ) : cancelDetailPhotos.length > 0 ? (
-                <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin">
-                  {cancelDetailPhotos.map((photo, idx) => (
-                    <div
-                      key={photo.id}
-                      className="relative w-24 h-16 flex-shrink-0 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-slate-100 dark:bg-slate-800 group"
-                    >
-                      <img
-                        src={photo.photo_data || `/uploads/${photo.filename}`}
-                        alt={`Constancia ${idx + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setPreviewFullPhoto(photo.photo_data || `/uploads/${photo.filename}`)}
-                        className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition backdrop-blur-[1px]"
-                        title="Ver foto completa"
-                      >
-                        Ver ↗
-                      </button>
-                      <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-white/90">
-                        #{idx + 1}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[11px] text-center text-slate-400 dark:text-slate-500 py-1.5 font-medium">
-                  No hay fotos adjuntas todavía
-                </p>
-              )}
             </div>
 
-            {/* Botones de Acción */}
-            <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+            {/* Footer con 2 Botones Limpios y Elegantes */}
+            <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  handleReopenOrder(cancelDetailOrder);
+                  setCancelDetailOrder(null);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
+                title="Reactivar trabajo para continuar con la instalación"
+              >
+                <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                <span>Reactivar Trabajo</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => {
@@ -1722,36 +1830,27 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   setCancelDetailOrder(null);
                   openShareModal(ord);
                 }}
-                className="w-full py-2.5 px-4 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black text-xs rounded-xl shadow-md shadow-rose-600/20 active:scale-95 transition flex items-center justify-center gap-1.5"
+                className="px-4 py-2 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black text-xs rounded-xl shadow-md shadow-rose-600/20 active:scale-95 transition flex items-center gap-1.5 cursor-pointer"
                 title="Abrir reporte con motivo y fotos de constancia para WhatsApp"
               >
                 <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
-                <span>Enviar Constancia a WhatsApp</span>
+                <span>Enviar a WhatsApp</span>
               </button>
-
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCancelDetailOrder(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition"
-                >
-                  Cerrar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleReopenOrder(cancelDetailOrder);
-                    setCancelDetailOrder(null);
-                  }}
-                  className="px-3 py-2 text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 text-xs font-bold rounded-xl transition hover:underline"
-                >
-                  Reactivar Trabajo
-                </button>
-              </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Visor de Cámara en Vivo para Constancia de No Realizado */}
+      {isLiveCameraOpenForCancel && cancelDetailOrder && (
+        <LiveCameraModal
+          isOpen={isLiveCameraOpenForCancel}
+          onClose={() => setIsLiveCameraOpenForCancel(false)}
+          order={cancelDetailOrder}
+          initialCategory="Constancia No Realizado"
+          onPhotoSaved={handleLivePhotoSavedForCancel}
+          autoAdvance={false}
+        />
       )}
 
       {/* MODAL: Enviar Reporte a WhatsApp (Texto Editable + Todas las Fotos Juntas) */}
