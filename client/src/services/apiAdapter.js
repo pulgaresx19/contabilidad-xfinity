@@ -233,6 +233,11 @@ export function initApiAdapter() {
               return jsonResponse(updated);
             } else if (method === 'DELETE') {
               await localDb.deleteOrder(orderId);
+              try {
+                if (originalFetch) {
+                  await originalFetch(input, init);
+                }
+              } catch (netErr) {}
               return jsonResponse({ success: true });
             }
           }
@@ -243,6 +248,11 @@ export function initApiAdapter() {
         if (photoMatch && method === 'DELETE') {
           const photoId = photoMatch[1];
           await localDb.deletePhoto(photoId);
+          try {
+            if (originalFetch) {
+              await originalFetch(input, init);
+            }
+          } catch (netErr) {}
           return jsonResponse({ success: true });
         }
 

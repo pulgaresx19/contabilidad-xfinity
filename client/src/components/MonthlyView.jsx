@@ -821,6 +821,10 @@ ${weeksLines || '  (No hay semanas registradas)'}
             fetchMonthlyData(selectedMonth);
             if (onRefresh) onRefresh();
           }}
+          onJobDeleted={() => {
+            fetchMonthlyData(selectedMonth);
+            if (onRefresh) onRefresh();
+          }}
         />
       )}
 

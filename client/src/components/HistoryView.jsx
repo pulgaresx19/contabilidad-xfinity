@@ -1306,6 +1306,11 @@ ${jobLines}
             if (onRefresh) onRefresh();
             if (onOrderUpdated) onOrderUpdated();
           }}
+          onJobDeleted={() => {
+            setEditingOrder(null);
+            if (onRefresh) onRefresh();
+            if (onOrderUpdated) onOrderUpdated();
+          }}
         />
       )}
     </div>

@@ -7,7 +7,7 @@ import {
 import { cleanPhoneNumber } from '../utils/smsUtils';
 import { geocodeAddressWithMapbox, searchAddressSuggestions } from '../utils/mapboxGeocode';
 
-export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
+export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, onJobDeleted }) {
   const [formData, setFormData] = useState({
     job_id: '',
     work_date: '',
@@ -36,6 +36,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
   const [previewPhoto, setPreviewPhoto] = useState(null);
 
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(null);
 
   // Address Autocomplete state
@@ -277,6 +278,42 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
     }
   };
 
+  const handleDeleteJob = async () => {
+    const targetId = order?.id || order?.job_id;
+    if (!targetId) return;
+
+    const jobIdentifier = (formData.job_id || order?.job_id || '').trim();
+    const confirmMsg = `¿Estás seguro de que deseas eliminar este trabajo${jobIdentifier ? ` (Job #${jobIdentifier})` : ''}?\n\nEsta acción eliminará permanentemente la orden y todo su historial.`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setDeleting(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/orders/${targetId}`, {
+        method: 'DELETE'
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Error al eliminar el trabajo');
+      }
+
+      if (onJobDeleted) {
+        await onJobDeleted(targetId);
+      } else if (onJobUpdated) {
+        await onJobUpdated();
+      }
+      onClose();
+    } catch (err) {
+      console.error('Error al eliminar trabajo:', err);
+      setError(err.message || 'Error al eliminar el trabajo');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-5 animate-fade-in modal-overlay-safe"
@@ -310,14 +347,30 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition active:scale-90"
-            title="Cerrar ventana"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleDeleteJob}
+              disabled={deleting || saving}
+              className="w-7 h-7 rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 flex items-center justify-center transition active:scale-90 cursor-pointer disabled:opacity-50"
+              title="Eliminar este trabajo"
+            >
+              {deleting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition active:scale-90 cursor-pointer"
+              title="Cerrar ventana"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Formulario Principal con Scroll */}
@@ -783,10 +836,10 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
           <button
             type="submit"
             disabled={saving}
-            className="flex-1 py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/25 active:scale-95 transition cursor-pointer disabled:opacity-50"
+            className="py-2 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/25 active:scale-95 transition cursor-pointer disabled:opacity-50 whitespace-nowrap"
           >
             <Check className="h-4 w-4 stroke-[3]" />
-            <span>{saving ? 'Guardando...' : `Guardar Cambios ($${currentTotal})`}</span>
+            <span>{saving ? 'Guardando...' : 'Guardar cambios'}</span>
           </button>
         </div>
       </form>

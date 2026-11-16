@@ -529,10 +529,10 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
           <button
             type="submit"
             disabled={saving}
-            className="flex-1 py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/25 active:scale-95 transition cursor-pointer disabled:opacity-50"
+            className="py-2 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/25 active:scale-95 transition cursor-pointer disabled:opacity-50 whitespace-nowrap"
           >
             <Check className="h-4 w-4 stroke-[3]" />
-            <span>{saving ? 'Guardando...' : `Añadir Trabajo ($${currentTotal})`}</span>
+            <span>{saving ? 'Guardando...' : 'Añadir trabajo'}</span>
           </button>
         </div>
       </form>

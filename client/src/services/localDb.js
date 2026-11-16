@@ -508,12 +508,23 @@ export async function deleteOrder(id) {
     const ordersStore = tx.objectStore('work_orders');
     const photosStore = tx.objectStore('job_photos');
 
-    ordersStore.delete(Number(id));
+    if (!isNaN(Number(id))) {
+      ordersStore.delete(Number(id));
+    }
+
+    const ordersReq = ordersStore.getAll();
+    ordersReq.onsuccess = () => {
+      const allOrders = ordersReq.result || [];
+      const match = allOrders.find((o) => String(o.id) === String(id) || String(o.job_id) === String(id));
+      if (match && match.id) {
+        ordersStore.delete(match.id);
+      }
+    };
 
     const photosReq = photosStore.getAll();
     photosReq.onsuccess = () => {
       (photosReq.result || []).forEach((p) => {
-        if (Number(p.work_order_id) === Number(id)) {
+        if (Number(p.work_order_id) === Number(id) || String(p.work_order_id) === String(id)) {
           photosStore.delete(p.id);
         }
       });

@@ -2078,6 +2078,10 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           setEditingOrder(null);
           if (onOrderUpdated) onOrderUpdated();
         }}
+        onJobDeleted={() => {
+          setEditingOrder(null);
+          if (onOrderUpdated) onOrderUpdated();
+        }}
       />
 
       {/* FULLSCREEN PHOTO PREVIEW MODAL (IN-APP - FOTO CENTRADA Y BOTONES DESPEGADOS) */}

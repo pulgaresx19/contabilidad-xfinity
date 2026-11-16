@@ -1013,12 +1013,23 @@ app.patch('/api/orders/:id/whatsapp-shared', (req, res) => {
 // 5. Delete order & related photos
 app.delete('/api/orders/:id', (req, res) => {
   try {
-    const photos = db.prepare('SELECT filename FROM job_photos WHERE work_order_id = ?').all(req.params.id);
-    for (const p of photos) {
-      const filePath = path.join(uploadsDir, p.filename);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    const orderId = req.params.id;
+    const order = db.prepare('SELECT * FROM work_orders WHERE id = ? OR job_id = ?').get(orderId, orderId);
+    if (!order) {
+      return res.json({ success: true, message: 'Orden ya no existe' });
     }
-    db.prepare('DELETE FROM work_orders WHERE id = ?').run(req.params.id);
+    const realId = order.id;
+    const photos = db.prepare('SELECT filename FROM job_photos WHERE work_order_id = ?').all(realId);
+    for (const p of photos) {
+      if (p.filename) {
+        const filePath = path.join(uploadsDir, p.filename);
+        if (fs.existsSync(filePath)) {
+          try { fs.unlinkSync(filePath); } catch (e) {}
+        }
+      }
+    }
+    db.prepare('DELETE FROM job_photos WHERE work_order_id = ?').run(realId);
+    db.prepare('DELETE FROM work_orders WHERE id = ?').run(realId);
     res.json({ success: true, message: 'Orden eliminada' });
   } catch (error) {
     res.status(500).json({ error: error.message });
