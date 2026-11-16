@@ -493,6 +493,27 @@ html.light header {
   scrollbar-width: none;
 }
 
+/* Sleek custom scrollbar for textareas and modal containers */
+.sleek-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.sleek-scroll::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+}
+.sleek-scroll::-webkit-scrollbar-thumb {
+  background: rgba(6, 182, 212, 0.4);
+  border-radius: 6px;
+}
+.sleek-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 182, 212, 0.7);
+}
+.sleek-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(6, 182, 212, 0.4) transparent;
+}
+
 /* Universal Mobile Safe Bounds for Modal Overlays & Cards */
 .modal-overlay-safe {
   padding-top: max(env(safe-area-inset-top, 0px) + 16px, 1.25rem) !important;

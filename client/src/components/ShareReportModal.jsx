@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  X, Share2, Copy, Check, Camera, ExternalLink, AlertCircle, AlertTriangle
+  X, Share2, Copy, Check, CheckCheck, Camera, ExternalLink, AlertCircle, AlertTriangle
 } from 'lucide-react';
 
 export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdated, onShared }) {
@@ -10,6 +10,7 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
   const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState(null);
+  const [isSharedState, setIsSharedState] = useState(false);
 
   const isCancelled = order ? (order.status === 'No Realizado' || order.status === 'Cancelado') : false;
   const hasDriveway = Boolean(
@@ -23,6 +24,7 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
   useEffect(() => {
     if (!isOpen || !order) return;
 
+    setIsSharedState(Boolean(order.whatsapp_shared || order.whatsapp_shared_at));
     const isOrderCancelled = order.status === 'No Realizado' || order.status === 'Cancelado';
 
     let initialText = '';
@@ -105,6 +107,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
   const markOrderAsShared = () => {
     order.whatsapp_shared = 1;
     order.whatsapp_shared_at = new Date().toISOString();
+    setIsSharedState(true);
     if (onShared && order.id) {
       onShared(order.id);
     }
@@ -256,50 +259,49 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           </button>
         </div>
 
-        {/* 2. Quick KPI / Specs Bar (Solo en trabajos completados; en no realizado se ahorra el espacio para ver el mensaje completo) */}
+        {/* 2. Quick KPI / Specs Bar (Metraje y Cable separados; sin recuadro repetido de Driveway) */}
         {!isCancelled && (
-          <div className="grid grid-cols-3 gap-2 px-4 py-2.5 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
-            <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
-              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
-                Metraje / Cable
+          <div className="grid grid-cols-4 gap-1.5 px-3.5 py-2 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
+            <div className="bg-[#16202c] p-1.5 rounded-xl border border-white/5 min-w-0">
+              <span className="text-[8.5px] uppercase tracking-wider text-slate-400 font-bold block truncate">
+                Metraje
               </span>
-              <span className="text-sm font-black font-mono truncate block text-cyan-400">
-                {order.drop_footage || 0} ft • {order.cable_type || 'RG-6'}
-              </span>
-            </div>
-            <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
-              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
-                Evidencias
-              </span>
-              <span className="text-sm font-black text-white font-mono">
-                {orderPhotos.length} {orderPhotos.length === 1 ? 'adjunta' : 'adjuntas'}
+              <span className="text-xs sm:text-sm font-black text-amber-400 font-mono truncate block">
+                {order.drop_footage || 0} ft
               </span>
             </div>
-            <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
-              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
-                Driveway
+            <div className="bg-[#16202c] p-1.5 rounded-xl border border-white/5 min-w-0">
+              <span className="text-[8.5px] uppercase tracking-wider text-slate-400 font-bold block truncate">
+                Cable
               </span>
-              <span className={`text-sm font-black font-mono ${hasDriveway ? 'text-cyan-400' : 'text-slate-400'}`}>
-                {hasDriveway ? 'Sí' : 'No'}
+              <span className="text-xs sm:text-sm font-black text-cyan-400 font-mono truncate block">
+                {order.cable_type || 'RG-6'}
+              </span>
+            </div>
+            <div className="bg-[#16202c] p-1.5 rounded-xl border border-white/5 min-w-0">
+              <span className="text-[8.5px] uppercase tracking-wider text-slate-400 font-bold block truncate">
+                Evidencia
+              </span>
+              <span className="text-xs sm:text-sm font-black text-white font-mono truncate block">
+                {orderPhotos.length} {orderPhotos.length === 1 ? 'foto' : 'fotos'}
+              </span>
+            </div>
+            <div className="bg-[#16202c] p-1.5 rounded-xl border border-white/5 min-w-0">
+              <span className="text-[8.5px] uppercase tracking-wider text-slate-400 font-bold block truncate">
+                Tarifa
+              </span>
+              <span className="text-xs sm:text-sm font-black font-mono text-emerald-400 truncate block">
+                ${order.rate_calculated || 100}
               </span>
             </div>
           </div>
         )}
 
         {/* 3. Cuerpo del Modal Scrollable */}
-        <div className="p-3.5 sm:p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0 scrollbar-none bg-[#101722]">
-          
-          {/* Detalles Técnicos Extra si aplican (Driveway) */}
-          {hasDriveway && !isCancelled && (
-            <div className="bg-[#16202c] border border-white/5 rounded-2xl p-2.5 flex items-center gap-2 flex-wrap text-xs">
-              <span className="px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40 text-[10px] flex items-center gap-1 font-mono">
-                🚗 Driveway Bore: Sí
-              </span>
-            </div>
-          )}
+        <div className="p-3.5 sm:p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0 scrollbar-none bg-[#101722] flex flex-col">
 
           {/* Texto del Reporte Editable */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 {isCancelled && (
@@ -309,36 +311,47 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   {isCancelled ? 'Mensaje de Constancia (Editable)' : 'Mensaje del Reporte (Editable)'}
                 </label>
               </div>
-              <button
-                type="button"
-                onClick={handleCopyText}
-                className="px-2.5 py-1 bg-[#16202c] hover:bg-[#1e2b3b] text-slate-300 border border-white/10 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
-              >
-                {copiedText ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3 text-cyan-400" />}
-                <span>{copiedText ? '¡Copiado!' : 'Copiar Texto'}</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleCopyText}
+                  className="px-2.5 py-1 bg-[#16202c] hover:bg-[#1e2b3b] text-slate-300 border border-white/10 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+                >
+                  {copiedText ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3 text-cyan-400" />}
+                  <span>{copiedText ? '¡Copiado!' : 'Copiar'}</span>
+                </button>
+                {isSharedState && (
+                  <button
+                    type="button"
+                    onClick={handleSendReportAndPhotos}
+                    disabled={sharing}
+                    className="px-2.5 py-1 bg-[#16202c] hover:bg-[#1e2b3b] text-cyan-300 border border-cyan-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+                    title="Volver a compartir por WhatsApp"
+                  >
+                    <Share2 className="h-3 w-3 text-cyan-400" />
+                    <span>Volver a Enviar</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             <textarea
-              rows={isCancelled ? 8 : 6}
+              rows={isCancelled ? 7 : 6}
               value={reportText}
               onChange={(e) => setReportText(e.target.value)}
               placeholder="Escribe o modifica los detalles del reporte..."
-              className={`w-full bg-[#0d141e] border rounded-2xl p-3 text-xs font-mono text-slate-200 focus:outline-none leading-relaxed shadow-inner resize-none ${
-                isCancelled ? 'border-rose-500/40 focus:border-rose-400 min-h-[175px]' : 'border-white/10 focus:border-cyan-400'
+              className={`w-full bg-[#0d141e] border rounded-2xl p-2.5 sm:p-3 text-xs font-mono text-slate-200 focus:outline-none leading-relaxed shadow-inner resize-none sleek-scroll overflow-y-auto h-36 sm:h-40 min-h-[145px] sm:min-h-[160px] ${
+                isCancelled ? 'border-rose-500/40 focus:border-rose-400' : 'border-white/10 focus:border-cyan-400'
               }`}
             />
-            <span className="text-[10px] text-slate-500 block px-0.5">
-              💡 Puedes editar cualquier dato o agregar notas antes de enviarlo al supervisor.
-            </span>
           </div>
 
           {/* Galería de Fotos Adjuntas */}
-          <div className="space-y-2 pt-1 border-t border-white/5">
-            <div className="flex items-center justify-between">
+          <div className="space-y-2 pt-2 border-t border-white/5 flex-1 flex flex-col min-h-0">
+            <div className="flex items-center justify-between shrink-0">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Camera className={`h-3.5 w-3.5 ${isCancelled ? 'text-rose-400' : 'text-cyan-400'}`} />
-                <span>{isCancelled ? 'Fotos del Obstáculo' : 'Fotos Adjuntas'} ({orderPhotos.length})</span>
+                <span>{isCancelled ? 'Fotos del Obstáculo' : 'Fotos de Instalación'} ({orderPhotos.length})</span>
               </span>
               {orderPhotos.length > 0 && (
                 <span className={`text-[10px] font-bold ${isCancelled ? 'text-rose-400' : 'text-emerald-400'}`}>
@@ -348,36 +361,48 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             </div>
 
             {loadingPhotos ? (
-              <div className="py-4 text-center text-xs text-slate-400 font-medium">Cargando fotos del trabajo...</div>
+              <div className="flex-1 min-h-[180px] sm:min-h-[220px] rounded-2xl border border-white/5 bg-[#0d141e] flex flex-col items-center justify-center p-3 text-center">
+                <span className="text-xs text-slate-400 font-medium">Cargando fotos del trabajo...</span>
+              </div>
             ) : orderPhotos.length > 0 ? (
-              <div className="grid grid-cols-3 gap-2 p-2 bg-[#0d141e] rounded-2xl border border-white/5 max-h-36 overflow-y-auto scrollbar-none">
-                {orderPhotos.map((p, idx) => (
-                  <div 
-                    key={p.id || idx} 
-                    onClick={() => setPreviewPhoto(p.photo_data || `/uploads/${p.filename}`)}
-                    className="relative rounded-xl overflow-hidden border border-white/10 bg-black/40 aspect-video group cursor-pointer hover:border-cyan-400/80 transition"
-                    title="Toca para ver la foto completa"
-                  >
-                    <img 
-                      src={p.photo_data || `/uploads/${p.filename}`} 
-                      alt={p.category || `Foto ${idx + 1}`} 
-                      className="w-full h-full object-cover group-hover:scale-105 transition" 
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                      <ExternalLink className="h-3.5 w-3.5 text-white" />
+              <div className="flex-1 min-h-[180px] sm:min-h-[220px] p-2 bg-[#0d141e] rounded-2xl border border-white/5 overflow-y-auto sleek-scroll">
+                <div className="grid grid-cols-3 gap-2">
+                  {orderPhotos.map((p, idx) => (
+                    <div 
+                      key={p.id || idx} 
+                      onClick={() => setPreviewPhoto(p.photo_data || `/uploads/${p.filename}`)}
+                      className="relative rounded-xl overflow-hidden border border-white/10 bg-black/40 aspect-video group cursor-pointer hover:border-cyan-400/80 transition shadow-xs"
+                      title="Toca para ver la foto completa"
+                    >
+                      <img 
+                        src={p.photo_data || `/uploads/${p.filename}`} 
+                        alt={p.category || `Foto ${idx + 1}`} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition" 
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                        <ExternalLink className="h-3.5 w-3.5 text-white" />
+                      </div>
+                      {/* Enunciado / Categoría de la foto en la esquina superior arriba para visualización clara */}
+                      <div className="absolute top-1 left-1 max-w-[92%] z-10 pointer-events-none">
+                        <span className="inline-block bg-black/90 backdrop-blur-xs text-[9px] font-black text-cyan-300 border border-cyan-400/40 px-1.5 py-0.5 rounded-md shadow-lg truncate leading-tight">
+                          {p.category || `#${idx + 1}`}
+                        </span>
+                      </div>
                     </div>
-                    {/* Enunciado / Categoría de la foto en la esquina superior arriba para visualización clara */}
-                    <div className="absolute top-1 left-1 max-w-[92%] z-10 pointer-events-none">
-                      <span className="inline-block bg-black/90 backdrop-blur-xs text-[9px] font-black text-cyan-300 border border-cyan-400/40 px-1.5 py-0.5 rounded-md shadow-lg truncate leading-tight">
-                        {p.category || `#${idx + 1}`}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             ) : (
-              <div className="text-[10.5px] text-slate-400 italic text-center py-4 bg-[#0d141e]/50 rounded-2xl border border-dashed border-white/10">
-                {isCancelled ? 'Sin fotos de constancia (se enviará solo el mensaje de texto).' : 'Sin fotos adjuntas (se enviará solo el mensaje de texto).'}
+              <div className="flex-1 min-h-[180px] sm:min-h-[220px] rounded-2xl border border-dashed border-white/10 bg-[#0e1622]/60 flex flex-col items-center justify-center p-6 text-center space-y-1">
+                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-500 mb-2 shadow-inner">
+                  <Camera className={`h-5 w-5 ${isCancelled ? 'text-rose-400/70' : 'text-cyan-400/70'}`} />
+                </div>
+                <p className="text-xs sm:text-sm font-bold text-slate-300">
+                  {isCancelled ? 'Sin fotos de obstáculo adjuntas' : 'Aún no hay fotos de la instalación'}
+                </p>
+                <p className="text-[10.5px] text-slate-500 mt-1 max-w-[240px]">
+                  (Se enviará solo el mensaje de texto del reporte)
+                </p>
               </div>
             )}
           </div>
@@ -390,28 +415,38 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             onClick={onClose}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-xs font-bold transition active:scale-95 cursor-pointer border border-white/10 shadow-sm"
           >
-            Cancelar
+            {isSharedState ? 'Cerrar' : 'Cancelar'}
           </button>
 
-          <button
-            type="button"
-            onClick={handleSendReportAndPhotos}
-            disabled={sharing}
-            className={`px-4 py-2 text-xs font-black rounded-xl shadow-lg transition active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
-              isCancelled
-                ? 'bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-rose-600/25 ring-2 ring-rose-400/30'
-                : 'bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-cyan-400 text-white shadow-cyan-600/25 ring-2 ring-cyan-400/30'
-            }`}
-          >
-            {sharing ? (
-              <span>Preparando...</span>
-            ) : (
-              <>
-                <Share2 className="h-4 w-4 stroke-[2.5]" />
-                <span>{isCancelled ? 'Enviar Constancia' : 'Enviar a WhatsApp'}</span>
-              </>
-            )}
-          </button>
+          {isSharedState ? (
+            <div 
+              className="px-3.5 py-2 text-xs font-black rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm flex items-center gap-1.5 select-none"
+              title={order.whatsapp_shared_at ? `Reportado el ${order.whatsapp_shared_at.slice(0, 10)} a las ${order.whatsapp_shared_at.slice(11, 16)}` : 'Reportado'}
+            >
+              <span>Reportado</span>
+              <CheckCheck className="h-4 w-4 stroke-[2.5] text-emerald-400" />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSendReportAndPhotos}
+              disabled={sharing}
+              className={`px-4 py-2 text-xs font-black rounded-xl shadow-lg transition active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
+                isCancelled
+                  ? 'bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-rose-600/25 ring-2 ring-rose-400/30'
+                  : 'bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-cyan-400 text-white shadow-cyan-600/25 ring-2 ring-cyan-400/30'
+              }`}
+            >
+              {sharing ? (
+                <span>Preparando...</span>
+              ) : (
+                <>
+                  <Share2 className="h-4 w-4 stroke-[2.5]" />
+                  <span>{isCancelled ? 'Enviar Constancia' : 'Enviar a WhatsApp'}</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 

@@ -3,8 +3,8 @@ import {
   Calendar, DollarSign, TrendingUp, TrendingDown, Clock, 
   CheckCircle2, ChevronLeft, ChevronRight, Plus, Fuel, Wrench, 
   Car, Utensils, Smartphone, Shield, Package, Trash2, Copy, 
-  Check, Share2, AlertCircle, FileText, ChevronDown, ChevronUp, Image as ImageIcon,
-  ShieldCheck, CheckCircle, Edit3, X
+  Check, CheckCheck, Share2, AlertCircle, FileText, ChevronDown, ChevronUp, Image as ImageIcon,
+  ShieldCheck, CheckCircle, Edit3, Pencil, Camera, Sparkles, AlertTriangle, ExternalLink, X
 } from 'lucide-react';
 import { 
   getCurrentMonthStr, formatMonthFriendly, 
@@ -12,6 +12,7 @@ import {
 } from '../utils/dateUtils';
 import AddExpenseModal from './AddExpenseModal';
 import EditJobModal from './EditJobModal';
+import ShareReportModal from './ShareReportModal';
 
 const CATEGORY_ICONS = {
   Combustible: { icon: Fuel, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
@@ -23,7 +24,13 @@ const CATEGORY_ICONS = {
   Otros: { icon: Package, color: 'text-slate-400 bg-slate-500/10 border-slate-500/20' },
 };
 
-export default function MonthlyView({ orders = [], onRefresh }) {
+export default function MonthlyView({ 
+  orders = [], 
+  onRefresh, 
+  onOpenPhotos, 
+  onOrderUpdated, 
+  onUpdateOrders 
+}) {
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStr());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +41,33 @@ export default function MonthlyView({ orders = [], onRefresh }) {
   const [copiedWeekKey, setCopiedWeekKey] = useState(null);
   const [copiedReport, setCopiedReport] = useState(false);
   const [updatingWeekKey, setUpdatingWeekKey] = useState(null);
+  const [reportOrder, setReportOrder] = useState(null);
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [copiedJobId, setCopiedJobId] = useState(null);
+
+  const copySingleJobClaim = (order) => {
+    const hasDriveway = Boolean(
+      order.bore_type && (
+        order.bore_type.includes('DW') || 
+        order.bore_type.toLowerCase().includes('driveway') || 
+        order.bore_type === 'Y'
+      )
+    );
+
+    const text = `📋 *COMPROBANTE DE TRABAJO - XFINITY*
+🔢 *Work Order #:* ${order.job_id}
+📅 *Fecha Ejecución:* ${order.work_date}
+📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
+📏 *Pies / Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
+🚗 *Driveway:* ${hasDriveway ? 'Sí' : 'No'}
+📸 *Fotos de Evidencia:* ${order.photos_count || (order.photos ? order.photos.length : 0)} archivada(s)`;
+
+    try {
+      navigator.clipboard.writeText(text);
+      setCopiedJobId(order.id);
+      setTimeout(() => setCopiedJobId(null), 2000);
+    } catch (e) {}
+  };
 
   useEffect(() => {
     if (selectedWeekModal && data?.weeks) {
@@ -425,91 +459,96 @@ ${weeksLines || '  (No hay semanas registradas)'}
             </div>
           ) : (
             weeks.map((w) => {
+              const completedCount = w.completedCount !== undefined 
+                ? w.completedCount 
+                : (w.orders || []).filter(o => o.status === 'Completado').length;
+              const totalJobs = w.totalJobs !== undefined
+                ? w.totalJobs
+                : (w.orders?.length || 0);
               const isUpdating = updatingWeekKey === w.key;
 
               return (
                 <div
                   key={w.key}
                   onClick={() => setSelectedWeekModal(w)}
-                  className={`bg-[#131b26] border rounded-2xl p-4 transition shadow-md space-y-3 cursor-pointer group active:scale-[0.99] ${
+                  className={`bg-[#131b26] border rounded-2xl p-3.5 cursor-pointer transition select-none space-y-2.5 shadow-lg active:scale-[0.99] group relative overflow-hidden ${
                     w.isPaid
                       ? 'border-emerald-500/30 hover:border-emerald-500/60 shadow-emerald-500/5'
                       : 'border-amber-500/30 hover:border-amber-500/60 shadow-amber-500/5'
                   }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <div>
+                  {/* Fila Superior */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-black text-white font-mono group-hover:text-cyan-400 transition">
-                          Semana {w.displayLabel}
-                        </h3>
+                        <span className="text-sm font-black text-white font-mono group-hover:text-cyan-400 transition">
+                          Semana {w.displayLabel || w.key}
+                        </span>
                         {w.isPaid ? (
-                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-xs">
+                          <span className="inline-flex items-center gap-1 text-[9px] text-emerald-400 font-bold bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/30">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                            <span>Cobrado</span>
+                            Cobrado
                           </span>
                         ) : (
-                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 shadow-xs">
+                          <span className="inline-flex items-center gap-1 text-[9px] text-amber-400 font-bold bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30">
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                            <Clock className="w-3 h-3 text-amber-400" />
-                            <span>Pendiente</span>
+                            Pendiente
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
-                        {w.startDate} al {w.endDate} • {w.completedCount} trabajos • {Math.round(w.totalFootage)} ft
+                      <p className="text-[11px] text-slate-400 font-medium">
+                        {w.startDate} al {w.endDate} • {completedCount} de {totalJobs} hechos
                       </p>
                     </div>
 
                     <div className="text-right">
-                      <div className={`text-base font-black font-mono ${
+                      <span className={`text-base sm:text-lg font-black font-mono block ${
                         w.isPaid ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]' : 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]'
                       }`}>
-                        ${w.totalEarnings.toFixed(2)}
-                      </div>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        {w.isPaid ? 'Cobrado ✓' : `Pendiente: $${w.pendingEarnings.toFixed(2)}`}
+                        ${(w.totalEarnings || 0).toFixed(2)}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono font-bold">
+                        {Math.round(w.totalFootage || 0)} ft
                       </span>
                     </div>
                   </div>
 
-                  {/* Action buttons */}
-                  <div className="flex items-center justify-between pt-2 border-t border-white/8 gap-2">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedWeekModal(w);
-                      }}
-                      className="text-xs text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1.5 py-1 px-2.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 transition active:scale-95 cursor-pointer"
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                      <span>Ver {w.orders?.length || 0} órdenes</span>
-                    </button>
+                  {/* Fila Inferior con Espacio de Confirmación Estético */}
+                  <div className="flex items-center justify-between pt-2 border-t border-white/8">
+                    <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                      <FileText className="h-3 w-3 text-cyan-400" />
+                      <span>{w.orders?.length || 0} órdenes registradas</span>
+                    </span>
 
-                    <button
-                      type="button"
-                      onClick={(e) => handleToggleWeekPayment(w, w.isPaid ? 'Pendiente' : 'Cobrado', e)}
-                      disabled={isUpdating}
-                      className={`text-xs px-2.5 py-1 rounded-xl font-black transition flex items-center gap-1 ${
-                        w.isPaid
-                          ? 'bg-emerald-500/15 hover:bg-rose-500/15 text-emerald-400 hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30'
-                          : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 shadow-md shadow-emerald-500/20 active:scale-95'
-                      }`}
-                    >
+                    <div className="flex items-center gap-2">
                       {w.isPaid ? (
-                        <>
-                          <CheckCircle className="h-3 w-3 text-emerald-400" />
+                        <button
+                          type="button"
+                          disabled={isUpdating}
+                          onClick={(e) => handleToggleWeekPayment(w, 'Pendiente', e)}
+                          className="px-2.5 py-1 bg-emerald-500/15 hover:bg-rose-500/15 text-emerald-400 hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30 rounded-xl text-[10px] font-black flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-xs"
+                          title="Toca para cambiar a Pendiente si hubo algún error"
+                        >
+                          <CheckCircle className="h-3 w-3" />
                           <span>Cobrado ✓</span>
-                        </>
+                        </button>
                       ) : (
-                        <>
+                        <button
+                          type="button"
+                          disabled={isUpdating}
+                          onClick={(e) => handleToggleWeekPayment(w, 'Cobrado', e)}
+                          className="px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-[10px] rounded-xl flex items-center gap-1 shadow-md shadow-emerald-500/20 transition active:scale-95 cursor-pointer"
+                          title="Confirmar que recibiste el pago de esta semana"
+                        >
                           <DollarSign className="h-3 w-3 stroke-[2.5]" />
                           <span>Confirmar Cobro</span>
-                        </>
+                        </button>
                       )}
-                    </button>
+
+                      <div className="h-7 w-7 rounded-full bg-slate-800/80 border border-white/10 flex items-center justify-center text-slate-300 group-hover:text-cyan-400 group-hover:border-cyan-500/30 transition flex-shrink-0">
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
@@ -854,88 +893,194 @@ ${weeksLines || '  (No hay semanas registradas)'}
                 {(selectedWeekModal.orders || []).map((order, idx) => {
                   const isComp = order.status === 'Completado';
                   const isCanc = order.status === 'No Realizado';
-                  const hasBore = order.bore_type && (order.bore_type.includes('DW') || order.bore_type.toLowerCase().includes('driveway') || order.bore_type === 'Y');
+                  const hasBore = Boolean(order.bore_type && (order.bore_type.includes('DW') || order.bore_type.toLowerCase().includes('driveway') || order.bore_type === 'Y'));
+                  const photos = order.photos || [];
+                  const photosCount = order.photos_count !== undefined ? order.photos_count : photos.length;
 
                   return (
                     <div
                       key={order.id}
-                      className="bg-[#16202c] border border-white/10 hover:border-cyan-500/30 rounded-2xl p-3 space-y-2 text-xs transition shadow-md"
+                      className="bg-[#141c28] border border-white/10 hover:border-cyan-500/35 rounded-2xl p-3 sm:p-3.5 space-y-2 text-xs shadow-md transition group"
                     >
-                      {/* Job Header */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black font-mono shadow-sm flex-shrink-0 ${
+                      {/* Fila 1: Parada / Dirección + Ciudad | Tarifa + Estado */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className={`w-6 h-6 rounded-full font-black text-xs flex items-center justify-center font-mono shrink-0 shadow-sm ${
                             isComp
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
                               : isCanc
-                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                              ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                              : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
                           }`}>
-                            {idx + 1}
-                          </div>
+                            {isComp ? '✓' : isCanc ? '✕' : (idx + 1)}
+                          </span>
 
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-mono font-black text-cyan-400">#{order.job_id}</span>
-                              <span className="text-[10px] text-slate-400 font-mono">{order.work_date}</span>
-                              {Number(order.manual_adjustment) > 0 && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                                  +${order.manual_adjustment} Bono
-                                </span>
-                              )}
-                              {Number(order.manual_adjustment) < 0 && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                                  -${Math.abs(order.manual_adjustment)} Desc.
-                                </span>
-                              )}
-                            </div>
+                          <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
+                            <span className="text-xs font-bold text-white truncate leading-tight">
+                              {order.address}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                              {order.city || 'Skokie'}
+                            </span>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                            isComp
-                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                              : isCanc
-                              ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                              : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                          <span className="font-mono font-black text-emerald-400 text-xs sm:text-sm drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">
+                            ${order.rate_calculated || 100}
+                          </span>
+                          <span className={`text-[8.5px] uppercase font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                            isComp ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                            : isCanc ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                            : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
                           }`}>
                             {order.status || 'Pendiente'}
                           </span>
-
-                          <button
-                            type="button"
-                            onClick={() => setEditingOrder(order)}
-                            className="p-1 text-slate-400 hover:text-cyan-400 bg-white/5 hover:bg-white/10 rounded-lg transition cursor-pointer"
-                            title="Editar trabajo"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
                         </div>
                       </div>
 
-                      {/* Dirección */}
-                      <p className="text-slate-300 font-bold truncate">
-                        {order.address}{order.city ? `, ${order.city}` : ''}
-                      </p>
+                      {/* Fila 2: Secuencia Lineal (#Orden • Fecha • Metraje • Cable • DW) + Bonos */}
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-slate-400">
+                        <span className="text-cyan-300 font-semibold">#{order.job_id}</span>
+                        {order.work_date && (
+                          <>
+                            <span>•</span>
+                            <span className="text-slate-400">{order.work_date}</span>
+                          </>
+                        )}
+                        <span>•</span>
+                        <span className="text-amber-300 font-bold">{order.drop_footage || 0} ft</span>
+                        <span>•</span>
+                        <span className="text-slate-300">{order.cable_type || 'RG-6'}</span>
+                        {hasBore && (
+                          <>
+                            <span>•</span>
+                            <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md shrink-0">
+                              DW
+                            </span>
+                          </>
+                        )}
+                        {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
+                          <span className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-bold">
+                            +${Math.floor((order.drop_footage - 300) / 100) * 25} Metraje
+                          </span>
+                        )}
+                        {Number(order.manual_adjustment) > 0 && (
+                          <span className="bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
+                            <Sparkles className="h-2.5 w-2.5" />
+                            <span>+${order.manual_adjustment} Bono</span>
+                          </span>
+                        )}
+                        {Number(order.manual_adjustment) < 0 && (
+                          <span className="bg-amber-500/15 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
+                            <span>-${Math.abs(order.manual_adjustment)} Desc.</span>
+                          </span>
+                        )}
+                      </div>
 
-                      {/* Footer de Tarjeta con Metraje y Ganancia */}
-                      <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[11px]">
-                        <div className="flex items-center gap-2 text-slate-400 font-mono">
-                          <span>{order.drop_footage || 0} ft</span>
-                          <span>•</span>
-                          <span className="text-cyan-300">{order.cable_type || 'RG-6'}</span>
-                          {hasBore && (
-                            <>
-                              <span>•</span>
-                              <span className="text-amber-400 font-bold">Driveway DW</span>
-                            </>
-                          )}
+                      {/* Fila 3: Si Cancelado, Motivo de Cancelación */}
+                      {isCanc && (
+                        <div className="bg-rose-950/25 border border-rose-500/25 p-2 rounded-xl text-xs text-rose-200 flex items-start gap-1.5">
+                          <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <span className="text-[9px] uppercase font-bold text-rose-400 block tracking-wider">
+                              Motivo No Realizado:
+                            </span>
+                            <p className="font-semibold text-xs leading-tight truncate">
+                              {order.cancel_reason || 'Sin motivo detallado'}
+                            </p>
+                          </div>
                         </div>
+                      )}
 
-                        <span className="font-mono font-black text-emerald-400 text-sm">
-                          ${order.rate_calculated || 0}
-                        </span>
+                      {/* Fila 4: Miniaturas de Fotos (si existen) */}
+                      {photos.length > 0 && (
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none pt-0.5">
+                          {photos.map((p, pIdx) => (
+                            <div
+                              key={p.id || pIdx}
+                              onClick={() => setSelectedPhoto(p.photo_data || `/uploads/${p.filename}`)}
+                              className="h-11 w-14 rounded-lg overflow-hidden bg-black/40 border border-white/10 flex-shrink-0 cursor-pointer relative group hover:border-cyan-400 transition"
+                              title="Toca para ver foto completa"
+                            >
+                              <img 
+                                src={p.photo_data || `/uploads/${p.filename}`} 
+                                alt={p.category || `Foto ${pIdx + 1}`} 
+                                className="w-full h-full object-cover group-hover:scale-105 transition" 
+                              />
+                              <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                <ExternalLink className="h-3 w-3 text-white" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Fila 5: Barra de Acciones Rápidas (Fotos, Editar, Comprobante, Reportar) */}
+                      <div className="pt-2 border-t border-white/8 flex items-center justify-between gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => onOpenPhotos ? onOpenPhotos(order) : (photos[0] && setSelectedPhoto(photos[0].photo_data || `/uploads/${photos[0].filename}`))}
+                          className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1.5 bg-[#182332] px-2.5 py-1 rounded-lg border border-white/10 transition active:scale-95 cursor-pointer"
+                          title="Ver o agregar fotos de evidencia"
+                        >
+                          <Camera className="h-3 w-3" />
+                          <span>{photosCount} Fotos</span>
+                        </button>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setEditingOrder(order)}
+                            className="text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-2.5 py-1 rounded-lg flex items-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
+                            title="Editar orden"
+                          >
+                            <Pencil className="h-3 w-3 text-cyan-400" />
+                            <span>Editar</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => copySingleJobClaim(order)}
+                            className="text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-2.5 py-1 rounded-lg flex items-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
+                            title="Copiar comprobante al portapapeles"
+                          >
+                            {copiedJobId === order.id ? (
+                              <>
+                                <Check className="h-3 w-3 text-emerald-400" />
+                                <span className="text-emerald-400 font-bold">¡Copiado!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3 w-3 text-cyan-400" />
+                                <span>Comprobante</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setReportOrder(order)}
+                            className={`text-[10px] border px-2.5 py-1 rounded-lg flex items-center gap-1 font-bold transition active:scale-95 shadow-xs cursor-pointer ${
+                              order.whatsapp_shared
+                                ? 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30 hover:bg-emerald-500/25'
+                                : 'text-cyan-300 bg-cyan-500/15 border-cyan-500/30 hover:bg-cyan-500/25'
+                            }`}
+                            title="Reportar trabajo por WhatsApp"
+                          >
+                            {order.whatsapp_shared ? (
+                              <>
+                                <CheckCheck className="h-3 w-3 text-emerald-400" />
+                                <span>Reportado</span>
+                              </>
+                            ) : (
+                              <>
+                                <Share2 className="h-3 w-3 text-cyan-400" />
+                                <span>Reportar</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -991,6 +1136,40 @@ ${weeksLines || '  (No hay semanas registradas)'}
           </div>
         </div>
       )}
+
+      {/* FULLSCREEN PHOTO PREVIEW MODAL */}
+      {selectedPhoto && (
+        <div
+          onClick={() => setSelectedPhoto(null)}
+          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+        >
+          <div className="relative max-w-lg w-full flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setSelectedPhoto(null)}
+              className="absolute -top-10 right-0 p-2 text-white hover:text-cyan-400"
+            >
+              <X className="h-6 w-6" />
+            </button>
+            <img
+              src={selectedPhoto}
+              alt="Evidencia"
+              className="max-h-[85vh] w-auto max-w-full rounded-2xl object-contain border border-slate-800 shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE REPORTE PARA WHATSAPP */}
+      <ShareReportModal
+        isOpen={Boolean(reportOrder)}
+        order={reportOrder}
+        onClose={() => setReportOrder(null)}
+        onOrderUpdated={() => {
+          if (onRefresh) onRefresh();
+          if (onOrderUpdated) onOrderUpdated();
+          fetchMonthlyData(selectedMonth);
+        }}
+      />
     </div>
   );
 }

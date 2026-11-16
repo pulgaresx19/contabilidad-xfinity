@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Camera, Check, AlertCircle, Trash2, Plus, X, Eye,
-  Image as ImageIcon, MapPin, Ruler, Maximize2
+  Image as ImageIcon, MapPin, Ruler, Maximize2, Phone
 } from 'lucide-react';
 import { getLocalDateStr, normalizeDateStr } from '../utils/dateUtils';
 import { interactWithAuraCore } from '../services/auraService';
@@ -769,10 +769,22 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                   <option value="SW:1">Sidewalk ($0)</option>
                 </select>
 
-                {/* Notas / Teléfono */}
-                {(o.phone || (o.raw_notes && o.raw_notes !== o.address)) && (
-                  <span className="text-[9.5px] text-slate-400 truncate max-w-[120px] font-mono bg-[#0b1017] px-1.5 py-0.5 rounded-lg border border-white/5">
-                    {o.phone ? `P#:${o.phone}` : o.raw_notes}
+                {/* Teléfono del Cliente */}
+                <div className="flex items-center gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-1.5 py-0.5 max-w-[130px]" title="Teléfono del cliente para llamadas o SMS">
+                  <Phone className="w-3 h-3 text-cyan-400 shrink-0" />
+                  <input
+                    type="text"
+                    placeholder="Teléfono"
+                    value={o.phone || ''}
+                    onChange={(e) => updateOrderField(idx, 'phone', e.target.value)}
+                    className="w-full bg-transparent text-cyan-300 font-mono text-[10.5px] focus:outline-none placeholder-slate-600"
+                  />
+                </div>
+
+                {/* Notas adicionales */}
+                {o.raw_notes && o.raw_notes !== o.address && (
+                  <span className="text-[9.5px] text-slate-400 truncate max-w-[120px] font-mono bg-[#0b1017] px-1.5 py-0.5 rounded-lg border border-white/5" title={o.raw_notes}>
+                    {o.raw_notes}
                   </span>
                 )}
               </div>

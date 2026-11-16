@@ -3,7 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { 
   Navigation, MapPin, Compass, Sparkles, CheckCircle2, 
-  Clock, AlertTriangle, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Phone, 
+  Clock, AlertTriangle, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Phone, MessageSquare,
   Camera, Share2, DollarSign, Layers, List, Pencil, 
   Car, Calendar, ArrowRight, ArrowLeft, 
   X, Plus, Play, Pause, MoreHorizontal,
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { formatDateFriendly, normalizeDateStr, formatRouteDuration } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
+import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
 import { useTheme } from '../context/ThemeContext';
 
 const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
@@ -2353,7 +2354,7 @@ export default function UberDriverView({
             
             {/* ROW 1: TOP BAR WITH ACTION/PHONE + [ ← PARADA X DE Y → ] + EXPAND */}
             <div className="flex items-center justify-between gap-2 pt-0.5">
-              {/* Left Action: Circular GPS Navigation Button */}
+              {/* Left Action: Circular GPS y Llamar */}
               <div className="flex items-center gap-1.5 justify-start">
                 <a
                   href={getNavUrl(selectedOrder)}
@@ -2367,10 +2368,10 @@ export default function UberDriverView({
                 {selectedOrder.phone && (
                   <a
                     href={`tel:${selectedOrder.phone}`}
-                    className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95 shadow-sm"
+                    className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
                     title={`Llamar: ${selectedOrder.phone}`}
                   >
-                    <Phone className="h-4 w-4 text-cyan-400" />
+                    <Phone className="h-4 w-4" />
                   </a>
                 )}
               </div>
@@ -2403,8 +2404,17 @@ export default function UberDriverView({
                 </button>
               </div>
 
-              {/* Right Action: Circular Expand/Collapse Chevron Button */}
-              <div className="w-9 flex items-center justify-end">
+              {/* Right Action: Circular Mensaje (SMS) y Circular Expand/Collapse Chevron Button */}
+              <div className="flex items-center gap-1.5 justify-end">
+                {selectedOrder.phone && (
+                  <a
+                    href={getCustomerSmsUrl(selectedOrder.phone, selectedOrder.address)}
+                    className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
+                    title={`Enviar SMS con aviso al cliente (${selectedOrder.phone})`}
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                  </a>
+                )}
                 <button
                   type="button"
                   onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
@@ -2596,13 +2606,18 @@ export default function UberDriverView({
                 ) : (
                   <button
                     type="button"
-                    onClick={() => onOpenShareModal(selectedOrder)}
-                    className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer ${
+                    disabled={!isSelectedCompleted}
+                    onClick={() => {
+                      if (isSelectedCompleted) {
+                        onOpenShareModal(selectedOrder);
+                      }
+                    }}
+                    className={`p-1.5 rounded-full transition active:scale-90 ${
                       isSelectedShared
-                        ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 shadow-xs'
+                        ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 shadow-xs cursor-pointer'
                         : isSelectedCompleted
-                        ? 'text-cyan-300 bg-cyan-500/25 border border-cyan-400 shadow-md shadow-cyan-500/40 animate-pulse'
-                        : 'text-slate-500/40 border border-transparent hover:text-slate-300'
+                        ? 'text-cyan-300 bg-cyan-500/25 border border-cyan-400 shadow-md shadow-cyan-500/40 animate-pulse cursor-pointer'
+                        : 'text-slate-500/30 border border-transparent cursor-not-allowed opacity-40'
                     }`}
                     title={
                       isSelectedShared
@@ -2712,23 +2727,25 @@ export default function UberDriverView({
                   </div>
 
                   <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
-                    <span className="text-slate-400 font-medium">Metraje & Cable</span>
-                    <span className="text-slate-200 font-bold text-[11px]">
-                      {selectedOrder.drop_footage || 0} ft ({selectedOrder.cable_type || 'RG-6'})
-                      {hasDrivewayBore ? ' • Bore DW' : ''}
+                    <span className="text-slate-400 font-medium">Metraje</span>
+                    <span className="text-amber-300 font-mono font-bold text-[11px]">
+                      {selectedOrder.drop_footage || 0} ft {hasDrivewayBore ? '• Bore DW' : ''}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                    <span className="text-slate-400 font-medium">Tipo de Cable</span>
+                    <span className="text-cyan-300 font-mono font-bold text-[11px]">
+                      {selectedOrder.cable_type || 'RG-6'}
                     </span>
                   </div>
 
                   {selectedOrder.phone && (
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-slate-400 font-medium">Teléfono Cliente</span>
-                      <a 
-                        href={`tel:${selectedOrder.phone}`}
-                        className="text-cyan-400 font-mono font-bold text-[11px] flex items-center gap-1 hover:underline"
-                      >
-                        <Phone className="h-3 w-3" />
-                        <span>{selectedOrder.phone}</span>
-                      </a>
+                      <span className="text-cyan-400 font-mono font-bold text-[11px]">
+                        {formatPhoneDisplay(selectedOrder.phone)}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -2801,18 +2818,30 @@ export default function UberDriverView({
                                   <span className="text-xs font-bold text-white truncate leading-tight">
                                     {ord.address}
                                   </span>
-                                  {ord.bore_type && ord.bore_type.includes('DW') && (
-                                    <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md shrink-0">
-                                      DW
-                                    </span>
-                                  )}
+                                  <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                                    {ord.city || 'Skokie'}
+                                  </span>
                                 </div>
                                 <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5 font-mono truncate">
-                                  <span>{ord.city || 'Skokie'}</span>
-                                  <span>•</span>
                                   <span className="text-cyan-300 font-semibold">#{ord.job_id}</span>
                                   <span>•</span>
                                   <span>{ord.drop_footage || 0} ft</span>
+                                  <span>•</span>
+                                  <span className="text-slate-300">{ord.cable_type || 'RG-6'}</span>
+                                  {Boolean(
+                                    ord.bore_type && (
+                                      ord.bore_type.includes('DW') || 
+                                      ord.bore_type.toLowerCase().includes('driveway') || 
+                                      ord.bore_type === 'Y'
+                                    )
+                                  ) && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md shrink-0">
+                                        DW
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
 
                                 {legInfo && !legInfo.isFirst && (
@@ -2890,12 +2919,12 @@ export default function UberDriverView({
             <MapPin className="h-8 w-8 text-slate-500 mb-2" />
             <p className="text-sm font-bold text-white">No hay órdenes para este día</p>
             <p className="text-xs text-slate-400 mt-1 mb-3">Escanea la foto de tu hoja o añade un trabajo manual.</p>
-            <div className="flex items-center justify-center gap-2">
+            <div className="grid grid-cols-2 gap-2.5 w-full max-w-xs sm:max-w-sm mx-auto pt-1">
               {onOpenScan && (
                 <button
                   type="button"
                   onClick={onOpenScan}
-                  className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 rounded-2xl text-xs font-black shadow-md flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
+                  className="py-2.5 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-xs rounded-2xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-1.5 transition active:scale-[0.98] cursor-pointer"
                 >
                   <Camera className="h-4 w-4 stroke-[2.5]" />
                   <span>Escanear Foto</span>
@@ -2904,10 +2933,10 @@ export default function UberDriverView({
               <button
                 type="button"
                 onClick={onOpenAddJob}
-                className="px-4 py-2 bg-[#182332] hover:bg-[#243140] text-slate-100 border border-white/10 rounded-2xl text-xs font-bold shadow-md flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
+                className="py-2.5 px-3 bg-[#182332] hover:bg-[#243140] text-slate-100 border border-white/10 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-1.5 transition active:scale-[0.98] shadow-sm cursor-pointer"
               >
                 <Plus className="h-4 w-4 stroke-[3] text-cyan-400" />
-                <span>Trabajo</span>
+                <span>Añadir Trabajo</span>
               </button>
             </div>
           </div>
@@ -3150,22 +3179,28 @@ export default function UberDriverView({
                               <span className="text-xs font-bold text-white truncate leading-tight">
                                 {ord.address}
                               </span>
-                              {ord.bore_type && ord.bore_type.includes('DW') && (
-                                <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md shrink-0">
-                                  DW
-                                </span>
-                              )}
+                              <span className="text-[10px] sm:text-[10.5px] text-slate-400 font-mono shrink-0">
+                                {ord.city || 'Skokie'}
+                              </span>
                             </div>
                             <div className="text-[10px] sm:text-[10.5px] text-slate-400 flex items-center gap-1.5 mt-0.5 truncate font-mono">
-                              <span>{ord.city || 'Skokie'}</span>
-                              <span>•</span>
                               <span className="text-cyan-300 font-semibold">#{ord.job_id}</span>
                               <span>•</span>
                               <span>{ord.drop_footage || 0} ft</span>
-                              {ord.cable_type && (
+                              <span>•</span>
+                              <span className="text-slate-300">{ord.cable_type || 'RG-6'}</span>
+                              {Boolean(
+                                ord.bore_type && (
+                                  ord.bore_type.includes('DW') || 
+                                  ord.bore_type.toLowerCase().includes('driveway') || 
+                                  ord.bore_type === 'Y'
+                                )
+                              ) && (
                                 <>
                                   <span>•</span>
-                                  <span className="text-slate-300">{ord.cable_type}</span>
+                                  <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md shrink-0">
+                                    DW
+                                  </span>
                                 </>
                               )}
                             </div>

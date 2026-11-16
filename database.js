@@ -201,8 +201,10 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
         const up = t.toUpperCase();
         if (up === 'CALLFIRST') {
           call_first = true;
-        } else if (up.startsWith('P#:')) {
-          phone = t.substring(3).trim();
+        } else if (/^(?:P#?|TEL|PHONE|CELL)[:\s]*/i.test(t)) {
+          const rawP = t.replace(/^(?:P#?|TEL|PHONE|CELL)[:\s]*/i, '').trim();
+          const digits = rawP.replace(/\D/g, '');
+          phone = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : (digits || rawP);
         } else if (up.startsWith('DROP:')) {
           const numStr = t.substring(5).trim().replace(',', '.');
           const val = parseFloat(numStr);
@@ -406,8 +408,11 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
 
   // Phone
   let phone = '';
-  const pMatch = postJobText.match(/P#?[:\s]*(\d{10})/i) || postJobText.match(/\b(\d{10})\b/);
-  if (pMatch) phone = pMatch[1];
+  const pMatch = postJobText.match(/(?:P#?|TEL|PHONE|CELL)[:\s]*([0-9\s().-]{10,15})/i) || postJobText.match(/\b(?:\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})\b/) || postJobText.match(/\b(\d{10})\b/);
+  if (pMatch) {
+    const rawDigits = (pMatch[1] || pMatch[0]).replace(/\D/g, '');
+    phone = rawDigits.length === 11 && rawDigits.startsWith('1') ? rawDigits.slice(1) : rawDigits;
+  }
 
   // Rate calculation
   let rate = 100;

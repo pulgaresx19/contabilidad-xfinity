@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, DollarSign, MapPin, Phone, Ruler, SlidersHorizontal, AlertCircle, Save } from 'lucide-react';
+import { cleanPhoneNumber } from '../utils/smsUtils';
 
 export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
   const [formData, setFormData] = useState({
@@ -135,6 +136,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
         body: JSON.stringify({
           ...order,
           ...formData,
+          phone: cleanPhoneNumber(formData.phone),
           drop_footage: parseFloat(formData.drop_footage) || 0,
           rate_calculated: parseFloat(formData.rate_calculated) || 100,
           manual_adjustment: parseFloat(formData.manual_adjustment) || 0,

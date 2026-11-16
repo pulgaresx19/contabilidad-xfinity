@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { getLocalDateStr } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox, searchAddressSuggestions } from '../utils/mapboxGeocode';
+import { cleanPhoneNumber } from '../utils/smsUtils';
 
 export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, initialDate }) {
   const [formData, setFormData] = useState({
@@ -145,6 +146,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
         job_id: cleanJobId,
         address: cleanAddress,
         city: (formData.city || '').trim().toUpperCase(),
+        phone: cleanPhoneNumber(formData.phone),
         drop_footage: numFootage,
         rate_calculated: currentTotal,
         latitude: lat,
