@@ -43,6 +43,8 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
   const [savingCancel, setSavingCancel] = useState(false);
   const [localReported, setLocalReported] = useState(false);
   const [confirmingReactivate, setConfirmingReactivate] = useState(false);
+  const [localStatusOverride, setLocalStatusOverride] = useState(null);
+  const [localPhotosOverride, setLocalPhotosOverride] = useState(null);
 
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
@@ -51,6 +53,8 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
 
   useEffect(() => {
     if (isOpen) {
+      setLocalStatusOverride(null);
+      setLocalPhotosOverride(null);
       setCategory('Casa');
       setShowCancelPrompt(Boolean(initialShowCancel));
       setCancelReason('');
@@ -66,6 +70,8 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
     setError(null);
     setCategory('Casa');
     setConfirmingReactivate(false);
+    setLocalStatusOverride(null);
+    setLocalPhotosOverride(null);
     if (onClose) onClose();
   };
 
@@ -79,14 +85,16 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
 
   if (!isOpen || !order) return null;
 
-  const allPhotos = [...(order.photos || [])].sort((a, b) => (a.id || 0) - (b.id || 0));
-  const isCompleted = order.status === 'Completado' || order.status === 'completed';
-  const isCancelled = order.status === 'No Realizado' || order.status === 'Cancelado' || order.status === 'cancelled' || order.status === 'no_realizado';
+  const currentStatus = localStatusOverride !== null ? localStatusOverride : order.status;
+  const currentPhotos = localPhotosOverride !== null ? localPhotosOverride : (order.photos || []);
+  const allPhotos = [...currentPhotos].sort((a, b) => (a.id || 0) - (b.id || 0));
+  const isCompleted = currentStatus === 'Completado' || currentStatus === 'completed';
+  const isCancelled = currentStatus === 'No Realizado' || currentStatus === 'Cancelado' || currentStatus === 'cancelled' || currentStatus === 'no_realizado';
   const specificCancelPhotos = allPhotos.filter(p => p.category === 'Constancia No Realizado' || p.category === 'Motivo' || p.category === 'Obstáculo');
   const cancelPhotos = isCancelled && specificCancelPhotos.length === 0 ? allPhotos : specificCancelPhotos;
   const workPhotos = allPhotos.filter(p => p.category !== 'Constancia No Realizado');
   const workPhotosCount = workPhotos.length;
-  const isReported = Boolean(order.whatsapp_shared || order.whatsapp_shared_at || localReported);
+  const isReported = localStatusOverride === 'Pendiente' ? false : Boolean(order.whatsapp_shared || order.whatsapp_shared_at || localReported);
 
   const handleUpload = async (e) => {
     const files = e.target.files;
@@ -276,16 +284,25 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
 
   const handleReactivateOrder = async () => {
     try {
-      const res = await fetch(`/api/orders/${order.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...order, status: 'Pendiente', cancel_reason: '' })
+      const res = await fetch(`/api/orders/${order.id}/reactivate`, {
+        method: 'POST'
       });
       if (res.ok) {
         order.status = 'Pendiente';
         order.cancel_reason = '';
+        order.whatsapp_shared = 0;
+        order.whatsapp_shared_at = null;
+        order.photos = [];
+        setLocalStatusOverride('Pendiente');
+        setLocalPhotosOverride([]);
         setConfirmingReactivate(false);
-        if (onPhotoUpdated) onPhotoUpdated();
+        setShowCancelPrompt(false);
+        setLocalReported(false);
+        setCategory('Casa');
+        if (onPhotoUpdated) await onPhotoUpdated();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert('Error al reactivar orden: ' + (err.error || res.statusText));
       }
     } catch (err) {
       alert('Error al reactivar orden: ' + err.message);
@@ -619,8 +636,11 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
               <div className="relative p-4 bg-rose-950/25 border border-rose-500/35 rounded-2xl text-center space-y-2.5 overflow-hidden shrink-0">
                 {confirmingReactivate ? (
                   <div className="absolute inset-0 bg-[#160c14]/95 backdrop-blur-xs rounded-2xl p-3 flex flex-col items-center justify-center text-center z-20 animate-fade-in border border-rose-500/40">
-                    <p className="text-xs font-bold text-white mb-2">
-                      ¿Reactivar este trabajo y pasarlo a Pendiente?
+                    <p className="text-xs font-black text-white leading-snug">
+                      ¿Reactivar este trabajo desde cero?
+                    </p>
+                    <p className="text-[10px] text-rose-200/90 mt-1 mb-2 max-w-[92%] leading-tight">
+                      Se pasará a Pendiente, se eliminarán las fotos de constancia y se limpiará el reporte para iniciar el trámite normal.
                     </p>
                     <div className="flex items-center gap-2">
                       <button

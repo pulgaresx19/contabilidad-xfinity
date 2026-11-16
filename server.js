@@ -875,6 +875,50 @@ app.patch('/api/orders/:id/note', (req, res) => {
   }
 });
 
+// 4b. Reactivate a cancelled/no-realizado order to Pendiente from scratch (eliminando fotos y reporte)
+app.post('/api/orders/:id/reactivate', (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const order = db.prepare('SELECT * FROM work_orders WHERE id = ? OR job_id = ?').get(orderId, orderId);
+    if (!order) {
+      // Orden en memoria o cliente IndexedDB
+      return res.json({ success: true, order: { id: orderId, status: 'Pendiente', photos: [] } });
+    }
+    
+    const realId = order.id;
+
+    // 1. Eliminar todas las fotos de la orden de la base de datos y del disco
+    const photos = db.prepare('SELECT filename FROM job_photos WHERE work_order_id = ?').all(realId);
+    for (const p of photos) {
+      if (p.filename) {
+        const filePath = path.join(uploadsDir, p.filename);
+        if (fs.existsSync(filePath)) {
+          try { fs.unlinkSync(filePath); } catch (e) { console.error('Error deleting photo file:', e); }
+        }
+      }
+    }
+    db.prepare('DELETE FROM job_photos WHERE work_order_id = ?').run(realId);
+
+    // 2. Reiniciar orden a Pendiente, limpiar motivo de cancelación y reiniciar constancia de reporte
+    db.prepare(`
+      UPDATE work_orders SET
+        status = 'Pendiente',
+        cancel_reason = '',
+        whatsapp_shared = 0,
+        whatsapp_shared_at = NULL,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(realId);
+
+    const updated = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(realId);
+    updated.photos = [];
+    res.json({ success: true, order: updated });
+  } catch (err) {
+    console.error('Error reactivating order:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 4c. Reorder route order for the day
 app.post('/api/orders/reorder-route', (req, res) => {
   try {

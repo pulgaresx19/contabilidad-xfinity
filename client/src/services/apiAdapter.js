@@ -175,6 +175,19 @@ export function initApiAdapter() {
             return jsonResponse({ success: true, order: updated });
           }
 
+          // /api/orders/:id/reactivate (Reset a Pendiente desde cero: borrar fotos y reporte)
+          if (subAction === '/reactivate' && method === 'POST') {
+            const updated = await localDb.reactivateOrder(orderId);
+            try {
+              if (originalFetch) {
+                await originalFetch(input, init);
+              }
+            } catch (netErr) {
+              console.warn('Network sync for reactivate failed (offline mode):', netErr);
+            }
+            return jsonResponse({ success: true, order: updated });
+          }
+
           // /api/orders/:id/photos
           if (subAction === '/photos' && method === 'POST') {
             const formData = init.body; // FormData

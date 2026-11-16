@@ -524,6 +524,47 @@ export async function deleteOrder(id) {
   });
 }
 
+export async function reactivateOrder(id) {
+  const db = await getDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(['work_orders', 'job_photos'], 'readwrite');
+    const ordersStore = tx.objectStore('work_orders');
+    const photosStore = tx.objectStore('job_photos');
+
+    const getReq = ordersStore.get(Number(id));
+    getReq.onsuccess = () => {
+      const order = getReq.result;
+      if (order) {
+        order.status = 'Pendiente';
+        order.cancel_reason = '';
+        order.whatsapp_shared = 0;
+        order.whatsapp_shared_at = null;
+        order.updated_at = new Date().toISOString();
+        delete order.photos;
+        delete order.photos_count;
+        delete order.work_photos_count;
+        delete order.cancel_photos_count;
+        ordersStore.put(order);
+      }
+    };
+
+    const photosReq = photosStore.getAll();
+    photosReq.onsuccess = () => {
+      (photosReq.result || []).forEach((p) => {
+        if (Number(p.work_order_id) === Number(id)) {
+          photosStore.delete(p.id);
+        }
+      });
+    };
+
+    tx.oncomplete = async () => {
+      const updated = await getOrderById(id);
+      resolve(updated);
+    };
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 export async function adjustOrder(id, manual_adjustment, adjustment_reason) {
   const existing = await getOrderById(id);
   if (!existing) throw new Error('Order not found');

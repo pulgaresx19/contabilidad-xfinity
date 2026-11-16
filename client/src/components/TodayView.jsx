@@ -471,16 +471,24 @@ export default function TodayView({
     }
   };
 
-  // Re-open cancelled order
+  // Re-open cancelled order desde cero (eliminando fotos y reporte)
   const handleReopenOrder = async (order) => {
     try {
-      const res = await fetch(`/api/orders/${order.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...order, status: 'Pendiente', cancel_reason: '' })
+      const res = await fetch(`/api/orders/${order.id}/reactivate`, {
+        method: 'POST'
       });
       if (res.ok) {
-        onOrderUpdated();
+        setLocalSharedMap((prev) => {
+          const next = { ...prev };
+          delete next[order.id];
+          return next;
+        });
+        setCancelDetailOrder(null);
+        setConfirmingReopen(false);
+        if (onOrderUpdated) await onOrderUpdated();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert('Error al reactivar orden: ' + (err.error || res.statusText));
       }
     } catch (err) {
       alert('Error: ' + err.message);
@@ -1833,8 +1841,11 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
               <div className="relative p-3.5 rounded-2xl bg-rose-950/25 border border-rose-500/30 space-y-1 overflow-hidden shrink-0">
                 {confirmingReopen ? (
                   <div className="absolute inset-0 bg-[#160c14]/95 backdrop-blur-xs rounded-2xl p-3 flex flex-col items-center justify-center text-center z-20 animate-fade-in border border-rose-500/40">
-                    <p className="text-xs font-bold text-white mb-2">
-                      ¿Reactivar este trabajo y pasarlo a Pendiente?
+                    <p className="text-xs font-black text-white leading-snug">
+                      ¿Reactivar este trabajo desde cero?
+                    </p>
+                    <p className="text-[10px] text-rose-200/90 mt-1 mb-2 max-w-[92%] leading-tight">
+                      Se pasará a Pendiente, se eliminarán las fotos de constancia y se limpiará el reporte para iniciar el trámite normal.
                     </p>
                     <div className="flex items-center gap-2">
                       <button
@@ -1846,11 +1857,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          handleReopenOrder(cancelDetailOrder);
-                          setConfirmingReopen(false);
-                          setCancelDetailOrder(null);
-                        }}
+                        onClick={() => handleReopenOrder(cancelDetailOrder)}
                         className="px-3 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
                       >
                         Sí, Reactivar
