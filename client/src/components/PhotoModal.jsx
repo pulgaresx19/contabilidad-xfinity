@@ -923,8 +923,8 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
         isOpen={isShareModalOpen}
         order={order}
         onClose={() => setIsShareModalOpen(false)}
-        onShared={(orderId, isShared = true) => setLocalReported(Boolean(isShared))}
         onOrderUpdated={() => {
+          setLocalReported(true);
           if (onPhotoUpdated) onPhotoUpdated();
         }}
       />

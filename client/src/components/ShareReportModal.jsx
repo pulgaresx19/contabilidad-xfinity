@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  X, Share2, Copy, Check, CheckCheck, Camera, ExternalLink, AlertCircle, AlertTriangle, Download, RotateCcw
+  X, Share2, Copy, Check, CheckCheck, Camera, ExternalLink, AlertCircle, AlertTriangle
 } from 'lucide-react';
 
 export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdated, onShared }) {
@@ -11,7 +11,6 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
   const [sharing, setSharing] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState(null);
   const [isSharedState, setIsSharedState] = useState(false);
-  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
   const isCancelled = order ? (order.status === 'No Realizado' || order.status === 'Cancelado') : false;
   const hasDriveway = Boolean(
@@ -26,7 +25,6 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
     if (!isOpen || !order) return;
 
     setIsSharedState(Boolean(order.whatsapp_shared || order.whatsapp_shared_at));
-    setAwaitingConfirmation(false);
     const isOrderCancelled = order.status === 'No Realizado' || order.status === 'Cancelado';
 
     let initialText = '';
@@ -110,9 +108,8 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
     order.whatsapp_shared = 1;
     order.whatsapp_shared_at = new Date().toISOString();
     setIsSharedState(true);
-    setAwaitingConfirmation(false);
     if (onShared && order.id) {
-      onShared(order.id, true);
+      onShared(order.id);
     }
 
     fetch(`/api/orders/${order.id}/whatsapp-shared`, {
@@ -123,39 +120,6 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
       if (onOrderUpdated) onOrderUpdated();
     }).catch((err) => {
       console.error('Error marking as shared:', err);
-    });
-  };
-
-  const unmarkOrderAsShared = () => {
-    order.whatsapp_shared = 0;
-    order.whatsapp_shared_at = null;
-    setIsSharedState(false);
-    setAwaitingConfirmation(false);
-    if (onShared && order.id) {
-      onShared(order.id, false);
-    }
-
-    fetch(`/api/orders/${order.id}/whatsapp-shared`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shared: false })
-    }).then(() => {
-      if (onOrderUpdated) onOrderUpdated();
-    }).catch((err) => {
-      console.error('Error unmarking as shared:', err);
-    });
-  };
-
-  const handleDownloadAllPhotos = () => {
-    if (!orderPhotos.length) return;
-    orderPhotos.forEach((p, idx) => {
-      const src = p.photo_data || `/uploads/${p.filename}`;
-      const a = document.createElement('a');
-      a.href = src;
-      a.download = `Job_${order.job_id}_${idx + 1}_${(p.category || 'foto').replace(/[^a-zA-Z0-9]/g, '_')}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
     });
   };
 
@@ -171,15 +135,17 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
     setSharing(true);
     const textToSend = (reportText || '').trim();
 
-    // 1. Copiar texto al portapapeles como respaldo de seguridad inmediato
+    // 1. Marcar como compartido
+    markOrderAsShared();
+
+    // 2. Copiar texto al portapapeles como respaldo
     try {
       await navigator.clipboard.writeText(textToSend);
       setCopiedText(true);
-      setTimeout(() => setCopiedText(false), 2500);
     } catch (e) {}
 
     try {
-      // 2. Preparar fotos
+      // 3. Preparar fotos
       const filesToShare = [];
       if (orderPhotos.length > 0) {
         for (let i = 0; i < orderPhotos.length; i++) {
@@ -213,36 +179,36 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         ? `Constancia No Realizado #${order.job_id}` 
         : `Reporte #${order.job_id}`;
 
-      // 3. Compartir nativamente con Web Share (archivos + texto juntos si el móvil lo soporta)
+      // 4. Compartir nativamente con Web Share (archivos + texto juntos)
       if (filesToShare.length > 0 && navigator.canShare && navigator.canShare({ files: filesToShare })) {
         await navigator.share({
           title: shareTitle,
           text: textToSend,
           files: filesToShare
         });
-        setAwaitingConfirmation(true);
+        onClose();
         return;
       }
 
-      // 4. Compartir nativamente solo texto
+      // 5. Compartir nativamente solo texto
       if (filesToShare.length === 0 && navigator.share && navigator.canShare && navigator.canShare({ text: textToSend })) {
         await navigator.share({
           title: shareTitle,
           text: textToSend
         });
-        setAwaitingConfirmation(true);
+        onClose();
         return;
       }
 
-      // 5. Fallback si no hay Web Share: abrir WhatsApp por enlace wa.me
+      // 6. Fallback si no hay Web Share: abrir WhatsApp
       const waUrl = `https://wa.me/?text=${encodeURIComponent(textToSend)}`;
       window.open(waUrl, '_blank');
-      setAwaitingConfirmation(true);
+      onClose();
     } catch (err) {
       if (err.name !== 'AbortError') {
         const waUrl = `https://wa.me/?text=${encodeURIComponent(textToSend)}`;
         window.open(waUrl, '_blank');
-        setAwaitingConfirmation(true);
+        onClose();
       }
     } finally {
       setSharing(false);
@@ -334,40 +300,6 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         {/* 3. Cuerpo del Modal Scrollable */}
         <div className="p-3.5 sm:p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0 scrollbar-none bg-[#101722] flex flex-col">
 
-          {/* Alerta de Verificación / Confirmación de Envío en WhatsApp */}
-          {awaitingConfirmation && (
-            <div className="p-3.5 bg-amber-500/15 border border-amber-500/40 rounded-2xl space-y-2.5 animate-in fade-in shrink-0">
-              <div className="flex items-center gap-2 text-amber-300 font-bold text-xs sm:text-sm">
-                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>¿Enviaste el reporte y fotos en WhatsApp?</span>
-              </div>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                Se abrió WhatsApp con el reporte {orderPhotos.length > 0 ? `y ${orderPhotos.length} fotos` : ''}. Por seguridad, la app no da por reportado el trabajo hasta que confirmes que tocaste enviar en WhatsApp.
-              </p>
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setAwaitingConfirmation(false)}
-                  className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 font-bold text-xs transition active:scale-95 cursor-pointer text-center"
-                >
-                  No lo envié aún
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    markOrderAsShared();
-                    setAwaitingConfirmation(false);
-                    onClose();
-                  }}
-                  className="py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition active:scale-95 shadow-md shadow-emerald-500/25 flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                  <span>Sí, Confirmar</span>
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Texto del Reporte Editable */}
           <div className="space-y-1.5 shrink-0">
             <div className="flex items-center justify-between">
@@ -422,20 +354,9 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                 <span>{isCancelled ? 'Fotos del Obstáculo' : 'Fotos de Instalación'} ({orderPhotos.length})</span>
               </span>
               {orderPhotos.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleDownloadAllPhotos}
-                    className="px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 text-cyan-400 hover:text-cyan-300 border border-white/10 text-[9.5px] font-bold flex items-center gap-1 transition active:scale-95 cursor-pointer"
-                    title="Descargar fotos de evidencia al dispositivo"
-                  >
-                    <Download className="h-3 w-3" />
-                    <span>Descargar</span>
-                  </button>
-                  <span className={`text-[10px] font-bold ${isCancelled ? 'text-rose-400' : 'text-emerald-400'}`}>
-                    Se adjuntarán juntas
-                  </span>
-                </div>
+                <span className={`text-[10px] font-bold ${isCancelled ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  Se adjuntarán juntas
+                </span>
               )}
             </div>
 
@@ -488,7 +409,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         </div>
 
         {/* 4. Footer (Mismo estilo que Travesía del Día y PhotoModal) */}
-        <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+        <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-3 shrink-0">
           <button
             type="button"
             onClick={onClose}
@@ -497,48 +418,13 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             {isSharedState ? 'Cerrar' : 'Cancelar'}
           </button>
 
-          {awaitingConfirmation ? (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleSendReportAndPhotos}
-                disabled={sharing}
-                className="px-3 py-2 text-xs font-bold rounded-xl bg-[#182332] hover:bg-[#223042] text-cyan-400 border border-cyan-500/30 transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                title="Volver a abrir WhatsApp si te saliste"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                <span>Reintentar</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  markOrderAsShared();
-                  setAwaitingConfirmation(false);
-                  onClose();
-                }}
-                className="px-3.5 py-2 text-xs font-black rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/25 transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Check className="h-3.5 w-3.5 stroke-[3]" />
-                <span>Sí, Confirmar</span>
-              </button>
-            </div>
-          ) : isSharedState ? (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={unmarkOrderAsShared}
-                className="px-3 py-2 text-xs font-bold rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition active:scale-95 cursor-pointer"
-                title="Desmarcar reporte si se marcó por error o no se envió"
-              >
-                Desmarcar Reporte
-              </button>
-              <div 
-                className="px-3 py-2 text-xs font-black rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm flex items-center gap-1.5 select-none"
-                title={order.whatsapp_shared_at ? `Reportado el ${order.whatsapp_shared_at.slice(0, 10)} a las ${order.whatsapp_shared_at.slice(11, 16)}` : 'Reportado'}
-              >
-                <span>Reportado</span>
-                <CheckCheck className="h-4 w-4 stroke-[2.5] text-emerald-400" />
-              </div>
+          {isSharedState ? (
+            <div 
+              className="px-3.5 py-2 text-xs font-black rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm flex items-center gap-1.5 select-none"
+              title={order.whatsapp_shared_at ? `Reportado el ${order.whatsapp_shared_at.slice(0, 10)} a las ${order.whatsapp_shared_at.slice(11, 16)}` : 'Reportado'}
+            >
+              <span>Reportado</span>
+              <CheckCheck className="h-4 w-4 stroke-[2.5] text-emerald-400" />
             </div>
           ) : (
             <button
