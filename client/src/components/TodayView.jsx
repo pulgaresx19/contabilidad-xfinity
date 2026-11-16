@@ -1149,7 +1149,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                       >
                         {isCancelled ? (
                           <>
-                            {/* 1. Botón Motivo */}
+                            {/* 1. Botón Motivo (Ícono sin texto) */}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -1157,13 +1157,14 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                                 if (onOpenPhotos) onOpenPhotos(order);
                                 else openCancelDetail(order);
                               }}
-                              className="px-2.5 py-1 rounded-full transition active:scale-90 cursor-pointer flex items-center gap-1 text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 shadow-xs"
+                              className="p-1.5 rounded-full transition active:scale-90 cursor-pointer flex items-center justify-center relative text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 shadow-xs"
                               title={`Motivo: ${order.cancel_reason || 'Sin motivo detallado'} - Toca para ver detalle y fotos`}
                             >
-                              <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-                              <span className="text-[10px] font-bold">Motivo</span>
+                              <AlertTriangle className="h-4 w-4 text-rose-400 stroke-[2.2]" />
                               {(order.cancel_photos_count > 0 || (order.photos_count > 0 && (!order.work_photos_count || order.work_photos_count === 0))) && (
-                                <Camera className="h-2.5 w-2.5 text-rose-300 ml-0.5 shrink-0" />
+                                <span className="absolute -top-1 -right-1 px-1 min-w-[14px] h-[14px] bg-rose-500 text-slate-950 text-[8.5px] font-black rounded-full flex items-center justify-center leading-none shadow-xs">
+                                  {order.cancel_photos_count || 1}
+                                </span>
                               )}
                             </button>
 
