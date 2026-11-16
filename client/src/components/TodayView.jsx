@@ -373,6 +373,12 @@ export default function TodayView({
   };
 
   // Open detail modal for cancelled order
+  const filterCancelPhotos = (photos) => {
+    if (!Array.isArray(photos)) return [];
+    const specific = photos.filter(p => p.category === 'Constancia No Realizado' || p.category === 'Motivo' || p.category === 'Obstáculo');
+    return specific.length > 0 ? specific : photos;
+  };
+
   const openCancelDetail = async (order) => {
     setCancelDetailOrder(order);
     setCancelDetailPhotos([]);
@@ -381,9 +387,7 @@ export default function TodayView({
       const res = await fetch(`/api/orders/${order.id}`);
       if (res.ok) {
         const full = await res.json();
-        // En trabajo no realizado, SOLO se muestran fotos de constancia del obstáculo
-        const cPhotos = (full.photos || []).filter(p => p.category === 'Constancia No Realizado');
-        setCancelDetailPhotos(cPhotos);
+        setCancelDetailPhotos(filterCancelPhotos(full.photos));
       }
     } catch (err) {
       console.error('Error fetching cancel detail photos:', err);
@@ -406,8 +410,7 @@ export default function TodayView({
         const updatedRes = await fetch(`/api/orders/${cancelDetailOrder.id}`);
         if (updatedRes.ok) {
           const updated = await updatedRes.json();
-          const cPhotos = (updated.photos || []).filter(p => p.category === 'Constancia No Realizado');
-          setCancelDetailPhotos(cPhotos);
+          setCancelDetailPhotos(filterCancelPhotos(updated.photos));
           onOrderUpdated();
         }
       }
@@ -424,8 +427,7 @@ export default function TodayView({
         const updatedRes = await fetch(`/api/orders/${cancelDetailOrder.id}`);
         if (updatedRes.ok) {
           const updated = await updatedRes.json();
-          const cPhotos = (updated.photos || []).filter(p => p.category === 'Constancia No Realizado');
-          setCancelDetailPhotos(cPhotos);
+          setCancelDetailPhotos(filterCancelPhotos(updated.photos));
           onOrderUpdated();
         }
       }
@@ -458,8 +460,7 @@ export default function TodayView({
         const updatedRes = await fetch(`/api/orders/${cancelDetailOrder.id}`);
         if (updatedRes.ok) {
           const updated = await updatedRes.json();
-          const cPhotos = (updated.photos || []).filter(p => p.category === 'Constancia No Realizado');
-          setCancelDetailPhotos(cPhotos);
+          setCancelDetailPhotos(filterCancelPhotos(updated.photos));
           onOrderUpdated();
         }
       }
@@ -1827,9 +1828,9 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             </div>
 
             {/* Body */}
-            <div className="p-3.5 sm:p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0 scrollbar-none bg-[#101722]">
+            <div className="p-3.5 sm:p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0 scrollbar-none bg-[#101722] flex flex-col">
               {/* Motivo Registrado con botón de Reactivar en esquina superior derecha */}
-              <div className="relative p-3.5 rounded-2xl bg-rose-950/25 border border-rose-500/30 space-y-1 overflow-hidden">
+              <div className="relative p-3.5 rounded-2xl bg-rose-950/25 border border-rose-500/30 space-y-1 overflow-hidden shrink-0">
                 {confirmingReopen ? (
                   <div className="absolute inset-0 bg-[#160c14]/95 backdrop-blur-xs rounded-2xl p-3 flex flex-col items-center justify-center text-center z-20 animate-fade-in border border-rose-500/40">
                     <p className="text-xs font-bold text-white mb-2">
@@ -1875,9 +1876,9 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                 </p>
               </div>
 
-              {/* Sección de Fotos de Constancia / Obstáculo */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
+              {/* Sección de Fotos de Constancia / Obstáculo (Ocupa el espacio restante completo) */}
+              <div className="space-y-2 flex-1 flex flex-col min-h-0">
+                <div className="flex items-center justify-between shrink-0">
                   <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
                     Fotos del Obstáculo ({cancelDetailPhotos.length}):
                   </span>
@@ -1889,7 +1890,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                 </div>
 
                 {/* Botones de Captura (Cámara en Vivo con GPS & Hora + Galería) */}
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsLiveCameraOpenForCancel(true)}
@@ -1913,51 +1914,56 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   </label>
                 </div>
 
-                {/* Galería de Fotos del Obstáculo (compacta y adaptable para múltiples fotos) */}
+                {/* Galería de Fotos del Obstáculo (expande para ocupar todo el espacio libre) */}
                 {loadingCancelPhotos ? (
-                  <div className="py-6 text-center text-xs text-slate-400">Cargando constancia...</div>
+                  <div className="flex-1 min-h-[160px] rounded-2xl border border-white/5 bg-[#0d141e]/50 flex flex-col items-center justify-center p-3 text-center">
+                    <span className="text-xs text-slate-400 font-medium">Cargando constancia...</span>
+                  </div>
                 ) : cancelDetailPhotos.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-44 overflow-y-auto scrollbar-none pt-0.5">
-                    {cancelDetailPhotos.map((photo, idx) => (
-                      <div
-                        key={photo.id}
-                        onClick={() => setPreviewFullPhoto(photo.photo_data || `/uploads/${photo.filename}`)}
-                        className="group relative bg-[#0e1622] border border-rose-500/35 hover:border-rose-400 rounded-xl overflow-hidden aspect-video shadow-xs transition cursor-pointer"
-                      >
-                        <img
-                          src={photo.photo_data || `/uploads/${photo.filename}`}
-                          alt={`Obstáculo ${idx + 1}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-between p-1.5">
-                          <div className="flex justify-between items-center" onClick={(e) => e.stopPropagation()}>
-                            <span className="text-[9px] bg-black/80 backdrop-blur-xs text-rose-300 border border-rose-500/30 px-1.5 py-0.5 rounded-md font-bold truncate max-w-[75%]">
-                              Foto #{idx + 1}
+                  <div className="flex-1 min-h-[160px] p-2 bg-[#0d141e]/50 rounded-2xl border border-rose-500/25 overflow-y-auto sleek-scroll">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {cancelDetailPhotos.map((photo, idx) => (
+                        <div
+                          key={photo.id || idx}
+                          onClick={() => setPreviewFullPhoto(photo.photo_data || `/uploads/${photo.filename}`)}
+                          className="group relative bg-[#16202c] border border-rose-500/30 hover:border-rose-400 rounded-xl overflow-hidden aspect-video shadow-xs transition cursor-pointer"
+                          title="Toca para ver la foto completa"
+                        >
+                          <img
+                            src={photo.photo_data || `/uploads/${photo.filename}`}
+                            alt={`Motivo ${idx + 1}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-between p-1">
+                            <div className="flex justify-between items-center" onClick={(e) => e.stopPropagation()}>
+                              <span className="text-[8.5px] bg-black/85 backdrop-blur-xs text-rose-300 border border-rose-400/30 px-1 py-0.2 rounded font-bold truncate max-w-[70%]">
+                                Motivo
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCancelDetailPhoto(photo.id)}
+                                title="Eliminar foto"
+                                className="p-1 bg-black/70 hover:bg-rose-600 text-slate-300 hover:text-white rounded transition shadow active:scale-90 cursor-pointer"
+                              >
+                                <Trash2 className="h-2.5 w-2.5" />
+                              </button>
+                            </div>
+                            <span className="text-[9px] text-slate-300 flex items-center gap-0.5 font-medium truncate group-hover:text-rose-300">
+                              <span>Ver</span>
+                              <ExternalLink className="h-2 w-2" />
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteCancelDetailPhoto(photo.id)}
-                              title="Eliminar foto"
-                              className="p-1 bg-black/70 hover:bg-rose-600 text-slate-300 hover:text-white rounded-md transition shadow active:scale-90 cursor-pointer"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
                           </div>
-                          <span className="text-[9.5px] text-slate-300 flex items-center gap-1 font-medium">
-                            <span>Ver</span>
-                            <ExternalLink className="h-2 w-2" />
-                          </span>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 ) : (
-                  <div className="h-28 rounded-xl border border-dashed border-rose-500/35 bg-black/25 flex flex-col items-center justify-center p-3 text-center space-y-1">
-                    <Camera className="h-6 w-6 text-rose-400/50 mb-0.5" />
+                  <div className="flex-1 min-h-[160px] rounded-2xl border border-dashed border-rose-500/35 bg-[#0d141e]/40 flex flex-col items-center justify-center p-4 text-center space-y-1">
+                    <Camera className="h-7 w-7 text-rose-400/50 mb-0.5" />
                     <p className="text-xs font-bold text-rose-200">
                       Espacio para fotos del obstáculo
                     </p>
-                    <p className="text-[10.5px] text-slate-400 max-w-xs">
+                    <p className="text-[10.5px] text-slate-400 max-w-xs leading-relaxed">
                       Toca "Cámara GPS" para registrar la evidencia con sello de coordenadas y hora.
                     </p>
                   </div>
@@ -2067,37 +2073,47 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         }}
       />
 
-      {/* FULLSCREEN PHOTO PREVIEW MODAL (IN-APP - NUNCA REDIRIGE) */}
+      {/* FULLSCREEN PHOTO PREVIEW MODAL (IN-APP - NUNCA REDIRIGE, SIEMPRE CON BOTONES VISIBLES) */}
       {previewFullPhoto && (
         <div
           onClick={() => setPreviewFullPhoto(null)}
-          className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-md flex items-center justify-center p-3 animate-fade-in"
+          className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-3 sm:p-4 animate-fade-in select-none"
         >
+          {/* Botón X fijo en la esquina superior derecha con safe-area */}
+          <button
+            type="button"
+            onClick={() => setPreviewFullPhoto(null)}
+            className="fixed z-50 p-2.5 rounded-full bg-slate-900/90 text-white hover:text-cyan-400 border border-white/20 shadow-2xl transition active:scale-90 cursor-pointer"
+            style={{
+              top: 'max(env(safe-area-inset-top, 0px) + 12px, 1rem)',
+              right: 'max(env(safe-area-inset-right, 0px) + 12px, 1rem)'
+            }}
+            title="Cerrar foto"
+          >
+            <X className="h-5 w-5 stroke-[2.5]" />
+          </button>
+
+          {/* Contenedor central flexible para la foto */}
           <div 
-            className="relative max-w-lg w-full flex flex-col items-center"
+            className="flex-1 min-h-0 w-full flex items-center justify-center p-2"
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={() => setPreviewFullPhoto(null)}
-              className="absolute -top-11 right-0 p-2 text-white hover:text-cyan-400 bg-slate-800/80 rounded-full transition shadow-lg"
-              title="Cerrar foto"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
             <img
               src={previewFullPhoto}
               alt="Constancia Completa"
-              className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain border border-slate-700 shadow-2xl"
+              className="max-h-[72dvh] sm:max-h-[78dvh] w-auto max-w-full rounded-2xl object-contain border border-white/10 shadow-2xl"
             />
+          </div>
 
+          {/* Botón inferior siempre visible */}
+          <div className="shrink-0 py-2" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={() => setPreviewFullPhoto(null)}
-              className="mt-3 px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition shadow"
+              className="px-5 py-2.5 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/10 rounded-xl text-xs font-bold transition shadow-lg active:scale-95 cursor-pointer flex items-center gap-1.5"
             >
-              Cerrar Foto
+              <X className="h-4 w-4" />
+              <span>Cerrar Foto</span>
             </button>
           </div>
         </div>

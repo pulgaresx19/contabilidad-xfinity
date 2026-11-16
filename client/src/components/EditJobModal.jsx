@@ -155,8 +155,9 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
     const targetId = order.id || order.job_id;
     if (!targetId) return;
 
+    const isCancelledOrder = order?.status === 'No Realizado' || order?.status === 'Cancelado';
     const data = new FormData();
-    data.append('category', 'Trabajo Terminado');
+    data.append('category', isCancelledOrder ? 'Constancia No Realizado' : 'Trabajo Terminado');
     files.forEach(f => data.append('photos', f));
 
     try {
@@ -738,7 +739,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-between p-1">
                         <div className="flex items-center justify-between w-full">
                           <span className="text-[7.5px] font-bold bg-black/70 text-cyan-300 px-1 py-0.2 rounded border border-white/10 truncate max-w-[70%]">
-                            {photo.category || `#${pIdx + 1}`}
+                            {photo.category === 'Constancia No Realizado' ? 'Motivo' : (photo.category || `#${pIdx + 1}`)}
                           </span>
                           {photo.id && (
                             <button
@@ -790,37 +791,47 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
         </div>
       </form>
 
-      {/* Lightbox / Visor de Fotos en Pantalla Completa */}
+      {/* Lightbox / Visor de Fotos en Pantalla Completa (Siempre con botón X y cerrar visibles) */}
       {previewPhoto && (
         <div
           onClick={() => setPreviewPhoto(null)}
-          className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-3 animate-fade-in"
+          className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-3 sm:p-4 animate-fade-in select-none"
         >
+          {/* Botón X fijo en la esquina superior derecha con safe-area */}
+          <button
+            type="button"
+            onClick={() => setPreviewPhoto(null)}
+            className="fixed z-50 p-2.5 rounded-full bg-slate-900/90 text-white hover:text-cyan-400 border border-white/20 shadow-2xl transition active:scale-90 cursor-pointer"
+            style={{
+              top: 'max(env(safe-area-inset-top, 0px) + 12px, 1rem)',
+              right: 'max(env(safe-area-inset-right, 0px) + 12px, 1rem)'
+            }}
+            title="Cerrar visor de foto"
+          >
+            <X className="h-5 w-5 stroke-[2.5]" />
+          </button>
+
+          {/* Contenedor central flexible para la foto */}
           <div 
-            className="relative max-w-lg w-full flex flex-col items-center"
+            className="flex-1 min-h-0 w-full flex items-center justify-center p-2"
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={() => setPreviewPhoto(null)}
-              className="absolute -top-12 right-0 p-2 text-white hover:text-cyan-400 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full transition shadow-lg cursor-pointer"
-              title="Cerrar visor de foto"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
             <img
               src={previewPhoto}
               alt="Evidencia Ampliada"
-              className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain border border-white/10 shadow-2xl"
+              className="max-h-[72dvh] sm:max-h-[78dvh] w-auto max-w-full rounded-2xl object-contain border border-white/10 shadow-2xl"
             />
+          </div>
 
+          {/* Botón inferior siempre visible */}
+          <div className="shrink-0 py-2" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={() => setPreviewPhoto(null)}
-              className="mt-3 px-5 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/10 rounded-xl text-xs font-bold transition shadow cursor-pointer active:scale-95"
+              className="px-5 py-2.5 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/10 rounded-xl text-xs font-bold transition shadow-lg active:scale-95 cursor-pointer flex items-center gap-1.5"
             >
-              Cerrar Foto
+              <X className="h-4 w-4" />
+              <span>Cerrar Foto</span>
             </button>
           </div>
         </div>

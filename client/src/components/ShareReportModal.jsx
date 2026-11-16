@@ -64,8 +64,9 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
       if (!Array.isArray(photos)) return [];
       const sorted = [...photos].sort((a, b) => (a.id || 0) - (b.id || 0));
       if (isOrderCancelled) {
-        // En trabajo no realizado, SOLO se muestran las fotos de constancia/obstáculo, NUNCA las de instalación normal
-        return sorted.filter((p) => p.category === 'Constancia No Realizado');
+        // En trabajo no realizado, se muestran las fotos de constancia/obstáculo
+        const specific = sorted.filter((p) => p.category === 'Constancia No Realizado' || p.category === 'Motivo' || p.category === 'Obstáculo');
+        return specific.length > 0 ? specific : sorted;
       }
       return sorted.filter((p) => p.category !== 'Constancia No Realizado');
     };
@@ -450,37 +451,47 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         </div>
       </div>
 
-      {/* FULLSCREEN PHOTO PREVIEW LIGHTBOX */}
+      {/* FULLSCREEN PHOTO PREVIEW LIGHTBOX (SIEMPRE CON BOTONES VISIBLES EN MÓVIL) */}
       {previewPhoto && (
         <div
           onClick={() => setPreviewPhoto(null)}
-          className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-3 animate-fade-in"
+          className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-3 sm:p-4 animate-fade-in select-none"
         >
+          {/* Botón X fijo en la esquina superior derecha con safe-area */}
+          <button
+            type="button"
+            onClick={() => setPreviewPhoto(null)}
+            className="fixed z-50 p-2.5 rounded-full bg-slate-900/90 text-white hover:text-cyan-400 border border-white/20 shadow-2xl transition active:scale-90 cursor-pointer"
+            style={{
+              top: 'max(env(safe-area-inset-top, 0px) + 12px, 1rem)',
+              right: 'max(env(safe-area-inset-right, 0px) + 12px, 1rem)'
+            }}
+            title="Cerrar foto"
+          >
+            <X className="h-5 w-5 stroke-[2.5]" />
+          </button>
+
+          {/* Contenedor central flexible para la foto */}
           <div 
-            className="relative max-w-lg w-full flex flex-col items-center"
+            className="flex-1 min-h-0 w-full flex items-center justify-center p-2"
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={() => setPreviewPhoto(null)}
-              className="absolute -top-11 right-0 p-2 text-white hover:text-cyan-400 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full transition shadow-lg active:scale-90 cursor-pointer"
-              title="Cerrar foto"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
             <img
               src={previewPhoto}
               alt="Evidencia en grande"
-              className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain border border-white/10 shadow-2xl"
+              className="max-h-[72dvh] sm:max-h-[78dvh] w-auto max-w-full rounded-2xl object-contain border border-white/10 shadow-2xl"
             />
+          </div>
 
+          {/* Botón inferior siempre visible */}
+          <div className="shrink-0 py-2" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={() => setPreviewPhoto(null)}
-              className="mt-3 px-5 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/10 rounded-xl text-xs font-bold transition shadow active:scale-95 cursor-pointer"
+              className="px-5 py-2.5 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/10 rounded-xl text-xs font-bold transition shadow-lg active:scale-95 cursor-pointer flex items-center gap-1.5"
             >
-              Cerrar Foto
+              <X className="h-4 w-4" />
+              <span>Cerrar Foto</span>
             </button>
           </div>
         </div>

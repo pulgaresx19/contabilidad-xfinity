@@ -80,11 +80,12 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
   if (!isOpen || !order) return null;
 
   const allPhotos = [...(order.photos || [])].sort((a, b) => (a.id || 0) - (b.id || 0));
-  const workPhotos = allPhotos.filter(p => p.category !== 'Constancia No Realizado');
-  const cancelPhotos = allPhotos.filter(p => p.category === 'Constancia No Realizado');
-  const workPhotosCount = workPhotos.length;
   const isCompleted = order.status === 'Completado' || order.status === 'completed';
   const isCancelled = order.status === 'No Realizado' || order.status === 'Cancelado' || order.status === 'cancelled' || order.status === 'no_realizado';
+  const specificCancelPhotos = allPhotos.filter(p => p.category === 'Constancia No Realizado' || p.category === 'Motivo' || p.category === 'Obstáculo');
+  const cancelPhotos = isCancelled && specificCancelPhotos.length === 0 ? allPhotos : specificCancelPhotos;
+  const workPhotos = allPhotos.filter(p => p.category !== 'Constancia No Realizado');
+  const workPhotosCount = workPhotos.length;
   const isReported = Boolean(order.whatsapp_shared || order.whatsapp_shared_at || localReported);
 
   const handleUpload = async (e) => {
@@ -614,8 +615,8 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
             </div>
           ) : isCancelled ? (
             /* CASO 2: El Trabajo ya está marcado como No Realizado */
-            <div className="space-y-3.5">
-              <div className="relative p-4 bg-rose-950/25 border border-rose-500/35 rounded-2xl text-center space-y-2.5 overflow-hidden">
+            <div className="space-y-3 flex-1 flex flex-col min-h-0">
+              <div className="relative p-4 bg-rose-950/25 border border-rose-500/35 rounded-2xl text-center space-y-2.5 overflow-hidden shrink-0">
                 {confirmingReactivate ? (
                   <div className="absolute inset-0 bg-[#160c14]/95 backdrop-blur-xs rounded-2xl p-3 flex flex-col items-center justify-center text-center z-20 animate-fade-in border border-rose-500/40">
                     <p className="text-xs font-bold text-white mb-2">
@@ -674,58 +675,62 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
                 </div>
               </div>
 
-              {/* Fotos del Obstáculo / Constancia (compacto sin ensanchar tarjeta) */}
-              {cancelPhotos.length > 0 ? (
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-rose-300 uppercase tracking-wider block">
-                    Fotos del Obstáculo ({cancelPhotos.length})
-                  </span>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-44 overflow-y-auto scrollbar-none">
-                    {cancelPhotos.map((photo, idx) => (
-                      <div
-                        key={photo.id}
-                        onClick={() => setPreviewPhoto(photo.photo_data || `/uploads/${photo.filename}`)}
-                        className="group relative bg-[#0e1622] border border-rose-500/35 hover:border-rose-400 rounded-xl overflow-hidden aspect-video shadow-xs transition cursor-pointer"
-                      >
-                        <img
-                          src={photo.photo_data || `/uploads/${photo.filename}`}
-                          alt={`Obstáculo ${idx + 1}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-between p-1.5">
-                          <div className="flex justify-between items-center" onClick={(e) => e.stopPropagation()}>
-                            <span className="text-[9px] bg-black/80 backdrop-blur-xs text-rose-300 border border-rose-500/30 px-1.5 py-0.5 rounded-md font-bold truncate max-w-[75%]">
-                              Foto #{idx + 1}
+              {/* Fotos del Obstáculo / Constancia (expande ocupando todo el espacio restante) */}
+              <div className="space-y-2 flex-1 flex flex-col min-h-0">
+                <span className="text-[10px] font-bold text-rose-300 uppercase tracking-wider block shrink-0">
+                  Fotos del Obstáculo ({cancelPhotos.length})
+                </span>
+
+                {cancelPhotos.length > 0 ? (
+                  <div className="flex-1 min-h-[160px] p-2 bg-[#0d141e]/50 rounded-2xl border border-rose-500/25 overflow-y-auto sleek-scroll">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {cancelPhotos.map((photo, idx) => (
+                        <div
+                          key={photo.id || idx}
+                          onClick={() => setPreviewPhoto(photo.photo_data || `/uploads/${photo.filename}`)}
+                          className="group relative bg-[#16202c] border border-rose-500/30 hover:border-rose-400 rounded-xl overflow-hidden aspect-video shadow-xs transition cursor-pointer"
+                          title="Toca para ver la foto completa"
+                        >
+                          <img
+                            src={photo.photo_data || `/uploads/${photo.filename}`}
+                            alt={`Motivo ${idx + 1}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-between p-1">
+                            <div className="flex justify-between items-center" onClick={(e) => e.stopPropagation()}>
+                              <span className="text-[8.5px] bg-black/85 backdrop-blur-xs text-rose-300 border border-rose-400/30 px-1 py-0.2 rounded font-bold truncate max-w-[70%]">
+                                Motivo
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePhoto(photo.id)}
+                                title="Eliminar foto"
+                                className="p-1 bg-black/70 hover:bg-rose-600 text-slate-300 hover:text-white rounded transition shadow active:scale-90 cursor-pointer"
+                              >
+                                <Trash2 className="h-2.5 w-2.5" />
+                              </button>
+                            </div>
+                            <span className="text-[9px] text-slate-300 flex items-center gap-0.5 font-medium truncate group-hover:text-rose-300">
+                              <span>Ver</span>
+                              <ExternalLink className="h-2 w-2" />
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => handleDeletePhoto(photo.id)}
-                              title="Eliminar foto"
-                              className="p-1 bg-black/70 hover:bg-rose-600 text-slate-300 hover:text-white rounded-md transition shadow active:scale-90 cursor-pointer"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
                           </div>
-                          <span className="text-[9.5px] text-slate-300 flex items-center gap-1 font-medium">
-                            <span>Ver</span>
-                            <ExternalLink className="h-2 w-2" />
-                          </span>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="h-28 rounded-xl border border-dashed border-rose-500/35 bg-black/25 flex flex-col items-center justify-center p-3 text-center space-y-1">
-                  <Camera className="h-6 w-6 text-rose-400/50 mb-0.5" />
-                  <p className="text-xs font-bold text-rose-200">
-                    No hay fotos de obstáculo adjuntas aún
-                  </p>
-                  <p className="text-[10.5px] text-slate-400 max-w-xs">
-                    Toca "Tomar Foto del Obstáculo (GPS)" para agregar la evidencia.
-                  </p>
-                </div>
-              )}
+                ) : (
+                  <div className="flex-1 min-h-[160px] rounded-2xl border border-dashed border-rose-500/35 bg-[#0d141e]/40 flex flex-col items-center justify-center p-4 text-center space-y-1">
+                    <Camera className="h-7 w-7 text-rose-400/50 mb-0.5" />
+                    <p className="text-xs font-bold text-rose-200">
+                      No hay fotos de obstáculo adjuntas aún
+                    </p>
+                    <p className="text-[10.5px] text-slate-400 max-w-xs leading-relaxed">
+                      Toca "Tomar Foto del Obstáculo (GPS)" para agregar la evidencia.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             /* CASO 3: Vista Normal de Evidencias de Instalación */
@@ -927,37 +932,47 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
         </div>
       </div>
 
-      {/* FULLSCREEN PHOTO PREVIEW MODAL */}
+      {/* FULLSCREEN PHOTO PREVIEW MODAL (SIEMPRE CON BOTONES VISIBLES EN MÓVIL) */}
       {previewPhoto && (
         <div
           onClick={() => setPreviewPhoto(null)}
-          className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-3 animate-fade-in"
+          className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-3 sm:p-4 animate-fade-in select-none"
         >
+          {/* Botón X fijo en la esquina superior derecha con safe-area */}
+          <button
+            type="button"
+            onClick={() => setPreviewPhoto(null)}
+            className="fixed z-50 p-2.5 rounded-full bg-slate-900/90 text-white hover:text-cyan-400 border border-white/20 shadow-2xl transition active:scale-90 cursor-pointer"
+            style={{
+              top: 'max(env(safe-area-inset-top, 0px) + 12px, 1rem)',
+              right: 'max(env(safe-area-inset-right, 0px) + 12px, 1rem)'
+            }}
+            title="Cerrar foto"
+          >
+            <X className="h-5 w-5 stroke-[2.5]" />
+          </button>
+
+          {/* Contenedor central flexible para la foto */}
           <div 
-            className="relative max-w-lg w-full flex flex-col items-center"
+            className="flex-1 min-h-0 w-full flex items-center justify-center p-2"
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={() => setPreviewPhoto(null)}
-              className="absolute -top-11 right-0 p-2 text-white hover:text-cyan-400 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full transition shadow-lg cursor-pointer"
-              title="Cerrar foto"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
             <img
               src={previewPhoto}
               alt="Evidencia Completa"
-              className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain border border-white/10 shadow-2xl"
+              className="max-h-[72dvh] sm:max-h-[78dvh] w-auto max-w-full rounded-2xl object-contain border border-white/10 shadow-2xl"
             />
+          </div>
 
+          {/* Botón inferior siempre visible */}
+          <div className="shrink-0 py-2" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={() => setPreviewPhoto(null)}
-              className="mt-3 px-5 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/10 rounded-xl text-xs font-bold transition shadow cursor-pointer active:scale-95"
+              className="px-5 py-2.5 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/10 rounded-xl text-xs font-bold transition shadow-lg active:scale-95 cursor-pointer flex items-center gap-1.5"
             >
-              Cerrar Foto
+              <X className="h-4 w-4" />
+              <span>Cerrar Foto</span>
             </button>
           </div>
         </div>

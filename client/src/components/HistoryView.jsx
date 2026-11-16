@@ -1131,20 +1131,44 @@ ${jobLines}
       {selectedPhoto && (
         <div
           onClick={() => setSelectedPhoto(null)}
-          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+          className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-3 sm:p-4 animate-fade-in select-none"
         >
-          <div className="relative max-w-lg w-full flex flex-col items-center">
-            <button
-              onClick={() => setSelectedPhoto(null)}
-              className="absolute -top-10 right-0 p-2 text-white hover:text-cyan-400"
-            >
-              <X className="h-6 w-6" />
-            </button>
+          {/* Botón X fijo en la esquina superior derecha con safe-area */}
+          <button
+            type="button"
+            onClick={() => setSelectedPhoto(null)}
+            className="fixed z-50 p-2.5 rounded-full bg-slate-900/90 text-white hover:text-cyan-400 border border-white/20 shadow-2xl transition active:scale-90 cursor-pointer"
+            style={{
+              top: 'max(env(safe-area-inset-top, 0px) + 12px, 1rem)',
+              right: 'max(env(safe-area-inset-right, 0px) + 12px, 1rem)'
+            }}
+            title="Cerrar foto"
+          >
+            <X className="h-5 w-5 stroke-[2.5]" />
+          </button>
+
+          {/* Contenedor central flexible para la foto */}
+          <div 
+            className="flex-1 min-h-0 w-full flex items-center justify-center p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
             <img
               src={selectedPhoto}
               alt="Evidencia"
-              className="max-h-[85vh] w-auto max-w-full rounded-2xl object-contain border border-slate-800 shadow-2xl"
+              className="max-h-[72dvh] sm:max-h-[78dvh] w-auto max-w-full rounded-2xl object-contain border border-white/10 shadow-2xl"
             />
+          </div>
+
+          {/* Botón inferior siempre visible */}
+          <div className="shrink-0 py-2" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setSelectedPhoto(null)}
+              className="px-5 py-2.5 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/10 rounded-xl text-xs font-bold transition shadow-lg active:scale-95 cursor-pointer flex items-center gap-1.5"
+            >
+              <X className="h-4 w-4" />
+              <span>Cerrar Foto</span>
+            </button>
           </div>
         </div>
       )}
