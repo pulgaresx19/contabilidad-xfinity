@@ -929,18 +929,8 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                       </div>
                     </div>
 
-                    {/* Grupo de Acciones: GPS, Llamar y Mensaje circulares */}
+                    {/* Grupo de Acciones: Llamar, Mensaje y GPS circulares */}
                     <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <a
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${order.address}, ${order.city || 'Elkhart'}, IN ${order.zip_code || ''}`)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-7 h-7 rounded-full bg-slate-800/80 hover:bg-slate-700/80 text-cyan-400 hover:text-cyan-300 border border-white/10 flex items-center justify-center active:scale-95 transition shadow-xs"
-                        title="Abrir navegación GPS en Google Maps"
-                      >
-                        <Navigation className="h-3.5 w-3.5" />
-                      </a>
                       {order.phone && (
                         <>
                           <a 
@@ -961,6 +951,16 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                           </a>
                         </>
                       )}
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${order.address}, ${order.city || 'Elkhart'}, IN ${order.zip_code || ''}`)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-7 h-7 rounded-full bg-slate-800/80 hover:bg-slate-700/80 text-cyan-400 hover:text-cyan-300 border border-white/10 flex items-center justify-center active:scale-95 transition shadow-xs"
+                        title="Abrir navegación GPS en Google Maps"
+                      >
+                        <Navigation className="h-3.5 w-3.5" />
+                      </a>
                     </div>
                   </div>
 
@@ -1067,85 +1067,49 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   );
                 })()}
 
-                {/* Si Cancelado: Rectángulo Curvado con Motivo, Foto y WhatsApp Directo (Mismo tamaño sin agrandar la tarjeta) */}
-                {isCancelled && (
-                  <div className="p-2 sm:p-2.5 rounded-2xl bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 text-xs transition flex items-center justify-between gap-2 shadow-sm">
-                    {/* Zona interactiva izquierda: Toca para ver motivo completo y fotos */}
-                    <div
-                      onClick={() => onOpenPhotos ? onOpenPhotos(order) : openCancelDetail(order)}
-                      className="flex items-center gap-2 min-w-0 cursor-pointer flex-1 group"
-                      title="Toca para ver el detalle y las fotos de constancia"
-                    >
-                      <div className="p-1 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 shrink-0 group-hover:scale-105 transition">
-                        <AlertTriangle className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400 tracking-wider">
-                            Motivo:
-                          </span>
-                          {(order.cancel_photos_count > 0 || (order.photos_count > 0 && (!order.work_photos_count || order.work_photos_count === 0))) && (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300 text-[9px] font-bold border border-rose-300 dark:border-rose-800 shrink-0">
-                              <Camera className="h-2.5 w-2.5" />
-                              <span>Foto</span>
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs font-semibold text-rose-900 dark:text-rose-100 truncate group-hover:text-rose-600 dark:group-hover:text-rose-300 transition">
-                          {order.cancel_reason || 'Sin motivo detallado'}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Zona derecha: Botón WhatsApp integrado sin alterar el alto de la tarjeta */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      {(() => {
-                        const isShared = Boolean(order.whatsapp_shared || localSharedMap[order.id]);
-                        return isShared ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openShareModal(order);
-                            }}
-                            className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30 text-[10.5px] font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs active:scale-95"
-                            title={`Constancia ya enviada por WhatsApp${order.whatsapp_shared_at ? ` (${order.whatsapp_shared_at.slice(11, 16)})` : ''}. Toca para abrir.`}
-                          >
-                            <span>Reportado</span>
-                            <CheckCheck className="h-3.5 w-3.5 stroke-[2.5] text-rose-600 dark:text-rose-400" />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openShareModal(order);
-                            }}
-                            className="px-2.5 py-1 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-[10.5px] font-black rounded-xl transition flex items-center gap-1 shadow-sm shadow-rose-600/20 active:scale-95"
-                            title="Toca para enviar constancia de trabajo no realizado por WhatsApp"
-                          >
-                            <Share2 className="h-3 w-3 stroke-[2.5]" />
-                            <span>WhatsApp</span>
-                          </button>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                )}
-
-                {/* Botones de Acción para Trabajos Activos (Pendientes / Completados). Los No Realizados no tienen botones afuera para no agrandar la tarjeta */}
-                {!isCancelled && (() => {
+                {/* Barra Inferior Uniforme para TODOS los Trabajos (Pendiente / Completado / No Realizado) */}
+                {(() => {
                   const photosCount = (order.work_photos_count !== undefined ? order.work_photos_count : order.photos_count) || (order.photos ? order.photos.filter(p => p.category !== 'Constancia No Realizado').length : 0) || 0;
                   const isShared = Boolean(order.whatsapp_shared || localSharedMap[order.id]);
 
                   return (
                     <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between gap-2">
-                      {/* 1. Esquina Izquierda: Estado del Trabajo (Pendiente / Por Compartir / Reportado) */}
+                      {/* 1. Esquina Izquierda: Estado del Trabajo Uniforme (Pendiente / Por Compartir / Reportado) */}
                       <div className="flex items-center gap-2">
-                        {isPending ? (
+                        {isCancelled ? (
+                          isShared ? (
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openShareModal(order);
+                              }}
+                              className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-xs cursor-pointer hover:bg-rose-500/30 transition active:scale-95 shrink-0"
+                              title={`No Realizado: Reportado por WhatsApp${order.whatsapp_shared_at ? ` (${order.whatsapp_shared_at.slice(11, 16)})` : ''}. Toca para abrir.`}
+                            >
+                              <CheckCheck className="h-3.5 w-3.5 stroke-[2.5] text-rose-400" />
+                              <span>Reportado</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openShareModal(order);
+                              }}
+                              className="px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1.5 bg-rose-500/25 text-rose-300 border border-rose-500/60 shadow-md shadow-rose-500/30 animate-pulse cursor-pointer hover:bg-rose-500/35 transition shrink-0 active:scale-95"
+                              title="No Realizado: Por Compartir - Toca para enviar constancia por WhatsApp"
+                            >
+                              <Share2 className="h-3.5 w-3.5 stroke-[2.2] text-rose-300" />
+                              <span>Por Compartir</span>
+                            </button>
+                          )
+                        ) : isPending ? (
                           <div
-                            onClick={() => onOpenPhotos(order)}
-                            className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-amber-500/15 text-amber-300 border border-amber-500/35 shadow-xs cursor-pointer hover:bg-amber-500/25 transition active:scale-95"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenPhotos(order);
+                            }}
+                            className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-amber-500/15 text-amber-300 border border-amber-500/35 shadow-xs cursor-pointer hover:bg-amber-500/25 transition active:scale-95 shrink-0"
                             title="Estado: Pendiente - Toca para abrir evidencias de trabajo"
                           >
                             <Clock className="h-3.5 w-3.5 stroke-[2.5] text-amber-400" />
@@ -1153,8 +1117,11 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                           </div>
                         ) : isCompleted && isShared ? (
                           <div
-                            onClick={() => openShareModal(order)}
-                            className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-xs cursor-pointer hover:bg-cyan-500/30 transition active:scale-95"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openShareModal(order);
+                            }}
+                            className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-xs cursor-pointer hover:bg-cyan-500/30 transition active:scale-95 shrink-0"
                             title="Estado: Reportado y confirmado exitosamente. Toca para ver reporte."
                           >
                             <CheckCheck className="h-3.5 w-3.5 stroke-[2.5] text-cyan-400" />
@@ -1163,7 +1130,10 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                         ) : isCompleted ? (
                           <button
                             type="button"
-                            onClick={() => openShareModal(order)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openShareModal(order);
+                            }}
                             className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-cyan-500/25 text-cyan-300 border border-cyan-400 shadow-md shadow-cyan-500/30 animate-pulse cursor-pointer hover:bg-cyan-500/35 transition shrink-0 active:scale-95"
                             title="Estado: Por Compartir - Toca para compartir reporte por WhatsApp"
                           >
@@ -1171,104 +1141,164 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                             <span>Por Compartir</span>
                           </button>
                         ) : null}
-
-
                       </div>
 
-                      {/* 2. Esquina Derecha: Cápsula con los 3 botones idéntica a Jornada (1. Cámara -> 2. Compartir -> 3. Reportado) */}
+                      {/* 2. Esquina Derecha: Cápsula Uniforme de 3 botones */}
                       <div 
                         className="flex items-center gap-1 rounded-full px-2 py-1 shadow-sm shrink-0 border transition-all bg-[#182332] border-white/10"
-                        title={
-                          isCompleted && isShared
-                            ? 'Historial: Proceso completado y reportado'
-                            : isCompleted
-                            ? 'Historial: Trabajo completado (pendiente de compartir)'
-                            : photosCount > 0
-                            ? `${photosCount} foto(s) tomada(s). Toca para ver o finalizar`
-                            : 'Paso 1: Solicita fotos de evidencia. Toca para tomar fotos'
-                        }
                       >
-                        {/* 1. Paso Iniciar / Tirar Fotos de Evidencia */}
-                        <button
-                          type="button"
-                          onClick={() => onOpenPhotos(order)}
-                          className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer flex items-center justify-center relative ${
-                            isCompleted
-                              ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 shadow-xs'
-                              : photosCount > 0
-                              ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/35 animate-pulse shadow-xs'
-                              : 'text-cyan-300 bg-cyan-500/20 border border-cyan-400/80 shadow-md shadow-cyan-500/30 animate-pulse'
-                          }`}
-                          title={
-                            isCompleted
-                              ? `Paso 1: Fotos listas (${photosCount}) y trabajo completado`
-                              : photosCount > 0
-                              ? `${photosCount} foto(s) tomada(s) - Toca para ver o agregar más`
-                              : 'Paso 1: Solicita fotos de evidencia. Toca para tomar fotos'
-                          }
-                        >
-                          {isCompleted ? (
-                            <Check className="h-4 w-4 stroke-[3]" />
-                          ) : (
-                            <Camera className="h-4 w-4 stroke-[2.2]" />
-                          )}
-                          {photosCount > 0 && !isCompleted && (
-                            <span className="absolute -top-1 -right-1 px-1 min-w-[14px] h-[14px] bg-emerald-500 text-slate-950 text-[8.5px] font-black rounded-full flex items-center justify-center leading-none shadow-xs">
-                              {photosCount}
-                            </span>
-                          )}
-                        </button>
+                        {isCancelled ? (
+                          <>
+                            {/* 1. Botón Motivo */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onOpenPhotos) onOpenPhotos(order);
+                                else openCancelDetail(order);
+                              }}
+                              className="px-2.5 py-1 rounded-full transition active:scale-90 cursor-pointer flex items-center gap-1 text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 shadow-xs"
+                              title={`Motivo: ${order.cancel_reason || 'Sin motivo detallado'} - Toca para ver detalle y fotos`}
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                              <span className="text-[10px] font-bold">Motivo</span>
+                              {(order.cancel_photos_count > 0 || (order.photos_count > 0 && (!order.work_photos_count || order.work_photos_count === 0))) && (
+                                <Camera className="h-2.5 w-2.5 text-rose-300 ml-0.5 shrink-0" />
+                              )}
+                            </button>
 
-                        {/* 2. Paso Compartir por WhatsApp */}
-                        <button
-                          type="button"
-                          disabled={!isCompleted}
-                          onClick={() => {
-                            if (isCompleted) {
-                              openShareModal(order);
-                            }
-                          }}
-                          className={`p-1.5 rounded-full transition active:scale-90 ${
-                            isShared
-                              ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 shadow-xs cursor-pointer'
-                              : isCompleted
-                              ? 'text-cyan-300 bg-cyan-500/25 border border-cyan-400 shadow-md shadow-cyan-500/40 animate-pulse cursor-pointer'
-                              : 'text-slate-500/30 border border-transparent cursor-not-allowed opacity-40'
-                          }`}
-                          title={
-                            isShared
-                              ? 'Paso 2: Compartido por WhatsApp (Hecho - Toca para volver a compartir)'
-                              : isCompleted
-                              ? 'Paso 2: ¡Trabajo completado! Toca para compartir reporte por WhatsApp'
-                              : 'Paso 2: Compartir reporte (Se habilita al completar el trabajo)'
-                          }
-                        >
-                          <Share2 className="h-4 w-4 stroke-[2.2]" />
-                        </button>
+                            {/* 2. Paso Compartir por WhatsApp (Cancelado) */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openShareModal(order);
+                              }}
+                              className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer ${
+                                isShared
+                                  ? 'text-rose-400 bg-rose-500/15 border border-rose-500/30 shadow-xs'
+                                  : 'text-rose-300 bg-rose-500/25 border border-rose-400 shadow-md shadow-rose-500/40 animate-pulse'
+                              }`}
+                              title={
+                                isShared
+                                  ? 'Constancia compartida por WhatsApp (Toca para volver a compartir)'
+                                  : 'Toca para compartir constancia de no realizado por WhatsApp'
+                              }
+                            >
+                              <Share2 className="h-4 w-4 stroke-[2.2]" />
+                            </button>
 
-                        {/* 3. Paso Reportado / Confirmar Reportado (Dos palomitas) */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (isCompleted) {
-                              openShareModal(order);
-                            }
-                          }}
-                          className={`p-1.5 rounded-full transition active:scale-90 ${
-                            isShared
-                              ? 'text-cyan-400 bg-cyan-500/20 border border-cyan-500/40 shadow-xs cursor-pointer'
-                              : 'text-slate-500/30 border border-transparent cursor-default'
-                          }`}
-                          title={
-                            isShared
-                              ? 'Paso 3: ¡Reportado y confirmado exitosamente!'
-                              : isCompleted
-                              ? 'Paso 3: Pendiente de reportar por WhatsApp'
-                              : 'Paso 3: Se marca completo automáticamente al compartir el reporte'
-                          }
-                        >
-                          <CheckCheck className="h-4 w-4 stroke-[2.5]" />
-                        </button>
+                            {/* 3. Paso Reportado / Confirmar (Cancelado) */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openShareModal(order);
+                              }}
+                              className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer ${
+                                isShared
+                                  ? 'text-rose-400 bg-rose-500/20 border border-rose-500/40 shadow-xs'
+                                  : 'text-slate-500/30 border border-transparent cursor-default'
+                              }`}
+                              title={
+                                isShared
+                                  ? 'Constancia reportada y confirmada'
+                                  : 'Pendiente de reportar constancia'
+                              }
+                            >
+                              <CheckCheck className="h-4 w-4 stroke-[2.5]" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {/* 1. Paso Iniciar / Tirar Fotos de Evidencia */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenPhotos(order);
+                              }}
+                              className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer flex items-center justify-center relative ${
+                                isCompleted
+                                  ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 shadow-xs'
+                                  : photosCount > 0
+                                  ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/35 animate-pulse shadow-xs'
+                                  : 'text-cyan-300 bg-cyan-500/20 border border-cyan-400/80 shadow-md shadow-cyan-500/30 animate-pulse'
+                              }`}
+                              title={
+                                isCompleted
+                                  ? `Paso 1: Fotos listas (${photosCount}) y trabajo completado`
+                                  : photosCount > 0
+                                  ? `${photosCount} foto(s) tomada(s) - Toca para ver o agregar más`
+                                  : 'Paso 1: Solicita fotos de evidencia. Toca para tomar fotos'
+                              }
+                            >
+                              {isCompleted ? (
+                                <Check className="h-4 w-4 stroke-[3]" />
+                              ) : (
+                                <Camera className="h-4 w-4 stroke-[2.2]" />
+                              )}
+                              {photosCount > 0 && !isCompleted && (
+                                <span className="absolute -top-1 -right-1 px-1 min-w-[14px] h-[14px] bg-emerald-500 text-slate-950 text-[8.5px] font-black rounded-full flex items-center justify-center leading-none shadow-xs">
+                                  {photosCount}
+                                </span>
+                              )}
+                            </button>
+
+                            {/* 2. Paso Compartir por WhatsApp */}
+                            <button
+                              type="button"
+                              disabled={!isCompleted}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isCompleted) {
+                                  openShareModal(order);
+                                }
+                              }}
+                              className={`p-1.5 rounded-full transition active:scale-90 ${
+                                isShared
+                                  ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 shadow-xs cursor-pointer'
+                                  : isCompleted
+                                  ? 'text-cyan-300 bg-cyan-500/25 border border-cyan-400 shadow-md shadow-cyan-500/40 animate-pulse cursor-pointer'
+                                  : 'text-slate-500/30 border border-transparent cursor-not-allowed opacity-40'
+                              }`}
+                              title={
+                                isShared
+                                  ? 'Paso 2: Compartido por WhatsApp (Hecho - Toca para volver a compartir)'
+                                  : isCompleted
+                                  ? 'Paso 2: ¡Trabajo completado! Toca para compartir reporte por WhatsApp'
+                                  : 'Paso 2: Compartir reporte (Se habilita al completar el trabajo)'
+                              }
+                            >
+                              <Share2 className="h-4 w-4 stroke-[2.2]" />
+                            </button>
+
+                            {/* 3. Paso Reportado / Confirmar Reportado (Dos palomitas) */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isCompleted) {
+                                  openShareModal(order);
+                                }
+                              }}
+                              className={`p-1.5 rounded-full transition active:scale-90 ${
+                                isShared
+                                  ? 'text-cyan-400 bg-cyan-500/20 border border-cyan-500/40 shadow-xs cursor-pointer'
+                                  : 'text-slate-500/30 border border-transparent cursor-default'
+                              }`}
+                              title={
+                                isShared
+                                  ? 'Paso 3: ¡Reportado y confirmado exitosamente!'
+                                  : isCompleted
+                                  ? 'Paso 3: Pendiente de reportar por WhatsApp'
+                                  : 'Paso 3: Se marca completo automáticamente al compartir el reporte'
+                              }
+                            >
+                              <CheckCheck className="h-4 w-4 stroke-[2.5]" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   );

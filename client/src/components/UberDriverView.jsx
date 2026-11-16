@@ -2470,25 +2470,27 @@ export default function UberDriverView({
             
             {/* ROW 1: TOP BAR WITH ACTION/PHONE + [ ← PARADA X DE Y → ] + EXPAND */}
             <div className="flex items-center justify-between gap-2 pt-0.5">
-              {/* Left Action: Circular GPS y Llamar */}
+              {/* Left Action: Circular Llamar y Mensaje */}
               <div className="flex items-center gap-1.5 justify-start">
-                <a
-                  href={getNavUrl(selectedOrder)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
-                  title="Abrir navegación GPS (Google Maps / Apple Maps)"
-                >
-                  <Navigation className="h-4 w-4 fill-cyan-400/20 text-cyan-400" />
-                </a>
-                {selectedOrder.phone && (
-                  <a
-                    href={`tel:${selectedOrder.phone}`}
-                    className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
-                    title={`Llamar: ${selectedOrder.phone}`}
-                  >
-                    <Phone className="h-4 w-4" />
-                  </a>
+                {selectedOrder.phone ? (
+                  <>
+                    <a
+                      href={`tel:${selectedOrder.phone}`}
+                      className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
+                      title={`Llamar: ${selectedOrder.phone}`}
+                    >
+                      <Phone className="h-4 w-4" />
+                    </a>
+                    <a
+                      href={getCustomerSmsUrl(selectedOrder.phone, selectedOrder.address)}
+                      className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
+                      title={`Enviar SMS con aviso al cliente (${selectedOrder.phone})`}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </a>
+                  </>
+                ) : (
+                  <div className="w-9 h-9" />
                 )}
               </div>
 
@@ -2520,21 +2522,21 @@ export default function UberDriverView({
                 </button>
               </div>
 
-              {/* Right Action: Circular Mensaje (SMS) y Circular Expand/Collapse Chevron Button */}
+              {/* Right Action: Circular GPS (al lado de la flecha) y Circular Expand/Collapse Chevron Button */}
               <div className="flex items-center gap-1.5 justify-end">
-                {selectedOrder.phone && (
-                  <a
-                    href={getCustomerSmsUrl(selectedOrder.phone, selectedOrder.address)}
-                    className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
-                    title={`Enviar SMS con aviso al cliente (${selectedOrder.phone})`}
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                  </a>
-                )}
+                <a
+                  href={getNavUrl(selectedOrder)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
+                  title="Abrir navegación GPS (Google Maps / Apple Maps)"
+                >
+                  <Navigation className="h-4 w-4 fill-cyan-400/20 text-cyan-400" />
+                </a>
                 <button
                   type="button"
                   onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
-                  className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95 shadow-sm"
+                  className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95 shadow-sm cursor-pointer"
                   title={drawerState === 'expanded' ? "Colapsar tarjeta" : "Ver detalles completos"}
                 >
                   <ChevronUp className={`h-4 w-4 transition-transform duration-300 ${drawerState === 'expanded' ? 'rotate-180' : ''}`} />
