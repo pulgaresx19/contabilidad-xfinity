@@ -1067,18 +1067,19 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   );
                 })()}
 
-                {/* Barra Inferior Uniforme para TODOS los Trabajos (Pendiente / Completado / No Realizado) */}
+                {/* Barra Inferior Uniforme para TODOS los Trabajos (Pendiente / Compartir / Reportado) */}
                 {(() => {
                   const photosCount = (order.work_photos_count !== undefined ? order.work_photos_count : order.photos_count) || (order.photos ? order.photos.filter(p => p.category !== 'Constancia No Realizado').length : 0) || 0;
                   const isShared = Boolean(order.whatsapp_shared || localSharedMap[order.id]);
 
                   return (
                     <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between gap-2">
-                      {/* 1. Esquina Izquierda: Estado del Trabajo Uniforme (Pendiente / Por Compartir / Reportado) */}
+                      {/* 1. Esquina Izquierda: Estado del Trabajo Uniforme (Pendiente / Compartir / Reportado) */}
                       <div className="flex items-center gap-2">
                         {isCancelled ? (
                           isShared ? (
-                            <div
+                            <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 openShareModal(order);
@@ -1088,7 +1089,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                             >
                               <CheckCheck className="h-3.5 w-3.5 stroke-[2.5] text-rose-400" />
                               <span>Reportado</span>
-                            </div>
+                            </button>
                           ) : (
                             <button
                               type="button"
@@ -1096,15 +1097,16 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                                 e.stopPropagation();
                                 openShareModal(order);
                               }}
-                              className="px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1.5 bg-rose-500/25 text-rose-300 border border-rose-500/60 shadow-md shadow-rose-500/30 animate-pulse cursor-pointer hover:bg-rose-500/35 transition shrink-0 active:scale-95"
-                              title="No Realizado: Por Compartir - Toca para enviar constancia por WhatsApp"
+                              className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-rose-500/25 text-rose-300 border border-rose-500/60 shadow-md shadow-rose-500/30 animate-pulse cursor-pointer hover:bg-rose-500/35 transition shrink-0 active:scale-95"
+                              title="No Realizado: Compartir - Toca para enviar constancia por WhatsApp"
                             >
                               <Share2 className="h-3.5 w-3.5 stroke-[2.2] text-rose-300" />
-                              <span>Por Compartir</span>
+                              <span>Compartir</span>
                             </button>
                           )
                         ) : isPending ? (
-                          <div
+                          <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               onOpenPhotos(order);
@@ -1114,9 +1116,10 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                           >
                             <Clock className="h-3.5 w-3.5 stroke-[2.5] text-amber-400" />
                             <span>Pendiente</span>
-                          </div>
+                          </button>
                         ) : isCompleted && isShared ? (
-                          <div
+                          <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               openShareModal(order);
@@ -1126,7 +1129,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                           >
                             <CheckCheck className="h-3.5 w-3.5 stroke-[2.5] text-cyan-400" />
                             <span>Reportado</span>
-                          </div>
+                          </button>
                         ) : isCompleted ? (
                           <button
                             type="button"
@@ -1135,10 +1138,10 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                               openShareModal(order);
                             }}
                             className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-cyan-500/25 text-cyan-300 border border-cyan-400 shadow-md shadow-cyan-500/30 animate-pulse cursor-pointer hover:bg-cyan-500/35 transition shrink-0 active:scale-95"
-                            title="Estado: Por Compartir - Toca para compartir reporte por WhatsApp"
+                            title="Estado: Compartir - Toca para compartir reporte por WhatsApp"
                           >
                             <Share2 className="h-3.5 w-3.5 stroke-[2.2] text-cyan-300" />
-                            <span>Por Compartir</span>
+                            <span>Compartir</span>
                           </button>
                         ) : null}
                       </div>

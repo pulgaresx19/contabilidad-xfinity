@@ -2607,54 +2607,59 @@ export default function UberDriverView({
 
             {/* ROW 4: BOTTOM CONTROL BAR (NO REALIZADO | $SALDO EN MEDIO | 3 BOTONES MILESTONES) */}
             <div className="flex items-center justify-between gap-2 pt-1 pb-0.5">
-              {/* 1. Left: Estado del Trabajo (Pendiente / Completado / Por Compartir / Reportado / No Realizado) */}
+              {/* 1. Left: Estado del Trabajo Uniforme (Pendiente / Compartir / Reportado) */}
               {isSelectedCancelled ? (
                 isSelectedShared ? (
-                  <div
+                  <button
+                    type="button"
                     onClick={() => onOpenShareModal(selectedOrder)}
                     className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-xs cursor-pointer hover:bg-rose-500/30 transition shrink-0 active:scale-95"
                     title={`No Realizado: Reportado por WhatsApp${selectedOrder.whatsapp_shared_at ? ` (${selectedOrder.whatsapp_shared_at.slice(11, 16)})` : ''}. Toca para abrir.`}
                   >
                     <CheckCheck className="h-3.5 w-3.5 stroke-[2.5] text-rose-400" />
                     <span>Reportado</span>
-                  </div>
+                  </button>
                 ) : (
                   <button
                     type="button"
                     onClick={() => onOpenShareModal(selectedOrder)}
-                    className="px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1.5 bg-rose-500/25 text-rose-300 border border-rose-500/60 shadow-md shadow-rose-500/30 animate-pulse cursor-pointer hover:bg-rose-500/35 transition shrink-0 active:scale-95"
-                    title="No Realizado: Por Compartir - Toca para enviar constancia por WhatsApp"
+                    className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-rose-500/25 text-rose-300 border border-rose-500/60 shadow-md shadow-rose-500/30 animate-pulse cursor-pointer hover:bg-rose-500/35 transition shrink-0 active:scale-95"
+                    title="No Realizado: Compartir - Toca para enviar constancia por WhatsApp"
                   >
                     <Share2 className="h-3.5 w-3.5 stroke-[2.2] text-rose-300" />
-                    <span>Por Compartir</span>
+                    <span>Compartir</span>
                   </button>
                 )
               ) : isSelectedCompleted && isSelectedShared ? (
-                <div
-                  className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-xs shrink-0 select-none"
-                  title="Estado: Reportado y confirmado exitosamente"
+                <button
+                  type="button"
+                  onClick={() => onOpenShareModal(selectedOrder)}
+                  className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-xs cursor-pointer hover:bg-cyan-500/30 transition shrink-0 active:scale-95"
+                  title="Estado: Reportado y confirmado exitosamente. Toca para ver reporte."
                 >
                   <CheckCheck className="h-3.5 w-3.5 stroke-[2.5] text-cyan-400" />
                   <span>Reportado</span>
-                </div>
+                </button>
               ) : isSelectedCompleted ? (
-                <div
+                <button
+                  type="button"
                   onClick={() => onOpenShareModal(selectedOrder)}
                   className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-cyan-500/25 text-cyan-300 border border-cyan-400 shadow-md shadow-cyan-500/30 animate-pulse cursor-pointer hover:bg-cyan-500/35 transition shrink-0 active:scale-95"
-                  title="Estado: Por Compartir - Toca para compartir reporte"
+                  title="Estado: Compartir - Toca para compartir reporte"
                 >
                   <Share2 className="h-3.5 w-3.5 stroke-[2.2] text-cyan-300" />
-                  <span>Por Compartir</span>
-                </div>
+                  <span>Compartir</span>
+                </button>
               ) : (
-                <div
+                <button
+                  type="button"
                   onClick={() => onOpenPhotos(selectedOrder)}
                   className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-amber-500/15 text-amber-300 border border-amber-500/35 shadow-xs cursor-pointer hover:bg-amber-500/25 transition shrink-0 active:scale-95"
                   title="Estado: Pendiente - Toca para abrir fotos y comenzar"
                 >
                   <Clock className="h-3.5 w-3.5 stroke-[2.5] text-amber-400" />
                   <span>Pendiente</span>
-                </div>
+                </button>
               )}
 
               {/* 2. Center: Saldo prominently in neon green monospace */}
