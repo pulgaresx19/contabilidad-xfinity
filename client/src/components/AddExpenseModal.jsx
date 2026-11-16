@@ -206,27 +206,9 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
 
             {/* Input de Monto */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400">
-                  Monto del Gasto ($ USD) *
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTempQuickAmounts([...quickAmounts]);
-                    setIsEditingQuick((prev) => !prev);
-                  }}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold font-mono transition border cursor-pointer ${
-                    isEditingQuick
-                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 ring-1 ring-cyan-500/30'
-                      : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-cyan-300 border-white/10'
-                  }`}
-                  title="Personalizar atajos de precio"
-                >
-                  <SlidersHorizontal className="w-3 h-3 stroke-[2.5]" />
-                  <span>Ajustes</span>
-                </button>
-              </div>
+              <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1.5">
+                Monto del Gasto ($ USD) *
+              </label>
 
               <div className="relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xl font-black text-rose-400 font-mono">
