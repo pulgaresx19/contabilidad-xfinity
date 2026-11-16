@@ -1,11 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import * as mapboxgl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
-
-// Set worker URL explicitly to local static asset
-if (typeof window !== 'undefined' && mapboxgl.setWorkerUrl) {
-  mapboxgl.setWorkerUrl('/assets/maplibre-gl-worker.mjs');
-}
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import { 
   Navigation, MapPin, Compass, Sparkles, CheckCircle2, 
   Clock, AlertTriangle, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Phone, MessageSquare,
@@ -21,74 +16,25 @@ import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
 import { useTheme } from '../context/ThemeContext';
 
 const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
+mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
 
-// Open High-Resolution Map Styles (100% reliable, zero token required, never black screen)
-const createRasterMapStyle = (tiles, attribution = '') => ({
-  version: 8,
-  sources: {
-    'open-raster-tiles': {
-      type: 'raster',
-      tiles: Array.isArray(tiles) ? tiles : [tiles],
-      tileSize: 256,
-      attribution,
-      maxzoom: 19
-    }
-  },
-  layers: [
-    {
-      id: 'open-raster-layer',
-      type: 'raster',
-      source: 'open-raster-tiles',
-      minzoom: 0,
-      maxzoom: 22,
-      paint: {
-        'raster-resampling': 'linear',
-        'raster-fade-duration': 0
-      }
-    }
-  ]
-});
-
-export const OPEN_MAP_STYLES = {
-  dark: 'https://tiles.openfreemap.org/styles/dark',
-  streets: 'https://tiles.openfreemap.org/styles/liberty',
-  satellite: createRasterMapStyle([
-    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-  ], '&copy; Esri World Imagery')
-};
-
-// Check if a custom valid token exists; otherwise use open reliable styles
-const isCustomMapboxToken = Boolean(
-  import.meta.env.VITE_MAPBOX_TOKEN && 
-  !import.meta.env.VITE_MAPBOX_TOKEN.includes('cmvxbyjo210hi2zpzu6hu2bb8')
-);
-
-export const getMapThemeStyle = (themeKey) => {
-  if (isCustomMapboxToken) {
-    if (themeKey === 'streets') return 'mapbox://styles/mapbox/streets-v12';
-    if (themeKey === 'satellite') return 'mapbox://styles/mapbox/satellite-streets-v12';
-    return 'mapbox://styles/mapbox/dark-v11';
-  }
-  return OPEN_MAP_STYLES[themeKey] || OPEN_MAP_STYLES.dark;
-};
-
-// Map Theme Definitions (Nombres profesionales y explícitos)
+// Official High-Definition Mapbox Themes (50,000 monthly loads, high-res satellite, 0 cuadritos)
 const MAP_THEMES = {
   dark: {
     name: 'Mapa Oscuro',
-    style: getMapThemeStyle('dark'),
+    style: 'mapbox://styles/mapbox/dark-v11',
     icon: Moon,
     description: 'Calles visibles y contraste nocturno'
   },
   streets: {
     name: 'Mapa Claro',
-    style: getMapThemeStyle('streets'),
+    style: 'mapbox://styles/mapbox/streets-v12',
     icon: Sun,
     description: 'Mapa claro de alta visibilidad'
   },
   satellite: {
     name: 'Satélite Real',
-    style: getMapThemeStyle('satellite'),
+    style: 'mapbox://styles/mapbox/satellite-streets-v12',
     icon: Globe,
     description: 'Fotos aéreas para postes y acometidas'
   }
@@ -548,8 +494,8 @@ export default function UberDriverView({
       return routeCacheRef.current.get(cacheKey);
     }
 
-    // 1. Primary: Mapbox Directions API (only if valid custom token configured)
-    if (isCustomMapboxToken) {
+    // 1. Primary: Mapbox Directions API
+    if (MAPBOX_ACCESS_TOKEN) {
       try {
         const dirUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords[0]},${startCoords[1]};${destCoords[0]},${destCoords[1]}?alternatives=true&overview=full&geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`;
         const res = await fetch(dirUrl, { signal });
@@ -722,8 +668,8 @@ export default function UberDriverView({
     const controller = new AbortController();
     travesiaAbortControllerRef.current = controller;
 
-    // 1. Primary Attempt: Mapbox Multi-Stop Directions API (up to 25 waypoints, only if valid custom token configured)
-    if (isCustomMapboxToken && validStops.length <= 25) {
+    // 1. Primary Attempt: Mapbox Multi-Stop Directions API (up to 25 waypoints)
+    if (MAPBOX_ACCESS_TOKEN && validStops.length <= 25) {
       try {
         const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsStr}?overview=full&geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`;
         const res = await fetch(url, { signal: controller.signal });
