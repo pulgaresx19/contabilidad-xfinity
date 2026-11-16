@@ -30,7 +30,8 @@ const createRasterMapStyle = (tiles, attribution = '') => ({
       type: 'raster',
       tiles: Array.isArray(tiles) ? tiles : [tiles],
       tileSize: 256,
-      attribution
+      attribution,
+      maxzoom: 19
     }
   },
   layers: [
@@ -39,7 +40,11 @@ const createRasterMapStyle = (tiles, attribution = '') => ({
       type: 'raster',
       source: 'open-raster-tiles',
       minzoom: 0,
-      maxzoom: 22
+      maxzoom: 22,
+      paint: {
+        'raster-resampling': 'linear',
+        'raster-fade-duration': 0
+      }
     }
   ]
 });
@@ -1288,11 +1293,15 @@ export default function UberDriverView({
       if (map.getLayer('building')) {
         map.setPaintProperty('building', 'fill-color', '#1d2734');
         map.setPaintProperty('building', 'fill-outline-color', '#263445');
+        map.setPaintProperty('building', 'fill-opacity', 0.5);
       }
 
       // 5. Deep navy water bodies
       if (map.getLayer('water')) {
         map.setPaintProperty('water', 'fill-color', '#142a3e');
+      }
+      if (map.getLayer('waterway')) {
+        map.setPaintProperty('waterway', 'line-color', '#142a3e');
       }
 
       // 6. Crisp white street labels with dark halo
@@ -1318,6 +1327,68 @@ export default function UberDriverView({
         map.setPaintProperty('poi-label', 'text-halo-color', '#141d27');
         map.setPaintProperty('poi-label', 'text-halo-width', 1.5);
       }
+
+      // 8. OpenFreeMap Vector Street & Terrain Overrides (exact navy dark palette match)
+      if (map.getLayer('highway_minor')) {
+        map.setPaintProperty('highway_minor', 'line-color', '#425468');
+        map.setPaintProperty('highway_minor', 'line-opacity', 0.95);
+        map.setPaintProperty('highway_minor', 'line-width', [
+          'interpolate', ['exponential', 1.55], ['zoom'],
+          10, 0.8,
+          13, 1.6,
+          16, 4.0
+        ]);
+      }
+      if (map.getLayer('highway_major_inner')) {
+        map.setPaintProperty('highway_major_inner', 'line-color', '#5a708a');
+        map.setPaintProperty('highway_major_inner', 'line-width', [
+          'interpolate', ['exponential', 1.3], ['zoom'],
+          10, 1.6,
+          13, 2.8,
+          16, 6.0
+        ]);
+      }
+      if (map.getLayer('highway_major_casing')) {
+        map.setPaintProperty('highway_major_casing', 'line-color', '#2d3b4d');
+      }
+      if (map.getLayer('highway_motorway_inner')) {
+        map.setPaintProperty('highway_motorway_inner', 'line-color', '#6a829e');
+        map.setPaintProperty('highway_motorway_inner', 'line-width', [
+          'interpolate', ['exponential', 1.4], ['zoom'],
+          10, 2.2,
+          13, 3.8,
+          16, 8.0
+        ]);
+      }
+      if (map.getLayer('highway_motorway_casing')) {
+        map.setPaintProperty('highway_motorway_casing', 'line-color', '#222f3e');
+      }
+      if (map.getLayer('landuse_park')) {
+        map.setPaintProperty('landuse_park', 'fill-color', '#184533');
+      }
+      if (map.getLayer('landcover_wood')) {
+        map.setPaintProperty('landcover_wood', 'fill-color', '#184533');
+      }
+      if (map.getLayer('landuse_residential')) {
+        map.setPaintProperty('landuse_residential', 'fill-opacity', 0);
+      }
+      if (map.getLayer('highway_name_other')) {
+        map.setPaintProperty('highway_name_other', 'text-color', '#e2e8f0');
+        map.setPaintProperty('highway_name_other', 'text-halo-color', '#141d27');
+        map.setPaintProperty('highway_name_other', 'text-halo-width', 2);
+      }
+      if (map.getLayer('highway_name_motorway')) {
+        map.setPaintProperty('highway_name_motorway', 'text-color', '#ffffff');
+        map.setPaintProperty('highway_name_motorway', 'text-halo-color', '#141d27');
+        map.setPaintProperty('highway_name_motorway', 'text-halo-width', 2);
+      }
+      ['place_other', 'place_suburb', 'place_town', 'place_city', 'place_city_large'].forEach(pid => {
+        if (map.getLayer(pid)) {
+          map.setPaintProperty(pid, 'text-color', '#94a3b8');
+          map.setPaintProperty(pid, 'text-halo-color', '#0f172a');
+          map.setPaintProperty(pid, 'text-halo-width', 2);
+        }
+      });
     } catch (err) {
       console.warn('Map styling adjustment notice:', err);
     }
