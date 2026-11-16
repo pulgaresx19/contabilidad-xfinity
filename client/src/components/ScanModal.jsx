@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Camera, Check, AlertCircle, Trash2, Plus, X, Eye,
-  Image as ImageIcon, MapPin, Ruler, Maximize2, Phone
+  Image as ImageIcon, MapPin, Ruler, Maximize2, Phone, CheckCircle2
 } from 'lucide-react';
 import { getLocalDateStr, normalizeDateStr } from '../utils/dateUtils';
 import { interactWithAuraCore } from '../services/auraService';
@@ -16,10 +16,11 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
     footage_extra_rate: 25
   });
 
-  // Photo & AuraCore IA state
+  // Photo & scan state
   const [previewUrl, setPreviewUrl] = useState(null);
   const previewUrlRef = useRef(null);
   const [scanning, setScanning] = useState(false);
+  const [scanStatus, setScanStatus] = useState('idle'); // 'idle' | 'scanning' | 'success' | 'error'
   const [extractedOrders, setExtractedOrders] = useState([]);
   const [rawAiText, setRawAiText] = useState('');
   const [showRawText, setShowRawText] = useState(false);
@@ -42,6 +43,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
   const resetScanState = useCallback(() => {
     replacePreviewUrl(null);
     setScanning(false);
+    setScanStatus('idle');
     setSaving(false);
     setExtractedOrders([]);
     setRawAiText('');
@@ -120,6 +122,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
     replacePreviewUrl(URL.createObjectURL(file));
     setScanning(true);
+    setScanStatus('scanning');
     setMessage(null);
     setExtractedOrders([]);
     setRawAiText('');
@@ -132,7 +135,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
     let aiNote = '';
     let aiNeedsConfirmation = false;
 
-    // Lectura directa 100% por IA multimodal (AuraCore -> Gemini Vision)
+    // Lectura directa por IA multimodal
     try {
       const auraRes = await interactWithAuraCore({
         imageFile: file,
@@ -166,25 +169,27 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
       aiNote = auraRes?.data?.ambiguityNote || '';
       aiNeedsConfirmation = Boolean(auraRes?.data?.needsConfirmation);
     } catch (auraErr) {
-      aiErrorMsg = auraErr.message || 'No se pudo conectar con AuraCore IA.';
+      aiErrorMsg = auraErr.message || 'No se pudo conectar con el servidor de análisis.';
     }
 
     setScanning(false);
 
     if (aiErrorMsg) {
+      setScanStatus('error');
       setMessage({
         type: 'error',
-        text: `Error de AuraCore IA: ${aiErrorMsg} Revisa la URL del servidor en Ajustes (⚙️).`
+        text: `Error al escanear: ${aiErrorMsg} Revisa la conexión en Ajustes (⚙️).`
       });
       return;
     }
 
     if (!ordersFound || ordersFound.length === 0) {
+      setScanStatus('error');
       setRawAiText(extractedText);
-      const detailNote = extractedText ? ` (${extractedText.slice(0, 120)}...)` : '';
+      const detailNote = extractedText ? ` (${extractedText.slice(0, 100)}...)` : '';
       setMessage({
         type: 'warning',
-        text: `AuraCore IA analizó la foto pero no detectó filas de órdenes válidas${detailNote}. Intenta con una toma más cercana, con buena luz o añade una fila manual.`
+        text: `No se detectaron órdenes válidas en la foto${detailNote}. Intenta con una toma más cercana o añade una fila manual.`
       });
       setExtractedOrders([
         {
@@ -206,6 +211,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
         }
       ]);
     } else {
+      setScanStatus('success');
       const detectedDate = normalizeDateStr(ordersFound[0]?.work_date || sheetDate) || getLocalDateStr();
       if (detectedDate && detectedDate !== sheetDate) {
         setSheetDate(detectedDate);
@@ -231,10 +237,14 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
           raw_notes: o.raw_notes || ''
         }))
       );
-      setMessage({
-        type: aiNeedsConfirmation ? 'warning' : 'success',
-        text: `¡Foto analizada con AuraCore IA (${auraModel})! Se detectaron ${ordersFound.length} orden(es).${aiNote ? ' Revisar: ' + aiNote : ' Revisa y confirma abajo.'}`
-      });
+      if (aiNeedsConfirmation && aiNote) {
+        setMessage({
+          type: 'warning',
+          text: `Revisar: ${aiNote}`
+        });
+      } else {
+        setMessage(null);
+      }
     }
   };
 
@@ -387,7 +397,8 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
         </div>
 
         {/* 2. Quick KPI / Info Bar */}
-        <div className="grid grid-cols-3 gap-2 px-4 py-2.5 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
+        <div className="grid grid-cols-3 gap-2 px-4 py-2 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
+          {/* Columna 1: Fecha Hoja */}
           <div className="bg-[#16202c] py-1.5 px-1 rounded-xl border border-white/5 flex flex-col justify-center">
             <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
               Fecha Hoja
@@ -403,20 +414,47 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
               className="bg-transparent text-cyan-400 text-xs font-mono font-black text-center focus:outline-none cursor-pointer w-full dark:[color-scheme:dark] [color-scheme:light]"
             />
           </div>
-          <div className="bg-[#16202c] py-1.5 px-1 rounded-xl border border-white/5 flex flex-col justify-center">
+
+          {/* Columna 2: Órdenes Detectadas con Icono de Reconocimiento / Error */}
+          <div className="bg-[#16202c] py-1.5 px-1 rounded-xl border border-white/5 flex flex-col justify-center items-center">
             <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
-              Escáner
+              Órdenes
             </span>
-            <span className="text-xs font-black text-white uppercase tracking-tight block">
-              AuraCore IA
-            </span>
+            <div className="flex items-center justify-center gap-1 min-w-0">
+              {scanning ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span className="text-xs font-black text-cyan-300 font-mono">Leyendo...</span>
+                </>
+              ) : scanStatus === 'success' || (extractedOrders.length > 0 && previewUrl) ? (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                  <span className="text-xs font-black text-emerald-400 font-mono">
+                    {extractedOrders.length} {extractedOrders.length === 1 ? 'orden' : 'órdenes'}
+                  </span>
+                </>
+              ) : scanStatus === 'error' ? (
+                <>
+                  <AlertCircle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                  <span className="text-xs font-black text-rose-400 font-mono">
+                    0 órdenes
+                  </span>
+                </>
+              ) : (
+                <span className="text-xs font-black text-slate-400 font-mono">
+                  {extractedOrders.length} {extractedOrders.length === 1 ? 'orden' : 'órdenes'}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="bg-[#16202c] py-1.5 px-1 rounded-xl border border-white/5 flex flex-col justify-center">
+
+          {/* Columna 3: Total del Precio en la Esquina */}
+          <div className="bg-[#16202c] py-1.5 px-1 rounded-xl border border-white/5 flex flex-col justify-center items-center">
             <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
-              Detectadas
+              Total
             </span>
-            <span className="text-xs font-black text-emerald-400 font-mono">
-              {extractedOrders.length} {extractedOrders.length === 1 ? 'orden' : 'órdenes'}
+            <span className="text-xs font-black text-emerald-400 font-mono tracking-tight block">
+              ${totalEarnings}
             </span>
           </div>
         </div>
@@ -466,11 +504,11 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
             </div>
           )}
 
-          {/* Spinner de procesamiento AuraCore IA */}
+          {/* Spinner de procesamiento */}
           {scanning && (
             <div className="p-3 bg-cyan-500/15 border border-cyan-500/30 rounded-xl flex items-center justify-center gap-2.5 text-cyan-300 text-xs">
               <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin shrink-0"></div>
-              <span className="font-bold">Analizando foto con AuraCore IA...</span>
+              <span className="font-bold">Analizando foto de la hoja...</span>
             </div>
           )}
 
@@ -536,7 +574,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                       className="text-[10px] text-slate-400 hover:text-cyan-300 flex items-center gap-1 font-medium cursor-pointer"
                     >
                       <Eye className="h-3 w-3" />
-                      <span>{showRawText ? 'Ocultar lectura de IA' : 'Ver lectura de AuraCore IA'}</span>
+                      <span>{showRawText ? 'Ocultar lectura de texto' : 'Ver texto detectado'}</span>
                     </button>
                     {showRawText && (
                       <pre className="mt-1 p-2 bg-[#080d14] border border-white/10 rounded-xl text-[9px] font-mono text-slate-300 max-h-20 overflow-x-auto whitespace-pre-wrap">
@@ -615,7 +653,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
           <div>
             <h4 className="text-xs font-bold text-white">Recuadro de Órdenes Vacío</h4>
             <p className="text-[11px] text-slate-400 max-w-xs mt-0.5 leading-snug">
-              Toma o sube una foto de tu hoja de despacho o lista de trabajos para que AuraCore IA la lea automáticamente.
+              Toma o sube una foto de tu hoja de despacho para detectar las órdenes automáticamente.
             </p>
           </div>
           <button
@@ -624,7 +662,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
             className="px-3 py-1.5 bg-[#16202c] hover:bg-[#1e2b3b] border border-white/10 rounded-xl text-cyan-400 hover:text-white text-[11px] font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Agregar Orden Manualmente</span>
+            <span>Agregar Fila Manual</span>
           </button>
         </div>
       );
@@ -633,23 +671,18 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
     return (
       <div className="bg-[#0e1622] border border-cyan-500/30 rounded-2xl p-3 flex flex-col flex-1 min-h-0 shadow-lg shadow-cyan-950/20">
         {/* Cabecera del Recuadro de Resultados */}
-        <div className="flex items-center justify-between pb-2.5 border-b border-white/10 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-            <h4 className="text-xs font-black text-white uppercase tracking-wider">
-              Órdenes Reconocidas ({extractedOrders.length})
+        <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-white/10 shrink-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+            <h4 className="text-xs font-black text-white uppercase tracking-wider whitespace-nowrap">
+              Órdenes ({extractedOrders.length})
             </h4>
-            {totalEarnings > 0 && (
-              <span className="text-[10px] font-black font-mono px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                ${totalEarnings}
-              </span>
-            )}
           </div>
 
           <button
             type="button"
             onClick={addBlankOrder}
-            className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 px-2 py-0.5 rounded-lg transition cursor-pointer"
+            className="whitespace-nowrap shrink-0 text-[10.5px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 px-2.5 py-1 rounded-lg transition active:scale-95 cursor-pointer shadow-xs"
           >
             <Plus className="h-3 w-3" />
             <span>Agregar Fila</span>
