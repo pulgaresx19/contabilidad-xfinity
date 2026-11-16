@@ -635,10 +635,10 @@ app.get('/api/orders', (req, res) => {
 // 2. Get single work order with all attached photos
 app.get('/api/orders/:id', (req, res) => {
   try {
-    const order = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(req.params.id);
+    const order = db.prepare('SELECT * FROM work_orders WHERE id = ? OR job_id = ?').get(req.params.id, req.params.id);
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-    const photos = db.prepare('SELECT * FROM job_photos WHERE work_order_id = ? ORDER BY id ASC').all(req.params.id);
+    const photos = db.prepare('SELECT * FROM job_photos WHERE work_order_id = ? ORDER BY id ASC').all(order.id);
     res.json({ ...order, photos });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -648,10 +648,12 @@ app.get('/api/orders/:id', (req, res) => {
 // 2b. Get just photos for an order (lightweight)
 app.get('/api/orders/:id/photos', (req, res) => {
   try {
-    const photos = db.prepare('SELECT * FROM job_photos WHERE work_order_id = ? ORDER BY id ASC').all(req.params.id);
+    const order = db.prepare('SELECT id FROM work_orders WHERE id = ? OR job_id = ?').get(req.params.id, req.params.id);
+    const targetId = order ? order.id : req.params.id;
+    const photos = db.prepare('SELECT * FROM job_photos WHERE work_order_id = ? ORDER BY id ASC').all(targetId);
     res.json({ photos });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

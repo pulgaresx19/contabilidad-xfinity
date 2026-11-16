@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Check, DollarSign, MapPin, Phone, Ruler, SlidersHorizontal, 
-  AlertCircle, Save, Pencil, Sparkles, Camera, ZoomIn, Loader2, CheckCircle2 
+  AlertCircle, Save, Pencil, Sparkles, Camera, ZoomIn, Loader2, 
+  CheckCircle2, Clock, AlertTriangle, Trash2, Plus
 } from 'lucide-react';
 import { cleanPhoneNumber } from '../utils/smsUtils';
 import { geocodeAddressWithMapbox, searchAddressSuggestions } from '../utils/mapboxGeocode';
@@ -84,19 +85,20 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
       setShowSuggestions(false);
 
       // Cargar fotos de evidencia asociadas al trabajo
-      if (Array.isArray(order.photos) && order.photos.length > 0) {
-        setPhotos(order.photos);
-      } else {
-        setPhotos([]);
-      }
-      if (order.id) {
+      const initialPhotos = Array.isArray(order.photos) ? order.photos : [];
+      setPhotos(initialPhotos);
+
+      const targetId = order.id || order.job_id;
+      if (targetId) {
         let isMounted = true;
         setLoadingPhotos(true);
-        fetch(`/api/orders/${order.id}/photos`)
+        fetch(`/api/orders/${targetId}/photos`)
           .then(res => res.json())
           .then(data => {
             if (isMounted && data && Array.isArray(data.photos)) {
-              setPhotos(data.photos);
+              if (data.photos.length > 0 || initialPhotos.length === 0) {
+                setPhotos(data.photos);
+              }
             }
           })
           .catch(err => console.warn('No se pudieron recargar las fotos:', err))
@@ -144,6 +146,52 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
     }));
     setSuggestions([]);
     setShowSuggestions(false);
+  };
+
+  const handleUploadPhotos = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const targetId = order.id || order.job_id;
+    if (!targetId) return;
+
+    const data = new FormData();
+    data.append('category', 'Trabajo Terminado');
+    files.forEach(f => data.append('photos', f));
+
+    try {
+      setLoadingPhotos(true);
+      const res = await fetch(`/api/orders/${targetId}/photos`, {
+        method: 'POST',
+        body: data
+      });
+      if (res.ok) {
+        const photoRes = await fetch(`/api/orders/${targetId}/photos`);
+        if (photoRes.ok) {
+          const fresh = await photoRes.json();
+          if (Array.isArray(fresh.photos)) setPhotos(fresh.photos);
+        }
+        if (onJobUpdated) onJobUpdated();
+      }
+    } catch (err) {
+      console.error('Error subiendo fotos:', err);
+    } finally {
+      setLoadingPhotos(false);
+    }
+  };
+
+  const handleDeletePhoto = async (photoId, e) => {
+    e.stopPropagation();
+    if (!window.confirm('¿Eliminar esta foto de evidencia?')) return;
+    try {
+      const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setPhotos(prev => prev.filter(p => p.id !== photoId));
+        if (onJobUpdated) onJobUpdated();
+      }
+    } catch (err) {
+      console.error('Error eliminando foto:', err);
+    }
   };
 
   if (!isOpen || !order) return null;
@@ -342,7 +390,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
             </div>
           </div>
 
-          {/* Fila 2: Dirección con Buscador y Autocompletado Mapbox */}
+          {/* Fila 2: Dirección con Buscador y Autocompletado Mapbox (SIN ubicación GPS abajo) */}
           <div className="relative">
             <div className="flex items-center justify-between mb-0.5">
               <label className="text-[9.5px] font-bold text-slate-300 uppercase tracking-wider">
@@ -392,13 +440,6 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
                     </div>
                   </button>
                 ))}
-              </div>
-            )}
-
-            {formData.city && (
-              <div className="mt-0.5 flex items-center gap-1 text-[10px] text-emerald-400 font-semibold">
-                <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />
-                <span>Ubicación: <strong className="text-white font-bold">{formData.city}</strong>{formData.latitude ? ' (GPS activo)' : ''}</span>
               </div>
             )}
           </div>
@@ -545,44 +586,47 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
             </div>
           </div>
 
-          {/* Fila 5: Estado del Trabajo */}
+          {/* Fila 5: Selector de Estado del Trabajo (Claro, visible y actualizable) */}
           <div className="space-y-1">
-            <label className="block text-[9.5px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+            <label className="block text-[9.5px] font-bold text-slate-300 uppercase tracking-wider">
               Estado del Trabajo
             </label>
-            <div className="grid grid-cols-3 gap-1 bg-[#16202c] p-0.5 rounded-xl border border-white/10 h-8.5 items-center">
+            <div className="grid grid-cols-3 gap-1.5 bg-[#16202c] p-1 rounded-xl border border-white/10 items-center">
               <button
                 type="button"
                 onClick={() => setFormData(prev => ({ ...prev, status: 'Pendiente' }))}
-                className={`h-full rounded-lg font-bold text-[11px] flex items-center justify-center transition ${
+                className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 transition cursor-pointer select-none ${
                   formData.status === 'Pendiente'
-                    ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50 shadow-xs'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-amber-500/25 text-amber-300 border border-amber-500/60 shadow-xs font-black'
+                    : 'text-slate-400 hover:text-white hover:bg-white/5'
                 }`}
               >
-                Pendiente
+                <Clock className="w-3 h-3 text-amber-400" />
+                <span>Pendiente</span>
               </button>
               <button
                 type="button"
                 onClick={() => setFormData(prev => ({ ...prev, status: 'Completado' }))}
-                className={`h-full rounded-lg font-bold text-[11px] flex items-center justify-center transition ${
+                className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 transition cursor-pointer select-none ${
                   formData.status === 'Completado'
-                    ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/50 shadow-xs'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/60 shadow-xs font-black'
+                    : 'text-slate-400 hover:text-white hover:bg-white/5'
                 }`}
               >
-                Completado
+                <Check className="w-3 h-3 text-emerald-400 stroke-[3]" />
+                <span>Completado</span>
               </button>
               <button
                 type="button"
                 onClick={() => setFormData(prev => ({ ...prev, status: 'No Realizado' }))}
-                className={`h-full rounded-lg font-bold text-[11px] flex items-center justify-center transition ${
+                className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 transition cursor-pointer select-none ${
                   formData.status === 'No Realizado'
-                    ? 'bg-rose-500/25 text-rose-300 border border-rose-500/50 shadow-xs'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-rose-500/25 text-rose-300 border border-rose-500/60 shadow-xs font-black'
+                    : 'text-slate-400 hover:text-white hover:bg-white/5'
                 }`}
               >
-                No Realizado
+                <AlertTriangle className="w-3 h-3 text-rose-400" />
+                <span>No Realizado</span>
               </button>
             </div>
 
@@ -590,7 +634,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
               <div className="pt-1 animate-fade-in">
                 <input
                   type="text"
-                  placeholder="Motivo de no realizado (ej. Cliente canceló, portón con candado...)"
+                  placeholder="Motivo de no realizado (ej. Portón cerrado, perro suelto...)"
                   value={formData.cancel_reason}
                   onChange={(e) => setFormData(prev => ({ ...prev, cancel_reason: e.target.value }))}
                   className="w-full h-8 bg-rose-950/25 border border-rose-500/35 rounded-xl px-2.5 text-xs text-rose-200 placeholder-rose-500/60 focus:outline-none focus:border-rose-400 shadow-xs"
@@ -599,7 +643,34 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
             )}
           </div>
 
-          {/* Fila 6: Ajuste Manual de Supervisor */}
+          {/* Fila 6: Remarks / Notas del Trabajo (ARRIBA de ajuste de supervisor) */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[9.5px] font-bold text-slate-300 uppercase tracking-wider">
+                Remarks / Notas del Trabajo
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={formData.call_first}
+                  onChange={(e) => setFormData({ ...formData, call_first: e.target.checked })}
+                  className="h-3.5 w-3.5 rounded border-white/20 bg-[#16202c] text-cyan-500 focus:ring-0"
+                />
+                <span className="text-cyan-300 font-bold text-[11px]">
+                  Call First
+                </span>
+              </label>
+            </div>
+            <input
+              type="text"
+              placeholder="Notas adicionales (portón, perro, zanja, traspatio...)"
+              value={formData.raw_notes}
+              onChange={(e) => setFormData({ ...formData, raw_notes: e.target.value })}
+              className="w-full h-8.5 bg-[#16202c] border border-white/10 focus:border-cyan-400 rounded-xl px-2.5 text-xs text-white placeholder-slate-500 focus:outline-none shadow-xs"
+            />
+          </div>
+
+          {/* Fila 7: Ajuste Manual de Supervisor (ABAJO de Remarks) */}
           <div className="bg-[#16202c] border border-white/5 rounded-xl p-2 space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-[9.5px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1">
@@ -617,7 +688,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
               <button
                 type="button"
                 onClick={() => { setAdjustType('none'); setAdjustVal(''); setAdjustmentReason(''); }}
-                className={`py-1 rounded-lg text-[10.5px] font-bold transition ${
+                className={`py-1 rounded-lg text-[10.5px] font-bold transition cursor-pointer ${
                   adjustType === 'none'
                     ? 'bg-white/15 text-white shadow-xs'
                     : 'text-slate-400 hover:text-white'
@@ -628,7 +699,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
               <button
                 type="button"
                 onClick={() => setAdjustType('add')}
-                className={`py-1 rounded-lg text-[10.5px] font-bold transition ${
+                className={`py-1 rounded-lg text-[10.5px] font-bold transition cursor-pointer ${
                   adjustType === 'add'
                     ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 shadow-xs'
                     : 'text-slate-400 hover:text-white'
@@ -639,7 +710,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
               <button
                 type="button"
                 onClick={() => setAdjustType('sub')}
-                className={`py-1 rounded-lg text-[10.5px] font-bold transition ${
+                className={`py-1 rounded-lg text-[10.5px] font-bold transition cursor-pointer ${
                   adjustType === 'sub'
                     ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40 shadow-xs'
                     : 'text-slate-400 hover:text-white'
@@ -679,33 +750,6 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
             )}
           </div>
 
-          {/* Fila 7: Remarks / Notas del Trabajo */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <label className="text-[9.5px] font-bold text-slate-300 uppercase tracking-wider">
-                Remarks / Notas del Trabajo
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={formData.call_first}
-                  onChange={(e) => setFormData({ ...formData, call_first: e.target.checked })}
-                  className="h-3 w-3 rounded border-white/20 bg-[#16202c] text-cyan-500 focus:ring-0"
-                />
-                <span className="text-cyan-300 font-bold text-[11px]">
-                  Call First
-                </span>
-              </label>
-            </div>
-            <input
-              type="text"
-              placeholder="Notas adicionales (portón, perro, zanja, traspatio...)"
-              value={formData.raw_notes}
-              onChange={(e) => setFormData({ ...formData, raw_notes: e.target.value })}
-              className="w-full h-8.5 bg-[#16202c] border border-white/10 focus:border-cyan-400 rounded-xl px-2.5 text-xs text-white placeholder-slate-500 focus:outline-none shadow-xs"
-            />
-          </div>
-
           {/* Sección: Fotos de Evidencia (Al Final) */}
           <div className="bg-[#16202c] border border-white/5 rounded-xl p-2.5 space-y-1.5">
             <div className="flex items-center justify-between">
@@ -713,19 +757,33 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
                 <Camera className="w-3.5 h-3.5 text-cyan-400" />
                 <span>Fotos de Evidencia ({photos.length})</span>
               </span>
-              {photos.length > 0 && (
-                <span className="text-[9px] text-slate-400">Toca para ampliar</span>
-              )}
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/35 hover:bg-cyan-500/30 text-[9.5px] font-bold flex items-center gap-1 transition active:scale-95 shadow-xs">
+                  <Plus className="w-2.5 h-2.5 stroke-[3]" />
+                  <span>Foto</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleUploadPhotos}
+                    className="hidden"
+                  />
+                </label>
+                {photos.length > 0 && (
+                  <span className="text-[9px] text-slate-400">Toca para ampliar</span>
+                )}
+              </div>
             </div>
 
             {loadingPhotos ? (
-              <div className="py-2 text-center text-slate-400 text-[10px]">
-                Cargando fotos...
+              <div className="py-3 text-center text-slate-400 text-[10px] flex items-center justify-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin text-cyan-400" />
+                <span>Cargando fotos de evidencia...</span>
               </div>
             ) : photos.length > 0 ? (
               <div className="grid grid-cols-3 gap-1.5">
                 {photos.map((photo, pIdx) => {
-                  const photoSrc = photo.photo_data || `/uploads/${photo.filename}`;
+                  const photoSrc = photo.photo_data || (photo.filename ? `/uploads/${photo.filename}` : photo.url || photo.src);
                   return (
                     <div
                       key={photo.id || pIdx}
@@ -738,9 +796,21 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
                         className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-between p-1">
-                        <span className="self-start text-[8px] font-bold bg-black/70 text-cyan-300 px-1 py-0.2 rounded border border-white/10 truncate max-w-full">
-                          {photo.category || `#${pIdx + 1}`}
-                        </span>
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-[7.5px] font-bold bg-black/70 text-cyan-300 px-1 py-0.2 rounded border border-white/10 truncate max-w-[70%]">
+                            {photo.category || `#${pIdx + 1}`}
+                          </span>
+                          {photo.id && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeletePhoto(photo.id, e)}
+                              className="p-0.5 rounded bg-black/60 text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 transition cursor-pointer"
+                              title="Eliminar foto"
+                            >
+                              <Trash2 className="w-2.5 h-2.5" />
+                            </button>
+                          )}
+                        </div>
                         <div className="flex justify-end opacity-75 group-hover:opacity-100 transition">
                           <span className="p-0.5 bg-black/60 rounded-full text-white">
                             <ZoomIn className="w-2.5 h-2.5" />

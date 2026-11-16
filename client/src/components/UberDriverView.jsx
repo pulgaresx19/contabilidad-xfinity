@@ -2555,11 +2555,9 @@ export default function UberDriverView({
               </div>
             </div>
 
-            {/* ROW 3: NOTES & WORK SPECS CARD (STATUS ICON + SPECS + REMARKS) - TOCA PARA VER FICHA */}
+            {/* ROW 3: NOTES & WORK SPECS CARD (STATUS ICON + SPECS + REMARKS) - TOCAR EL LÁPIZ PARA EDITAR */}
             <div 
-              onClick={() => onOpenEditModal(selectedOrder, 'view')}
-              className="group bg-[#131b26] border border-white/8 hover:border-cyan-500/30 rounded-2xl p-2.5 flex items-center justify-between gap-2.5 my-1 cursor-pointer transition active:scale-[0.99] select-none"
-              title="Toca para ver la ficha técnica completa y fotos de evidencia"
+              className="bg-[#131b26] border border-white/8 rounded-2xl p-2.5 flex items-center justify-between gap-2.5 my-1 select-none"
             >
               {/* Site / Parada Circle Badge */}
               <div 
@@ -2589,21 +2587,21 @@ export default function UberDriverView({
                   )}
                 </div>
                 <p className="text-[10.5px] text-slate-400 truncate mt-0.5 font-medium">
-                  {selectedRemark || (selectedOrder.raw_notes ? selectedOrder.raw_notes.slice(0, 45) : 'Ver detalles o notas del trabajo...')}
+                  {selectedRemark || (selectedOrder.raw_notes ? selectedOrder.raw_notes.slice(0, 45) : 'Notas del trabajo...')}
                 </p>
               </div>
 
-              {/* Pencil Edit Icon */}
+              {/* Pencil Edit Icon - Único disparador para editar trabajo */}
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onOpenEditModal(selectedOrder, 'view');
+                  onOpenEditModal(selectedOrder, 'edit');
                 }}
-                className="p-1.5 text-slate-400 hover:text-cyan-400 transition active:scale-90 shrink-0 rounded-lg hover:bg-white/5 cursor-pointer"
-                title="Ver o editar orden"
+                className="w-8 h-8 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/35 flex items-center justify-center transition active:scale-90 shrink-0 cursor-pointer shadow-xs"
+                title="Editar este trabajo"
               >
-                <Pencil className="h-3.5 w-3.5" />
+                <Pencil className="h-3.5 w-3.5 stroke-[2.2]" />
               </button>
             </div>
 
