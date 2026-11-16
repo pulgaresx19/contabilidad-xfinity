@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar, DollarSign, TrendingUp, TrendingDown, Clock, 
   CheckCircle2, ChevronLeft, ChevronRight, Plus, Fuel, Wrench, 
   Car, Utensils, Smartphone, Shield, Package, Home, Trash2, Copy, 
   Check, CheckCheck, Share2, AlertCircle, FileText, ChevronDown, ChevronUp, Image as ImageIcon,
-  ShieldCheck, CheckCircle, Edit3, Pencil, Camera, Sparkles, AlertTriangle, ExternalLink, X
+  ShieldCheck, CheckCircle, Edit3, Pencil, Camera, Sparkles, AlertTriangle, ExternalLink, X,
+  ArrowDownWideNarrow
 } from 'lucide-react';
 import { 
   getCurrentMonthStr, formatMonthFriendly, 
@@ -56,6 +57,7 @@ export default function MonthlyView({
   const [reportOrder, setReportOrder] = useState(null);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [copiedJobId, setCopiedJobId] = useState(null);
+  const [sortByAmountDesc, setSortByAmountDesc] = useState(false);
 
   const getReceiptSrc = (p) => {
     if (!p) return '';
@@ -312,6 +314,11 @@ ${weeksLines || '  (No hay semanas registradas)'}
   const weeks = data?.weeks || [];
   const expenses = data?.expenses || [];
   const expensesByCategory = data?.expensesByCategory || {};
+
+  const displayedExpenses = useMemo(() => {
+    if (!sortByAmountDesc) return expenses;
+    return [...expenses].sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0));
+  }, [expenses, sortByAmountDesc]);
 
   return (
     <div className="space-y-4 max-w-md sm:max-w-lg mx-auto w-full pb-24">
@@ -639,9 +646,30 @@ ${weeksLines || '  (No hay semanas registradas)'}
 
           {/* Expenses List */}
           <div className="space-y-2">
-            <span className="text-xs font-bold text-slate-300 px-1 block">
-              Historial de Gastos ({expenses.length})
-            </span>
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold text-slate-300">
+                Historial de Gastos ({expenses.length})
+              </span>
+              {expenses.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSortByAmountDesc((prev) => !prev)}
+                  className={`w-6 h-6 rounded-full transition-colors border select-none active:scale-90 flex items-center justify-center shrink-0 ${
+                    sortByAmountDesc
+                      ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                      : 'bg-slate-800/60 hover:bg-slate-700/60 text-slate-400 hover:text-slate-200 border-white/10'
+                  }`}
+                  title={
+                    sortByAmountDesc
+                      ? 'Organizado: Mayor a menor (Toca para deseleccionar)'
+                      : 'Organizar por gasto más alto primero'
+                  }
+                  aria-label="Organizar gastos de mayor a menor"
+                >
+                  <ArrowDownWideNarrow className={`w-3 h-3 ${sortByAmountDesc ? 'text-rose-300 stroke-[2.2]' : 'stroke-[1.8]'}`} />
+                </button>
+              )}
+            </div>
 
             {expenses.length === 0 ? (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-xs">
@@ -649,7 +677,7 @@ ${weeksLines || '  (No hay semanas registradas)'}
                 <p className="text-[11px] text-slate-500 mt-1">Registra combustible, herramientas, renta y repuestos para llevar tu contabilidad real.</p>
               </div>
             ) : (
-              expenses.map((exp) => {
+              displayedExpenses.map((exp) => {
                 const catCfg = CATEGORY_ICONS[exp.category] || CATEGORY_ICONS.Otros;
                 const Icon = catCfg.icon;
                 const photos = parseExpensePhotos(exp.receipt_photo);
