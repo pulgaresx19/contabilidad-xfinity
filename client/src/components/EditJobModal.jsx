@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Check, DollarSign, MapPin, Phone, Ruler, SlidersHorizontal, 
   AlertCircle, Save, Pencil, Sparkles, Camera, ZoomIn, Loader2, 
-  CheckCircle2, Clock, AlertTriangle, Trash2, Plus
+  CheckCircle2, Trash2, Plus
 } from 'lucide-react';
 import { cleanPhoneNumber } from '../utils/smsUtils';
 import { geocodeAddressWithMapbox, searchAddressSuggestions } from '../utils/mapboxGeocode';
@@ -586,64 +586,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
             </div>
           </div>
 
-          {/* Fila 5: Selector de Estado del Trabajo (Claro, visible y actualizable) */}
-          <div className="space-y-1">
-            <label className="block text-[9.5px] font-bold text-slate-300 uppercase tracking-wider">
-              Estado del Trabajo
-            </label>
-            <div className="grid grid-cols-3 gap-1.5 bg-[#16202c] p-1 rounded-xl border border-white/10 items-center">
-              <button
-                type="button"
-                onClick={() => setFormData(prev => ({ ...prev, status: 'Pendiente' }))}
-                className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 transition cursor-pointer select-none ${
-                  formData.status === 'Pendiente'
-                    ? 'bg-amber-500/25 text-amber-300 border border-amber-500/60 shadow-xs font-black'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Clock className="w-3 h-3 text-amber-400" />
-                <span>Pendiente</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormData(prev => ({ ...prev, status: 'Completado' }))}
-                className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 transition cursor-pointer select-none ${
-                  formData.status === 'Completado'
-                    ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/60 shadow-xs font-black'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Check className="w-3 h-3 text-emerald-400 stroke-[3]" />
-                <span>Completado</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormData(prev => ({ ...prev, status: 'No Realizado' }))}
-                className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 transition cursor-pointer select-none ${
-                  formData.status === 'No Realizado'
-                    ? 'bg-rose-500/25 text-rose-300 border border-rose-500/60 shadow-xs font-black'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <AlertTriangle className="w-3 h-3 text-rose-400" />
-                <span>No Realizado</span>
-              </button>
-            </div>
-
-            {formData.status === 'No Realizado' && (
-              <div className="pt-1 animate-fade-in">
-                <input
-                  type="text"
-                  placeholder="Motivo de no realizado (ej. Portón cerrado, perro suelto...)"
-                  value={formData.cancel_reason}
-                  onChange={(e) => setFormData(prev => ({ ...prev, cancel_reason: e.target.value }))}
-                  className="w-full h-8 bg-rose-950/25 border border-rose-500/35 rounded-xl px-2.5 text-xs text-rose-200 placeholder-rose-500/60 focus:outline-none focus:border-rose-400 shadow-xs"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Fila 6: Remarks / Notas del Trabajo (ARRIBA de ajuste de supervisor) */}
+          {/* Fila 5: Remarks / Notas del Trabajo (ARRIBA de ajuste de supervisor) */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <label className="text-[9.5px] font-bold text-slate-300 uppercase tracking-wider">
