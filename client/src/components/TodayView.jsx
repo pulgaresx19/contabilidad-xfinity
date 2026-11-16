@@ -853,31 +853,36 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             return (
               <div
                 key={order.id}
-                onClick={() => {
-                  setEditModalInitialMode('view');
-                  setEditingOrder(order);
-                }}
-                className={`bg-[#131b26] border rounded-2xl p-3.5 space-y-2.5 transition shadow-md cursor-pointer hover:border-cyan-500/40 active:scale-[0.99] select-none ${
+                className={`bg-[#131b26] border rounded-2xl p-3.5 space-y-2.5 shadow-md select-none transition-all ${
                   isCompleted
-                    ? 'border-emerald-500/35 hover:border-emerald-500/60 shadow-emerald-500/5'
+                    ? 'border-emerald-500/35 shadow-emerald-500/5'
                     : isCancelled
-                    ? 'border-rose-500/35 hover:border-rose-500/60 shadow-rose-500/5'
-                    : 'border-amber-500/35 hover:border-amber-500/60 shadow-amber-500/5'
+                    ? 'border-rose-500/35 shadow-rose-500/5'
+                    : 'border-amber-500/35 shadow-amber-500/5'
                 }`}
               >
                 {/* Header de la Tarjeta con Número en Círculo */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    {/* Número de ítem en círculo */}
-                    <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black font-mono shadow-sm flex-shrink-0 ${
-                      isCompleted
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                        : isCancelled
-                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                    }`}>
+                    {/* Número de ítem en círculo - Tocar aquí abre directamente la edición del trabajo */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditModalInitialMode('edit');
+                        setEditingOrder(order);
+                      }}
+                      className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black font-mono shadow-sm flex-shrink-0 transition-transform active:scale-90 hover:scale-105 cursor-pointer select-none ${
+                        isCompleted
+                          ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/50 hover:bg-emerald-500/40 shadow-emerald-500/20'
+                          : isCancelled
+                          ? 'bg-rose-500/25 text-rose-300 border border-rose-500/50 hover:bg-rose-500/40 shadow-rose-500/20'
+                          : 'bg-amber-500/25 text-amber-300 border border-amber-500/50 hover:bg-amber-500/40 shadow-amber-500/20'
+                      }`}
+                      title={`Ítem #${idx + 1} • Toca para editar trabajo`}
+                    >
                       {idx + 1}
-                    </div>
+                    </button>
 
                     <span className="text-sm font-black text-cyan-400 font-mono">
                       #{order.job_id}

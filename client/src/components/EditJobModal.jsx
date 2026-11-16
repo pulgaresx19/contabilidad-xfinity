@@ -1,50 +1,50 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Check, DollarSign, MapPin, Phone, Ruler, SlidersHorizontal, 
-  AlertCircle, Save, Pencil, MessageSquare, FileText, Sparkles, 
-  CheckCheck, Camera, ZoomIn, Navigation, ExternalLink, Image as ImageIcon 
+  AlertCircle, Save, Pencil, Sparkles, Camera, ZoomIn, Loader2, CheckCircle2 
 } from 'lucide-react';
-import { cleanPhoneNumber, getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
+import { cleanPhoneNumber } from '../utils/smsUtils';
+import { geocodeAddressWithMapbox, searchAddressSuggestions } from '../utils/mapboxGeocode';
 
-const formatCoordinates = (lat, lng) => {
-  if (!lat || !lng) return 'No disponibles';
-  const numLat = Number(lat);
-  const numLng = Number(lng);
-  if (isNaN(numLat) || isNaN(numLng)) return 'No disponibles';
-  return `${numLat.toFixed(5)}, ${numLng.toFixed(5)}`;
-};
-
-export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, initialMode = 'view' }) {
-  const [isEditing, setIsEditing] = useState(initialMode === 'edit');
-  const [photos, setPhotos] = useState(order?.photos || []);
-  const [loadingPhotos, setLoadingPhotos] = useState(false);
-  const [previewPhoto, setPreviewPhoto] = useState(null);
+export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
   const [formData, setFormData] = useState({
     job_id: '',
     work_date: '',
+    tech_id: 'Javier (P0G1)',
     address: '',
     city: '',
     zip_code: '',
     phone: '',
     call_first: false,
-    drop_footage: 0,
+    drop_footage: '',
     cable_type: 'RG-6',
     bore_type: 'N',
-    manual_adjustment: 0,
-    adjustment_reason: '',
-    rate_calculated: 100,
     status: 'Pendiente',
     cancel_reason: '',
-    raw_notes: ''
+    raw_notes: '',
+    latitude: null,
+    longitude: null
   });
 
   const [adjustType, setAdjustType] = useState('none'); // 'none' | 'add' | 'sub'
   const [adjustVal, setAdjustVal] = useState('');
+  const [adjustmentReason, setAdjustmentReason] = useState('');
+
+  const [photos, setPhotos] = useState([]);
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
+  const [previewPhoto, setPreviewPhoto] = useState(null);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  // Address Autocomplete state
+  const [suggestions, setSuggestions] = useState([]);
+  const [searchingAddress, setSearchingAddress] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const debounceTimerRef = useRef(null);
+
   useEffect(() => {
-    if (order) {
+    if (order && isOpen) {
       const adj = order.manual_adjustment || 0;
       let type = 'none';
       let val = '';
@@ -59,29 +59,35 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
       setFormData({
         job_id: order.job_id || '',
         work_date: order.work_date || '',
+        tech_id: order.tech_id || 'Javier (P0G1)',
         address: order.address || '',
         city: order.city || '',
         zip_code: order.zip_code || '',
         phone: order.phone || '',
         call_first: Boolean(order.call_first),
-        drop_footage: order.drop_footage || 0,
+        drop_footage: order.drop_footage !== undefined && order.drop_footage !== null ? String(order.drop_footage) : '',
         cable_type: order.cable_type || 'RG-6',
         bore_type: order.bore_type || 'N',
-        manual_adjustment: adj,
-        adjustment_reason: order.adjustment_reason || '',
-        rate_calculated: order.rate_calculated || 100,
         status: order.status || 'Pendiente',
         cancel_reason: order.cancel_reason || '',
-        raw_notes: order.raw_notes || ''
+        raw_notes: order.raw_notes || '',
+        latitude: order.latitude || null,
+        longitude: order.longitude || null
       });
+
       setAdjustType(type);
       setAdjustVal(val);
+      setAdjustmentReason(order.adjustment_reason || '');
       setError(null);
-      setIsEditing(initialMode === 'edit');
+      setSaving(false);
+      setSuggestions([]);
+      setShowSuggestions(false);
 
       // Cargar fotos de evidencia asociadas al trabajo
       if (Array.isArray(order.photos) && order.photos.length > 0) {
         setPhotos(order.photos);
+      } else {
+        setPhotos([]);
       }
       if (order.id) {
         let isMounted = true;
@@ -100,104 +106,69 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
         return () => { isMounted = false; };
       }
     }
-  }, [order, isOpen, initialMode]);
+  }, [order, isOpen]);
+
+  // Debounced search for address suggestions
+  const handleAddressChange = (val) => {
+    setFormData(prev => ({ ...prev, address: val }));
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+
+    if (!val || val.trim().length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setSearchingAddress(true);
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        const results = await searchAddressSuggestions(val);
+        setSuggestions(results);
+        setShowSuggestions(results.length > 0);
+      } catch (e) {
+        setSuggestions([]);
+      } finally {
+        setSearchingAddress(false);
+      }
+    }, 280);
+  };
+
+  const handleSelectSuggestion = (sug) => {
+    setFormData(prev => ({
+      ...prev,
+      address: sug.streetAddress,
+      city: sug.city || prev.city,
+      zip_code: sug.zipCode || prev.zip_code,
+      latitude: sug.latitude,
+      longitude: sug.longitude
+    }));
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
 
   if (!isOpen || !order) return null;
 
-  // Auto-recalcular tarifa cuando cambia metraje, bore o ajuste
-  const calculateRate = (footage, bore, adjType, adjAmount) => {
-    let rate = 100; // Tarifa base
-    if (bore && typeof bore === 'string' && bore.includes('DW')) {
-      rate += 30; // Bono de Driveway Bore
-    }
-    const numFootage = parseFloat(footage) || 0;
-    if (numFootage > 300) {
-      const extraBlocks = Math.floor((numFootage - 300) / 100);
-      if (extraBlocks > 0) rate += extraBlocks * 25;
-    }
+  // Cálculo Dinámico de Tarifa idéntico a AddJobModal
+  const numFootage = parseFloat(formData.drop_footage) || 0;
+  const isDW = formData.bore_type && formData.bore_type.includes('DW');
+  const boreBonus = isDW ? 30 : 0;
+  const extraBlocks = numFootage > 300 ? Math.floor((numFootage - 300) / 100) : 0;
+  const footageBonus = extraBlocks > 0 ? extraBlocks * 25 : 0;
 
-    const numAdj = parseFloat(String(adjAmount).replace(/[^0-9.]/g, '')) || 0;
-    let finalAdj = 0;
-    if (adjType === 'add') finalAdj = Math.abs(numAdj);
-    else if (adjType === 'sub') finalAdj = -Math.abs(numAdj);
+  const numAdj = parseFloat(String(adjustVal).replace(/[^0-9.]/g, '')) || 0;
+  let finalAdj = 0;
+  if (adjustType === 'add') finalAdj = Math.abs(numAdj);
+  else if (adjustType === 'sub') finalAdj = -Math.abs(numAdj);
 
-    return {
-      rate_calculated: Math.max(0, rate + finalAdj),
-      manual_adjustment: finalAdj
-    };
-  };
-
-  const handleFootageChange = (val) => {
-    const calc = calculateRate(val, formData.bore_type, adjustType, adjustVal);
-    setFormData(prev => ({
-      ...prev,
-      drop_footage: val,
-      ...calc
-    }));
-  };
-
-  const handleBoreChange = (bore) => {
-    const calc = calculateRate(formData.drop_footage, bore, adjustType, adjustVal);
-    setFormData(prev => ({
-      ...prev,
-      bore_type: bore,
-      ...calc
-    }));
-  };
-
-  const handleAdjustChange = (type, val) => {
-    setAdjustType(type);
-    const cleanVal = type === 'none' ? '' : String(val).replace(/[^0-9.]/g, '');
-    setAdjustVal(cleanVal);
-    const calc = calculateRate(formData.drop_footage, formData.bore_type, type, cleanVal);
-    setFormData(prev => ({
-      ...prev,
-      ...calc,
-      ...(type === 'none' ? { adjustment_reason: '' } : {})
-    }));
-  };
-
-  const handleCancelEdit = () => {
-    if (order) {
-      const adj = order.manual_adjustment || 0;
-      let type = 'none';
-      let val = '';
-      if (adj > 0) {
-        type = 'add';
-        val = String(adj);
-      } else if (adj < 0) {
-        type = 'sub';
-        val = String(Math.abs(adj));
-      }
-      setFormData({
-        job_id: order.job_id || '',
-        work_date: order.work_date || '',
-        address: order.address || '',
-        city: order.city || '',
-        zip_code: order.zip_code || '',
-        phone: order.phone || '',
-        call_first: Boolean(order.call_first),
-        drop_footage: order.drop_footage || 0,
-        cable_type: order.cable_type || 'RG-6',
-        bore_type: order.bore_type || 'N',
-        manual_adjustment: adj,
-        adjustment_reason: order.adjustment_reason || '',
-        rate_calculated: order.rate_calculated || 100,
-        status: order.status || 'Pendiente',
-        cancel_reason: order.cancel_reason || '',
-        raw_notes: order.raw_notes || ''
-      });
-      setAdjustType(type);
-      setAdjustVal(val);
-    }
-    setIsEditing(false);
-    setError(null);
-  };
+  const currentTotal = Math.max(0, 100 + boreBonus + footageBonus + finalAdj);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.address.trim()) {
-      setError('La dirección es obligatoria.');
+    const cleanJobId = (formData.job_id || '').trim();
+    const cleanAddress = (formData.address || '').trim();
+
+    if (!cleanJobId || !cleanAddress) {
+      setError('Por favor ingresa el número de trabajo (Job ID) y la dirección.');
       return;
     }
 
@@ -205,30 +176,53 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
     setError(null);
 
     try {
+      let lat = formData.latitude;
+      let lng = formData.longitude;
+
+      // Geocodificar dirección si cambió respecto a la original o si faltan coordenadas
+      if (cleanAddress !== order.address || !lat || !lng) {
+        try {
+          const geo = await geocodeAddressWithMapbox(cleanAddress, formData.city, formData.zip_code);
+          if (geo && geo.latitude && geo.longitude) {
+            lat = geo.latitude;
+            lng = geo.longitude;
+          }
+        } catch (geoErr) {
+          console.warn('Aviso de geocodificación:', geoErr.message);
+        }
+      }
+
+      const payload = {
+        ...order,
+        ...formData,
+        job_id: cleanJobId,
+        address: cleanAddress,
+        city: (formData.city || '').trim().toUpperCase(),
+        phone: cleanPhoneNumber(formData.phone),
+        drop_footage: numFootage,
+        rate_calculated: currentTotal,
+        manual_adjustment: finalAdj,
+        adjustment_reason: adjustType === 'none' ? '' : (adjustmentReason || '').trim(),
+        call_first: formData.call_first ? 1 : 0,
+        latitude: lat,
+        longitude: lng
+      };
+
       const res = await fetch(`/api/orders/${order.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...order,
-          ...formData,
-          phone: cleanPhoneNumber(formData.phone),
-          drop_footage: parseFloat(formData.drop_footage) || 0,
-          rate_calculated: parseFloat(formData.rate_calculated) || 100,
-          manual_adjustment: parseFloat(formData.manual_adjustment) || 0,
-          call_first: formData.call_first ? 1 : 0
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Error al actualizar el trabajo');
       }
 
-      if (onJobUpdated) onJobUpdated();
-      setIsEditing(false);
+      if (onJobUpdated) await onJobUpdated();
       onClose();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Error al actualizar el trabajo');
     } finally {
       setSaving(false);
     }
@@ -236,31 +230,33 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-5 animate-fade-in modal-overlay-safe"
       style={{
-        paddingTop: 'max(env(safe-area-inset-top, 0px) + 16px, 1.25rem)',
-        paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
+        paddingTop: 'max(env(safe-area-inset-top, 0px) + 24px, 1.75rem)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 24px, 1.75rem)'
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div 
-        className="bg-[#101722] border border-white/10 rounded-3xl w-full max-w-sm sm:max-w-md h-[80dvh] sm:h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all my-auto"
+      <form 
+        onSubmit={handleSubmit}
+        className="bg-[#101722] border border-white/10 w-full max-w-sm sm:max-w-md rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact overflow-hidden transition-all mx-auto text-white my-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 1. Header Unificado Estándar (Sin badges de estado ni botón de editar arriba) */}
-        <div className="px-4 sm:px-5 py-3 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white dark:bg-slate-900/70 shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white font-bold shrink-0">
-              <FileText className="h-4 w-4 stroke-[2.5]" />
+        
+        {/* Header Elegante y Compacto (Idéntico a Añadir Trabajo) */}
+        <div className="px-3.5 py-2.5 bg-white dark:bg-[#131d2b] border-b border-slate-200 dark:border-white/10 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-xl bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 flex items-center justify-center shadow-xs">
+              <Pencil className="h-3.5 w-3.5 stroke-[2.5]" />
             </div>
-            <div className="min-w-0">
-              <h3 className="text-sm font-black text-slate-900 dark:text-white truncate">
-                {isEditing ? 'Editar Trabajo' : 'Ficha de Trabajo'}
+            <div>
+              <h3 className="text-xs font-black text-slate-900 dark:text-white leading-tight">
+                Editar Trabajo
               </h3>
-              <p className="text-[10.5px] text-slate-600 dark:text-slate-400 font-semibold truncate font-mono">
-                Job #{formData.job_id || order?.job_id} • Información del trabajo
+              <p className="text-[9.5px] text-slate-500 dark:text-slate-400 font-semibold font-mono">
+                Job #{formData.job_id || order.job_id} • Modificar orden
               </p>
             </div>
           </div>
@@ -268,582 +264,521 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition cursor-pointer"
-            title="Cerrar"
+            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition active:scale-90"
+            title="Cerrar ventana"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        {/* 2. Cuerpo del Modal: Información General Arriba + Fotos Abajo */}
-        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
-          <div className="p-4 overflow-y-auto sleek-scroll space-y-3 flex-1 min-h-0 text-xs">
-            
-            {/* Mensaje de Error */}
-            {error && (
-              <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-xl text-xs flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
-                <span>{error}</span>
+        {/* Formulario Principal con Scroll */}
+        <div className="p-3 space-y-2 flex-1 min-h-0 text-xs overflow-y-auto scrollbar-none">
+          {error && (
+            <div className="p-2 bg-rose-500/15 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center gap-2">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Tarifa Estimada Banner Compacto Dinámico */}
+          <div className="bg-gradient-to-r from-emerald-950/40 via-emerald-900/30 to-emerald-950/40 border border-emerald-500/30 rounded-xl px-2.5 py-1.5 flex items-center justify-between gap-2 shadow-xs shrink-0">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[9.5px] font-bold text-emerald-400 uppercase tracking-wider">
+                  Tarifa:
+                </span>
+                <span className="text-[11px] font-mono text-slate-200 font-semibold">
+                  Base $100
+                  {boreBonus > 0 && <strong className="text-cyan-400 font-bold"> +$30 DW</strong>}
+                  {footageBonus > 0 && <strong className="text-emerald-400 font-bold"> +${footageBonus} Drop</strong>}
+                  {finalAdj !== 0 && (
+                    <strong className={finalAdj > 0 ? "text-cyan-300 font-bold" : "text-amber-400 font-bold"}>
+                      {" "}{finalAdj > 0 ? `+$${finalAdj}` : `-$${Math.abs(finalAdj)}`}
+                    </strong>
+                  )}
+                </span>
               </div>
-            )}
-
-            {/* CONTENEDOR UNIFICADO: DETALLES DEL TRABAJO (Estilo exacto de Jornada) */}
-            <div className="bg-[#131c27] border border-white/8 rounded-2xl p-3.5 space-y-2.5 shadow-xs">
-              {!isEditing ? (
-                <>
-                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                    <h4 className="text-xs font-black text-white uppercase tracking-wider">
-                      Detalles del Trabajo
-                    </h4>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
-                        formData.status === 'Completado' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                        : formData.status === 'No Realizado' ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                        : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                      }`}>
-                        {formData.status}
-                      </span>
-                      {order?.whatsapp_shared ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
-                          <CheckCheck className="w-3 h-3 stroke-[2.5]" />
-                          <span>WhatsApp</span>
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {/* Dirección */}
-                  <div className="flex justify-between items-start text-xs border-b border-white/5 pb-2">
-                    <span className="text-slate-400 font-medium">Dirección</span>
-                    <div className="text-right text-slate-100 font-semibold leading-tight">
-                      <div>{formData.address || 'Sin dirección asignada'}</div>
-                      <div className="text-[11px] text-slate-400">
-                        {formData.city || 'Skokie'}, IN {formData.zip_code || ''}
-                      </div>
-                      <div className="mt-1 flex justify-end">
-                        <a
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${formData.address}, ${formData.city || 'Skokie'}, IN`)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-2 py-0.5 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 rounded-md font-bold text-[10px] inline-flex items-center gap-1 transition"
-                        >
-                          <Navigation className="w-2.5 h-2.5" />
-                          <span>GPS Maps</span>
-                          <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Coordenadas */}
-                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
-                    <span className="text-slate-400 font-medium">Coordenadas</span>
-                    <span className="text-slate-200 font-mono text-[11px]">
-                      {formatCoordinates(order?.latitude, order?.longitude)}
-                    </span>
-                  </div>
-
-                  {/* Metraje */}
-                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
-                    <span className="text-slate-400 font-medium">Metraje</span>
-                    <span className="text-amber-300 font-mono font-bold text-[11px]">
-                      {formData.drop_footage || 0} ft {(formData.bore_type || '').includes('DW') ? '• Bore DW' : ''}
-                    </span>
-                  </div>
-
-                  {/* Tipo de Cable */}
-                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
-                    <span className="text-slate-400 font-medium">Tipo de Cable</span>
-                    <span className="text-cyan-300 font-mono font-bold text-[11px]">
-                      {formData.cable_type || 'RG-6'}
-                    </span>
-                  </div>
-
-                  {/* Perforación (Bore) */}
-                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
-                    <span className="text-slate-400 font-medium">Perforación (Bore)</span>
-                    <span className="text-slate-200 font-semibold text-[11px]">
-                      {(formData.bore_type || '').includes('DW') ? 'Driveway (+$30)' : formData.bore_type === 'SW:1' ? 'Sidewalk' : 'Sin Bore'}
-                    </span>
-                  </div>
-
-                  {/* Tarifa / Total */}
-                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
-                    <span className="text-slate-400 font-medium">Tarifa Total</span>
-                    <span className="text-emerald-400 font-mono font-black text-xs">
-                      ${formData.rate_calculated || 100} USD
-                    </span>
-                  </div>
-
-                  {/* Fecha Asignada */}
-                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
-                    <span className="text-slate-400 font-medium">Fecha</span>
-                    <span className="text-slate-200 font-mono text-[11px]">
-                      {formData.work_date || 'No asignada'}
-                    </span>
-                  </div>
-
-                  {/* Teléfono Cliente */}
-                  {formData.phone ? (
-                    <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
-                      <span className="text-slate-400 font-medium">Teléfono Cliente</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-cyan-400 font-mono font-bold text-[11px]">
-                          {formatPhoneDisplay(formData.phone)}
-                        </span>
-                        <a
-                          href={`tel:${cleanPhoneNumber(formData.phone)}`}
-                          className="p-1 bg-[#1f2b3a] hover:bg-[#28374a] text-cyan-400 rounded-md border border-white/10"
-                          title="Llamar"
-                        >
-                          <Phone className="w-3 h-3" />
-                        </a>
-                        <a
-                          href={getCustomerSmsUrl(formData.phone, formData.address)}
-                          className="p-1 bg-[#1f2b3a] hover:bg-[#28374a] text-cyan-400 rounded-md border border-white/10"
-                          title="SMS"
-                        >
-                          <MessageSquare className="w-3 h-3" />
-                        </a>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {/* Call First */}
-                  {formData.call_first ? (
-                    <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
-                      <span className="text-slate-400 font-medium">Aviso Previo</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                        CALL FIRST (Llamar al cliente)
-                      </span>
-                    </div>
-                  ) : null}
-
-                  {/* Observaciones */}
-                  {formData.raw_notes ? (
-                    <div className="flex justify-between items-start text-xs border-b border-white/5 pb-2">
-                      <span className="text-slate-400 font-medium">Observaciones</span>
-                      <span className="text-slate-300 font-medium text-right max-w-[65%] text-[11px]">
-                        {formData.raw_notes}
-                      </span>
-                    </div>
-                  ) : null}
-
-                  {/* Ajuste Supervisor (si tiene) */}
-                  {formData.manual_adjustment !== 0 ? (
-                    <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
-                      <span className="text-slate-400 font-medium">Ajuste Supervisor</span>
-                      <span className={`font-mono font-bold text-[11px] ${formData.manual_adjustment > 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                        {formData.manual_adjustment > 0 ? `+$${formData.manual_adjustment}` : `-$${Math.abs(formData.manual_adjustment)}`} ({formData.adjustment_reason || 'Manual'})
-                      </span>
-                    </div>
-                  ) : null}
-
-                  {/* Motivo de Cancelación (si no realizado) */}
-                  {formData.status === 'No Realizado' && formData.cancel_reason ? (
-                    <div className="flex justify-between items-start text-xs">
-                      <span className="text-rose-400 font-medium">Motivo Cancelación</span>
-                      <span className="text-rose-300 font-semibold text-right max-w-[65%] text-[11px]">
-                        {formData.cancel_reason}
-                      </span>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                /* FORMULARIO DE EDICIÓN FLUIDO */
-                <div className="space-y-2.5">
-                  <div className="border-b border-white/5 pb-2">
-                    <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
-                      Estado del Trabajo *
-                    </label>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {['Pendiente', 'Completado', 'No Realizado'].map((st) => (
-                        <button
-                          key={st}
-                          type="button"
-                          onClick={() => setFormData({ ...formData, status: st })}
-                          className={`py-1.5 px-1 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
-                            formData.status === st
-                              ? st === 'Completado'
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-xs'
-                                : st === 'No Realizado'
-                                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-xs'
-                                : 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs'
-                              : 'bg-[#0b1118] border-white/5 text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          {st}
-                        </button>
-                      ))}
-                    </div>
-
-                    {formData.status === 'No Realizado' && (
-                      <div className="pt-2">
-                        <label className="block text-[9px] font-bold text-rose-300 mb-1 uppercase tracking-wider">
-                          Motivo de Cancelación / No Realizado *
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="ej. Sin acceso al patio, perro suelto..."
-                          value={formData.cancel_reason}
-                          onChange={(e) => setFormData({ ...formData, cancel_reason: e.target.value })}
-                          className="w-full bg-[#0b1118] border border-rose-500/30 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-rose-400 transition"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
-                      Dirección de la Vivienda *
-                    </label>
-                    <div className="relative">
-                      <MapPin className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-                      <input
-                        type="text"
-                        required
-                        placeholder="ej. 23322 Ironwood Dr"
-                        value={formData.address}
-                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                        className="w-full bg-[#0b1118] border border-white/10 rounded-xl pl-9 pr-3 py-2 text-white font-semibold focus:outline-none focus:border-cyan-500 text-xs transition"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider truncate">
-                        Ciudad
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Ciudad..."
-                        value={formData.city}
-                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                        className="w-full bg-[#0b1118] border border-white/10 rounded-xl px-2.5 py-2 text-white font-semibold focus:outline-none focus:border-cyan-500 uppercase text-xs transition"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider truncate">
-                        Teléfono
-                      </label>
-                      <div className="relative">
-                        <Phone className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" />
-                        <input
-                          type="tel"
-                          placeholder="ej. 5742094475"
-                          value={formData.phone}
-                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                          className="w-full bg-[#0b1118] border border-white/10 rounded-xl pl-8 pr-2.5 py-2 text-white font-mono focus:outline-none focus:border-cyan-500 text-xs transition"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider truncate">
-                        Job ID *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="ej. 734521"
-                        value={formData.job_id}
-                        onChange={(e) => setFormData({ ...formData, job_id: e.target.value })}
-                        className="w-full bg-[#0b1118] border border-white/10 rounded-xl px-2.5 py-1.5 text-white font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs transition"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider truncate">
-                        Fecha Asignada *
-                      </label>
-                      <input
-                        type="date"
-                        required
-                        value={formData.work_date}
-                        onChange={(e) => setFormData({ ...formData, work_date: e.target.value })}
-                        className="w-full bg-[#0b1118] border border-white/10 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-cyan-500 font-mono font-bold text-xs transition dark:[color-scheme:dark] [color-scheme:light]"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider truncate">
-                        Metraje Drop (ft)
-                      </label>
-                      <div className="relative">
-                        <Ruler className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
-                        <input
-                          type="number"
-                          step="0.1"
-                          placeholder="0.0"
-                          value={formData.drop_footage}
-                          onChange={(e) => handleFootageChange(e.target.value)}
-                          className="w-full bg-[#0b1118] border border-white/10 rounded-xl pl-8 pr-2.5 py-1.5 text-white font-mono font-bold focus:outline-none focus:border-cyan-500 text-xs transition"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider truncate">
-                        Tipo de Cable
-                      </label>
-                      <div className="grid grid-cols-2 gap-1">
-                        {['RG-6', 'RG-11'].map((c) => (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() => setFormData({ ...formData, cable_type: c })}
-                            className={`py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
-                              formData.cable_type === c
-                                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-xs font-black'
-                                : 'bg-[#0b1118] border-white/10 text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            {c}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
-                      Perforación / Bore
-                    </label>
-                    <div className="grid grid-cols-3 gap-1">
-                      {[
-                        { id: 'N', label: 'Sin Bore' },
-                        { id: 'SW:1', label: 'Sidewalk' },
-                        { id: 'DW:1', label: 'Driveway (+$30)' }
-                      ].map((b) => {
-                        const active = formData.bore_type === b.id || (b.id === 'DW:1' && (formData.bore_type || '').includes('DW'));
-                        return (
-                          <button
-                            key={b.id}
-                            type="button"
-                            onClick={() => handleBoreChange(b.id)}
-                            className={`py-1.5 px-0.5 rounded-xl text-[10.5px] font-bold border text-center transition cursor-pointer ${
-                              active
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-xs font-black'
-                                : 'bg-[#0b1118] border-white/10 text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            {b.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Selector de Ajuste Supervisor en Edición */}
-                  <div className="bg-[#0b1118] p-2.5 rounded-xl border border-white/5 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Ajuste Supervisor:
-                      </span>
-                      <span className="text-[9px] text-slate-400 font-mono">
-                        {formData.manual_adjustment !== 0 ? (
-                          formData.manual_adjustment > 0 ? (
-                            <span className="text-emerald-400 font-bold">+${formData.manual_adjustment}</span>
-                          ) : (
-                            <span className="text-amber-400 font-bold">-${Math.abs(formData.manual_adjustment)}</span>
-                          )
-                        ) : 'Opcional'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-1">
-                      {[
-                        { id: 'none', label: 'Sin Ajuste' },
-                        { id: 'add', label: '+ Bono' },
-                        { id: 'sub', label: '- Descuento' }
-                      ].map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => handleAdjustChange(t.id, t.id === 'none' ? '' : adjustVal)}
-                          className={`py-1 rounded-lg text-[10.5px] font-bold border transition cursor-pointer ${
-                            adjustType === t.id
-                              ? t.id === 'add'
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-xs'
-                                : t.id === 'sub'
-                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs'
-                                : 'bg-white/10 text-white border-white/20'
-                              : 'bg-[#131c27] border-white/5 text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          {t.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {adjustType !== 'none' && (
-                      <div className="grid grid-cols-2 gap-1.5 pt-1">
-                        <div>
-                          <label className="text-[9px] text-slate-400 block mb-0.5 font-bold uppercase">
-                            {adjustType === 'add' ? 'Monto ($):' : 'Descuento ($):'}
-                          </label>
-                          <input
-                            type="number"
-                            step="any"
-                            min="0"
-                            placeholder="ej. 25"
-                            value={adjustVal}
-                            onChange={(e) => handleAdjustChange(adjustType, e.target.value)}
-                            className="w-full bg-[#131c27] border border-white/10 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold focus:outline-none focus:border-cyan-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[9px] text-slate-400 block mb-0.5 font-bold uppercase">
-                            Motivo:
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="ej. Rocoso / Autorizado"
-                            value={formData.adjustment_reason}
-                            onChange={(e) => setFormData({ ...formData, adjustment_reason: e.target.value })}
-                            className="w-full bg-[#131c27] border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-500"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
-                      Observaciones & Notas
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Notas, portón, perro, zanja..."
-                      value={formData.raw_notes}
-                      onChange={(e) => setFormData({ ...formData, raw_notes: e.target.value })}
-                      className="w-full bg-[#0b1118] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 transition"
-                    />
-                  </div>
-
-                  <label className="flex items-center gap-2 pt-1 text-[11px] text-slate-300 font-semibold cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={formData.call_first}
-                      onChange={(e) => setFormData({ ...formData, call_first: e.target.checked })}
-                      className="rounded border-white/20 bg-slate-800 text-cyan-500 focus:ring-0 w-3.5 h-3.5"
-                    />
-                    <span>Llamar al cliente primero (Call First)</span>
-                  </label>
-                </div>
+              {footageBonus > 0 && (
+                <p className="text-[9.5px] text-emerald-400 font-bold truncate">
+                  ✓ Bono metraje: {extraBlocks} tramo(s) sobre 300 ft
+                </p>
               )}
             </div>
 
-            {/* SECCIÓN 5: FOTOS DE EVIDENCIA (Abajo de la información general) */}
-            <div className="bg-[#131c27] border border-white/8 rounded-2xl p-3 space-y-2 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-slate-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                  <Camera className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Fotos de Evidencia ({photos.length})</span>
+            {/* Medallón Dinero */}
+            <div className="flex items-center gap-0.5 px-2.5 py-0.5 bg-emerald-500 text-slate-950 rounded-lg font-mono font-black shadow-xs shrink-0 text-sm">
+              <span className="text-xs">$</span>
+              <span>{currentTotal}</span>
+            </div>
+          </div>
+
+          {/* Fila 1: Job ID y Fecha */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0">
+              <label className="block text-[9.5px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 truncate">
+                Job ID (Orden #) *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="ej. 734521"
+                value={formData.job_id}
+                onChange={(e) => setFormData({ ...formData, job_id: e.target.value })}
+                className="w-full h-8.5 bg-[#16202c] border border-white/10 rounded-xl px-2.5 text-cyan-400 font-mono font-bold focus:outline-none focus:border-cyan-400 text-xs shadow-xs"
+              />
+            </div>
+
+            <div className="min-w-0">
+              <label className="block text-[9.5px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 truncate">
+                Fecha Asignada
+              </label>
+              <input
+                type="date"
+                required
+                value={formData.work_date}
+                onChange={(e) => setFormData({ ...formData, work_date: e.target.value })}
+                className="w-full h-8.5 bg-[#16202c] border border-white/10 rounded-xl px-2.5 text-slate-200 font-mono font-bold focus:outline-none focus:border-cyan-400 text-xs shadow-xs dark:[color-scheme:dark] [color-scheme:light]"
+              />
+            </div>
+          </div>
+
+          {/* Fila 2: Dirección con Buscador y Autocompletado Mapbox */}
+          <div className="relative">
+            <div className="flex items-center justify-between mb-0.5">
+              <label className="text-[9.5px] font-bold text-slate-300 uppercase tracking-wider">
+                Dirección de la Vivienda *
+              </label>
+              {searchingAddress && (
+                <span className="flex items-center gap-1 text-[9.5px] text-cyan-400 font-bold animate-pulse">
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" /> Buscando...
                 </span>
-                {photos.length > 0 && (
-                  <span className="text-[9.5px] text-slate-400">Toca para ampliar</span>
+              )}
+            </div>
+
+            <div className="relative">
+              <MapPin className="h-3.5 w-3.5 text-cyan-400 absolute left-2.5 top-2.5 pointer-events-none" />
+              <input
+                type="text"
+                required
+                placeholder="Dirección (ej. 1308 Mintcrest, 23322 Ironwood...)"
+                value={formData.address}
+                onChange={(e) => handleAddressChange(e.target.value)}
+                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                className="w-full h-8.5 bg-[#16202c] border border-white/10 focus:border-cyan-400 rounded-xl pl-8 pr-2.5 text-white font-semibold focus:outline-none text-xs placeholder-slate-500 shadow-xs"
+              />
+            </div>
+
+            {/* Dropdown de Sugerencias de Mapbox */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1 bg-[#192433] border border-cyan-500/40 rounded-xl shadow-2xl z-40 overflow-hidden divide-y divide-white/5 animate-fade-in max-h-48 overflow-y-auto">
+                <div className="p-1 bg-cyan-950/40 text-[9.5px] font-bold text-cyan-400 uppercase tracking-wider px-2.5">
+                  Direcciones encontradas:
+                </div>
+                {suggestions.map((sug) => (
+                  <button
+                    key={sug.id}
+                    type="button"
+                    onClick={() => handleSelectSuggestion(sug)}
+                    className="w-full text-left p-2 hover:bg-cyan-500/15 flex items-start gap-2 transition cursor-pointer"
+                  >
+                    <MapPin className="h-3.5 w-3.5 text-cyan-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white leading-tight truncate">
+                        {sug.streetAddress}
+                      </p>
+                      <p className="text-[10px] text-slate-400 truncate">
+                        {sug.city ? `${sug.city}, ` : ''}{sug.state} {sug.zipCode}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {formData.city && (
+              <div className="mt-0.5 flex items-center gap-1 text-[10px] text-emerald-400 font-semibold">
+                <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />
+                <span>Ubicación: <strong className="text-white font-bold">{formData.city}</strong>{formData.latitude ? ' (GPS activo)' : ''}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Fila: Ciudad y Código Postal */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0">
+              <label className="block text-[9.5px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 truncate">
+                Ciudad
+              </label>
+              <input
+                type="text"
+                placeholder="Ciudad (ej. Goshen)"
+                value={formData.city}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value.toUpperCase() })}
+                className="w-full h-8.5 bg-[#16202c] border border-white/10 rounded-xl px-2.5 text-white uppercase font-bold focus:outline-none focus:border-cyan-400 text-xs shadow-xs"
+              />
+            </div>
+
+            <div className="min-w-0">
+              <label className="block text-[9.5px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 truncate">
+                Código Postal (ZIP)
+              </label>
+              <input
+                type="text"
+                placeholder="ej. 46526"
+                value={formData.zip_code}
+                onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
+                className="w-full h-8.5 bg-[#16202c] border border-white/10 rounded-xl px-2.5 text-slate-200 font-mono text-xs focus:outline-none focus:border-cyan-400 shadow-xs"
+              />
+            </div>
+          </div>
+
+          {/* Fila 3: Teléfono del Cliente & Pies de Cable */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0">
+              <label className="block text-[9.5px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 truncate">
+                Teléfono del Cliente
+              </label>
+              <div className="relative">
+                <Phone className="h-3 w-3 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" />
+                <input
+                  type="tel"
+                  placeholder="ej. 5741234567"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className="w-full h-8.5 bg-[#16202c] border border-white/10 rounded-xl pl-7 pr-2 text-slate-200 font-mono text-xs focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex items-center justify-between mb-0.5">
+                <label className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                  Pies (Drop ft)
+                </label>
+                {footageBonus > 0 && (
+                  <span className="text-[9px] font-bold text-emerald-400 font-mono">
+                    +${footageBonus}
+                  </span>
                 )}
               </div>
-
-              {loadingPhotos ? (
-                <div className="p-3 text-center bg-[#0b1118] rounded-xl border border-white/5 text-slate-400 text-xs">
-                  Cargando fotos de evidencia...
-                </div>
-              ) : photos.length > 0 ? (
-                <div className="grid grid-cols-3 gap-2">
-                  {photos.map((photo, idx) => {
-                    const photoSrc = photo.photo_data || `/uploads/${photo.filename}`;
-                    return (
-                      <div
-                        key={photo.id || idx}
-                        onClick={() => setPreviewPhoto(photoSrc)}
-                        className="group relative aspect-square bg-[#0b1118] rounded-xl overflow-hidden border border-white/10 hover:border-cyan-400/60 transition cursor-pointer shadow-xs"
-                      >
-                        <img
-                          src={photoSrc}
-                          alt={photo.category || `Foto ${idx + 1}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-between p-1">
-                          <span className="self-start text-[8px] font-bold bg-black/70 text-cyan-300 px-1 py-0.2 rounded border border-white/10 truncate max-w-full">
-                            {photo.category || `#${idx + 1}`}
-                          </span>
-                          <div className="flex justify-end opacity-75 group-hover:opacity-100 transition">
-                            <span className="p-0.5 bg-black/60 rounded-full text-white">
-                              <ZoomIn className="w-2.5 h-2.5" />
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="p-3 text-center bg-[#0b1118] rounded-xl border border-white/5 text-slate-400 text-xs">
-                  Sin fotos de evidencia adjuntas
-                </div>
-              )}
+              <div className="relative">
+                <Ruler className="h-3 w-3 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" />
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="ej. 120"
+                  value={formData.drop_footage}
+                  onChange={(e) => setFormData({ ...formData, drop_footage: e.target.value })}
+                  className="w-full h-8.5 bg-[#16202c] border border-white/10 rounded-xl pl-7 pr-2 text-amber-300 font-mono font-bold text-xs focus:outline-none focus:border-cyan-400"
+                />
+              </div>
             </div>
           </div>
 
-          {/* 3. Footer del Modal (Botones abajo) */}
-          <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-3 shrink-0">
-            {!isEditing ? (
-              <>
+          {/* Fila 4: Tipo de Cable & Driveway Bore */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0">
+              <label className="block text-[9.5px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 truncate">
+                Tipo de Cable
+              </label>
+              <div className="grid grid-cols-2 gap-1 bg-[#16202c] p-0.5 rounded-xl border border-white/10 h-8.5 items-center">
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition active:scale-95 border border-white/10 cursor-pointer"
+                  onClick={() => setFormData({ ...formData, cable_type: 'RG-6' })}
+                  className={`h-full rounded-lg font-bold text-xs flex items-center justify-center transition ${
+                    formData.cable_type === 'RG-6'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  Cerrar
+                  RG-6
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, cable_type: 'RG-11' })}
+                  className={`h-full rounded-lg font-bold text-xs flex items-center justify-center transition ${
+                    formData.cable_type === 'RG-11'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  RG-11
+                </button>
+              </div>
+            </div>
 
+            <div className="min-w-0">
+              <div className="flex items-center justify-between mb-0.5">
+                <label className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                  Driveway Bore
+                </label>
+                {boreBonus > 0 && (
+                  <span className="text-[9px] font-bold text-cyan-400 font-mono">
+                    +$30 DW
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-1 bg-[#16202c] p-0.5 rounded-xl border border-white/10 h-8.5 items-center">
                 <button
                   type="button"
-                  onClick={() => setIsEditing(true)}
-                  className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                  onClick={() => setFormData({ ...formData, bore_type: 'N' })}
+                  className={`h-full rounded-lg font-bold text-xs flex items-center justify-center transition ${
+                    formData.bore_type === 'N'
+                      ? 'bg-white/15 text-white font-black shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  <Pencil className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Editar Trabajo</span>
+                  No
                 </button>
-              </>
-            ) : (
-              <>
                 <button
                   type="button"
-                  onClick={handleCancelEdit}
-                  disabled={saving}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition active:scale-95 border border-white/10 cursor-pointer"
+                  onClick={() => setFormData({ ...formData, bore_type: 'DW:1' })}
+                  className={`h-full rounded-lg font-bold text-xs flex items-center justify-center transition ${
+                    formData.bore_type === 'DW:1'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  Cancelar
+                  Sí (DW)
                 </button>
+              </div>
+            </div>
+          </div>
 
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-1.5 transition active:scale-95 disabled:opacity-50 cursor-pointer"
-                >
-                  {saving ? (
-                    <span>Guardando...</span>
-                  ) : (
-                    <>
-                      <Save className="w-3.5 h-3.5 stroke-[2.5]" />
-                      <span>Guardar Cambios</span>
-                    </>
-                  )}
-                </button>
-              </>
+          {/* Fila 5: Estado del Trabajo */}
+          <div className="space-y-1">
+            <label className="block text-[9.5px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+              Estado del Trabajo
+            </label>
+            <div className="grid grid-cols-3 gap-1 bg-[#16202c] p-0.5 rounded-xl border border-white/10 h-8.5 items-center">
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, status: 'Pendiente' }))}
+                className={`h-full rounded-lg font-bold text-[11px] flex items-center justify-center transition ${
+                  formData.status === 'Pendiente'
+                    ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Pendiente
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, status: 'Completado' }))}
+                className={`h-full rounded-lg font-bold text-[11px] flex items-center justify-center transition ${
+                  formData.status === 'Completado'
+                    ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/50 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Completado
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, status: 'No Realizado' }))}
+                className={`h-full rounded-lg font-bold text-[11px] flex items-center justify-center transition ${
+                  formData.status === 'No Realizado'
+                    ? 'bg-rose-500/25 text-rose-300 border border-rose-500/50 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                No Realizado
+              </button>
+            </div>
+
+            {formData.status === 'No Realizado' && (
+              <div className="pt-1 animate-fade-in">
+                <input
+                  type="text"
+                  placeholder="Motivo de no realizado (ej. Cliente canceló, portón con candado...)"
+                  value={formData.cancel_reason}
+                  onChange={(e) => setFormData(prev => ({ ...prev, cancel_reason: e.target.value }))}
+                  className="w-full h-8 bg-rose-950/25 border border-rose-500/35 rounded-xl px-2.5 text-xs text-rose-200 placeholder-rose-500/60 focus:outline-none focus:border-rose-400 shadow-xs"
+                />
+              </div>
             )}
           </div>
-        </form>
-      </div>
+
+          {/* Fila 6: Ajuste Manual de Supervisor */}
+          <div className="bg-[#16202c] border border-white/5 rounded-xl p-2 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[9.5px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-cyan-400" />
+                <span>Ajuste de Supervisor</span>
+              </span>
+              {finalAdj !== 0 && (
+                <span className={`text-[10px] font-mono font-bold ${finalAdj > 0 ? 'text-cyan-400' : 'text-amber-400'}`}>
+                  {finalAdj > 0 ? `+$${finalAdj}` : `-$${Math.abs(finalAdj)}`}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-1">
+              <button
+                type="button"
+                onClick={() => { setAdjustType('none'); setAdjustVal(''); setAdjustmentReason(''); }}
+                className={`py-1 rounded-lg text-[10.5px] font-bold transition ${
+                  adjustType === 'none'
+                    ? 'bg-white/15 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Sin Ajuste
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdjustType('add')}
+                className={`py-1 rounded-lg text-[10.5px] font-bold transition ${
+                  adjustType === 'add'
+                    ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                + Bono
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdjustType('sub')}
+                className={`py-1 rounded-lg text-[10.5px] font-bold transition ${
+                  adjustType === 'sub'
+                    ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                - Descuento
+              </button>
+            </div>
+
+            {adjustType !== 'none' && (
+              <div className="grid grid-cols-2 gap-1.5 pt-1 animate-fade-in">
+                <div>
+                  <label className="block text-[8.5px] font-bold text-slate-400 uppercase mb-0.5">
+                    Monto ($)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="ej. 20"
+                    value={adjustVal}
+                    onChange={(e) => setAdjustVal(e.target.value)}
+                    className="w-full h-7 bg-[#101722] border border-white/10 rounded-lg px-2 text-xs font-mono font-bold text-cyan-400 focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[8.5px] font-bold text-slate-400 uppercase mb-0.5">
+                    Motivo
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="ej. Apoyo especial"
+                    value={adjustmentReason}
+                    onChange={(e) => setAdjustmentReason(e.target.value)}
+                    className="w-full h-7 bg-[#101722] border border-white/10 rounded-lg px-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Fila 7: Remarks / Notas del Trabajo */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[9.5px] font-bold text-slate-300 uppercase tracking-wider">
+                Remarks / Notas del Trabajo
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={formData.call_first}
+                  onChange={(e) => setFormData({ ...formData, call_first: e.target.checked })}
+                  className="h-3 w-3 rounded border-white/20 bg-[#16202c] text-cyan-500 focus:ring-0"
+                />
+                <span className="text-cyan-300 font-bold text-[11px]">
+                  Call First
+                </span>
+              </label>
+            </div>
+            <input
+              type="text"
+              placeholder="Notas adicionales (portón, perro, zanja, traspatio...)"
+              value={formData.raw_notes}
+              onChange={(e) => setFormData({ ...formData, raw_notes: e.target.value })}
+              className="w-full h-8.5 bg-[#16202c] border border-white/10 focus:border-cyan-400 rounded-xl px-2.5 text-xs text-white placeholder-slate-500 focus:outline-none shadow-xs"
+            />
+          </div>
+
+          {/* Sección: Fotos de Evidencia (Al Final) */}
+          <div className="bg-[#16202c] border border-white/5 rounded-xl p-2.5 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[9.5px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Fotos de Evidencia ({photos.length})</span>
+              </span>
+              {photos.length > 0 && (
+                <span className="text-[9px] text-slate-400">Toca para ampliar</span>
+              )}
+            </div>
+
+            {loadingPhotos ? (
+              <div className="py-2 text-center text-slate-400 text-[10px]">
+                Cargando fotos...
+              </div>
+            ) : photos.length > 0 ? (
+              <div className="grid grid-cols-3 gap-1.5">
+                {photos.map((photo, pIdx) => {
+                  const photoSrc = photo.photo_data || `/uploads/${photo.filename}`;
+                  return (
+                    <div
+                      key={photo.id || pIdx}
+                      onClick={() => setPreviewPhoto(photoSrc)}
+                      className="group relative aspect-square bg-[#0b1118] rounded-lg overflow-hidden border border-white/10 hover:border-cyan-400/60 transition cursor-pointer shadow-xs"
+                    >
+                      <img
+                        src={photoSrc}
+                        alt={photo.category || `Foto ${pIdx + 1}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-between p-1">
+                        <span className="self-start text-[8px] font-bold bg-black/70 text-cyan-300 px-1 py-0.2 rounded border border-white/10 truncate max-w-full">
+                          {photo.category || `#${pIdx + 1}`}
+                        </span>
+                        <div className="flex justify-end opacity-75 group-hover:opacity-100 transition">
+                          <span className="p-0.5 bg-black/60 rounded-full text-white">
+                            <ZoomIn className="w-2.5 h-2.5" />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[10px] text-slate-500 italic py-1">
+                Sin fotos de evidencia adjuntas
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Footer Fijo con Botones de Acción */}
+        <div className="p-3 bg-slate-900/90 flex items-center justify-between gap-2 border-t border-white/10 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3.5 py-2 bg-[#16202c] hover:bg-white/10 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition border border-white/5 active:scale-95 cursor-pointer"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/25 active:scale-95 transition cursor-pointer disabled:opacity-50"
+          >
+            <Check className="h-4 w-4 stroke-[3]" />
+            <span>{saving ? 'Guardando...' : `Guardar Cambios ($${currentTotal})`}</span>
+          </button>
+        </div>
+      </form>
 
       {/* Lightbox / Visor de Fotos en Pantalla Completa */}
       {previewPhoto && (
