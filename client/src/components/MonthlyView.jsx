@@ -605,7 +605,7 @@ ${weeksLines || '  (No hay semanas registradas)'}
             className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-rose-500 to-amber-600 hover:from-rose-600 hover:to-amber-700 text-white font-bold text-xs shadow-lg shadow-rose-950/30 flex items-center justify-center gap-2 transition active:scale-[0.98]"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
-            <span>+ Registrar Gasto de {formatMonthFriendly(selectedMonth)}</span>
+            <span>Registrar Gasto de {formatMonthFriendly(selectedMonth)}</span>
           </button>
 
           {/* Breakdown by Category */}
