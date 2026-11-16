@@ -44,11 +44,66 @@ export default function HistoryView({
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
 
+  // Weekly closures search and status filter
+  const [weekStatusFilter, setWeekStatusFilter] = useState('ALL'); // 'ALL' | 'Pendiente' | 'Cobrado'
+  const [weekSearch, setWeekSearch] = useState('');
+
   const weeks = summaryData?.weeks || [];
   const totalPaidWeeks = weeks.filter(w => w.isPaid).reduce((sum, w) => sum + (w.totalEarnings || 0), 0);
   const totalPendingWeeks = weeks.filter(w => !w.isPaid).reduce((sum, w) => sum + (w.totalEarnings || 0), 0);
   const paidWeeksCount = weeks.filter(w => w.isPaid).length;
   const pendingWeeksCount = weeks.filter(w => !w.isPaid).length;
+
+  const MONTH_NAMES_ES = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+  ];
+
+  // Filtered weeks based on weekStatusFilter and weekSearch
+  const filteredWeeks = weeks.filter((w) => {
+    // 1. Status filter
+    if (weekStatusFilter === 'Pendiente' && w.isPaid) return false;
+    if (weekStatusFilter === 'Cobrado' && !w.isPaid) return false;
+
+    // 2. Search query filter
+    const rawQ = weekSearch.trim();
+    if (rawQ) {
+      const q = rawQ.toLowerCase();
+
+      // Check month names from startDate and endDate
+      const [sYear, sMonth] = (w.startDate || '').split('-');
+      const [eYear, eMonth] = (w.endDate || '').split('-');
+      const sMonthName = sMonth ? (MONTH_NAMES_ES[parseInt(sMonth, 10) - 1] || '') : '';
+      const eMonthName = eMonth ? (MONTH_NAMES_ES[parseInt(eMonth, 10) - 1] || '') : '';
+
+      // Direct ISO date in range check (e.g. YYYY-MM-DD)
+      const isIsoDate = /^\d{4}-\d{2}(-\d{2})?$/.test(rawQ);
+      let fallsInRange = false;
+      if (isIsoDate && w.startDate && w.endDate && rawQ.length === 10) {
+        fallsInRange = rawQ >= w.startDate && rawQ <= w.endDate;
+      }
+
+      const matchesSearch =
+        fallsInRange ||
+        (w.key && w.key.toLowerCase().includes(q)) ||
+        (w.displayLabel && String(w.displayLabel).toLowerCase().includes(q)) ||
+        `semana ${w.displayLabel || w.key}`.toLowerCase().includes(q) ||
+        (w.startDate && w.startDate.toLowerCase().includes(q)) ||
+        (w.endDate && w.endDate.toLowerCase().includes(q)) ||
+        (sMonthName && sMonthName.includes(q)) ||
+        (eMonthName && eMonthName.includes(q)) ||
+        (w.orders && w.orders.some(o => 
+          (o.work_date && o.work_date.toLowerCase().includes(q)) ||
+          (o.job_id && String(o.job_id).toLowerCase().includes(q)) ||
+          (o.address && o.address.toLowerCase().includes(q)) ||
+          (o.city && o.city.toLowerCase().includes(q))
+        ));
+
+      if (!matchesSearch) return false;
+    }
+
+    return true;
+  });
 
   // Active Cutoff Day & Global Balance Metrics
   const activeCutoff = String(summaryData?.cutoffDay ?? summaryData?.summary?.cutoffDay ?? '0');
@@ -242,57 +297,95 @@ ${jobLines}
       {/* SUBTAB 2: LISTADO DE CIERRES SEMANALES */}
       {subTab === 'weeks' && (
         <div className="space-y-3">
-          {/* Banner de Ciclo de Cierre Semanal Activo */}
-          <div className="bg-[#101722] border border-white/10 rounded-2xl p-2.5 px-3 flex items-center justify-between text-xs shadow-md">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="p-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0 shadow-xs">
-                <Calendar className="h-4 w-4" />
+          {/* 1. Resumen Superior de Cobros (KPIs Estéticos Cockpit - En la parte superior) */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-[#131b26] border border-amber-500/30 rounded-2xl p-3 shadow-lg space-y-1">
+              <div className="flex items-center justify-between text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+                <span>Pendiente</span>
+                <Clock className="h-3.5 w-3.5" />
               </div>
-              <div className="min-w-0">
-                <span className="text-[9.5px] uppercase tracking-wider text-slate-400 font-bold block">
-                  Día de Cierre de Semana
-                </span>
-                <span className="text-xs font-black text-amber-300 font-mono block truncate">
-                  {CUTOFF_LABELS[activeCutoff] || 'Sábado (Domingo a Sábado)'}
-                </span>
+              <div className="text-xl sm:text-2xl font-black text-amber-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]">
+                ${totalPendingWeeks.toFixed(2)}
               </div>
+              <p className="text-[10px] text-slate-400 truncate font-medium">
+                {pendingWeeksCount} semana{pendingWeeksCount !== 1 ? 's' : ''} pendiente{pendingWeeksCount !== 1 ? 's' : ''}
+              </p>
             </div>
-            <span className="text-[10px] text-cyan-400 font-mono font-bold bg-cyan-500/10 border border-cyan-500/25 px-2 py-0.5 rounded-lg shrink-0">
-              Activo
-            </span>
+
+            <div className="bg-[#131b26] border border-emerald-500/30 rounded-2xl p-3 shadow-lg space-y-1">
+              <div className="flex items-center justify-between text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                <span>Cobrado</span>
+                <ShieldCheck className="h-3.5 w-3.5" />
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-emerald-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]">
+                ${totalPaidWeeks.toFixed(2)}
+              </div>
+              <p className="text-[10px] text-slate-400 truncate font-medium">
+                {paidWeeksCount} semana{paidWeeksCount !== 1 ? 's' : ''} liquidada{paidWeeksCount !== 1 ? 's' : ''}
+              </p>
+            </div>
           </div>
 
-          {/* Resumen Superior de Cobros (KPIs Estéticos Cockpit) */}
-          {weeks.length > 0 && (
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-[#131b26] border border-amber-500/30 rounded-2xl p-3 shadow-lg space-y-1">
-                <div className="flex items-center justify-between text-amber-400 text-[10px] font-bold uppercase tracking-wider">
-                  <span>Pendiente</span>
-                  <Clock className="h-3.5 w-3.5" />
-                </div>
-                <div className="text-xl sm:text-2xl font-black text-amber-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]">
-                  ${totalPendingWeeks.toFixed(2)}
-                </div>
-                <p className="text-[10px] text-slate-400 truncate font-medium">
-                  {pendingWeeksCount} semana{pendingWeeksCount !== 1 ? 's' : ''} pendiente{pendingWeeksCount !== 1 ? 's' : ''}
-                </p>
-              </div>
+          {/* 2. Selector de Filtro: Todos, Pendiente, Cobrado */}
+          <div className="grid grid-cols-3 gap-1 bg-[#0f1722]/90 p-1 rounded-2xl border border-white/10 text-[11px] font-bold text-center shadow-md">
+            <button
+              type="button"
+              onClick={() => setWeekStatusFilter('ALL')}
+              className={`py-1.5 px-2 rounded-xl transition cursor-pointer select-none ${
+                weekStatusFilter === 'ALL'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm font-black'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent font-medium'
+              }`}
+            >
+              Todos ({weeks.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeekStatusFilter('Pendiente')}
+              className={`py-1.5 px-2 rounded-xl transition cursor-pointer select-none ${
+                weekStatusFilter === 'Pendiente'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm font-black'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent font-medium'
+              }`}
+            >
+              Pendiente ({pendingWeeksCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeekStatusFilter('Cobrado')}
+              className={`py-1.5 px-2 rounded-xl transition cursor-pointer select-none ${
+                weekStatusFilter === 'Cobrado'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm font-black'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent font-medium'
+              }`}
+            >
+              Cobrado ({paidWeeksCount})
+            </button>
+          </div>
 
-              <div className="bg-[#131b26] border border-emerald-500/30 rounded-2xl p-3 shadow-lg space-y-1">
-                <div className="flex items-center justify-between text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
-                  <span>Cobrado</span>
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                </div>
-                <div className="text-xl sm:text-2xl font-black text-emerald-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]">
-                  ${totalPaidWeeks.toFixed(2)}
-                </div>
-                <p className="text-[10px] text-slate-400 truncate font-medium">
-                  {paidWeeksCount} semana{paidWeeksCount !== 1 ? 's' : ''} liquidada{paidWeeksCount !== 1 ? 's' : ''}
-                </p>
-              </div>
-            </div>
-          )}
+          {/* 3. Buscador de Semanas por Fecha / Término */}
+          <div className="relative">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Buscar semana por fecha (ej. 2026, 11, Nov), # semana..."
+              value={weekSearch}
+              onChange={(e) => setWeekSearch(e.target.value)}
+              className="w-full bg-[#131b26] border border-white/10 rounded-2xl pl-9 pr-8 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition shadow-md"
+            />
+            {weekSearch && (
+              <button
+                type="button"
+                onClick={() => setWeekSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-0.5 cursor-pointer"
+                title="Limpiar búsqueda"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
 
+          {/* 4. Lista de Semanas / Historial */}
           {weeks.length === 0 ? (
             <div className="bg-[#0f1722]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 text-center shadow-lg flex flex-col items-center justify-center space-y-3 my-4 select-none">
               <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
@@ -305,8 +398,29 @@ ${jobLines}
                 </p>
               </div>
             </div>
+          ) : filteredWeeks.length === 0 ? (
+            <div className="bg-[#131b26] border border-white/10 rounded-2xl p-6 text-center space-y-2 select-none shadow-md">
+              <p className="text-xs font-bold text-slate-300">
+                No se encontraron semanas que coincidan con la búsqueda o filtro
+              </p>
+              <p className="text-[11px] text-slate-500">
+                Prueba buscando por otra fecha, número de semana o limpia los filtros.
+              </p>
+              {(weekSearch || weekStatusFilter !== 'ALL') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWeekSearch('');
+                    setWeekStatusFilter('ALL');
+                  }}
+                  className="mt-1 px-3 py-1 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25 border border-cyan-500/30 rounded-xl text-[11px] font-bold transition cursor-pointer"
+                >
+                  Limpiar filtros
+                </button>
+              )}
+            </div>
           ) : (
-            weeks.map((w) => {
+            filteredWeeks.map((w) => {
               const completedCount = w.completedCount !== undefined 
                 ? w.completedCount 
                 : w.orders.filter(o => o.status === 'Completado').length;
