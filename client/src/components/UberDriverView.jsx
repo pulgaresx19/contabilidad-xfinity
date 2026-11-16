@@ -3013,7 +3013,7 @@ export default function UberDriverView({
               </div>
               <div className="bg-[#16202c] p-2 rounded-xl border border-white/5">
                 <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
-                  Completados
+                  Hechos
                 </span>
                 <span className="text-sm font-black text-white font-mono">
                   {tempOrdersList.filter(o => o.status === 'Completado').length} / {tempOrdersList.length}
@@ -3067,27 +3067,60 @@ export default function UberDriverView({
               )}
             </div>
 
-            {/* Status Filter Tabs */}
-            <div className="flex items-center gap-1.5 px-4 py-2 border-b border-white/5 bg-[#101722] shrink-0 overflow-x-auto no-scrollbar">
-              {[
-                { id: 'ALL', label: `Todos (${tempOrdersList.length})` },
-                { id: 'Pendiente', label: `Pendientes (${tempOrdersList.filter(o => o.status !== 'Completado' && o.status !== 'No Realizado').length})` },
-                { id: 'Completado', label: `Completados (${tempOrdersList.filter(o => o.status === 'Completado').length})` },
-                { id: 'No Realizado', label: `Cancelados (${tempOrdersList.filter(o => o.status === 'No Realizado').length})` },
-              ].map(f => (
+            {/* Status Filter Tabs - Segmented Grid 4 Columnas sin scroll horizontal */}
+            <div className="px-3 sm:px-4 py-2 border-b border-white/5 bg-[#101722] shrink-0">
+              <div className="grid grid-cols-4 gap-1 bg-[#121922] p-1 rounded-xl border border-white/5 text-[10px] font-bold text-center">
                 <button
-                  key={f.id}
                   type="button"
-                  onClick={() => setOverlayStatusFilter(f.id)}
-                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition whitespace-nowrap cursor-pointer ${
-                    overlayStatusFilter === f.id
-                      ? 'bg-cyan-500 text-slate-950 shadow-sm'
-                      : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'
+                  onClick={() => setOverlayStatusFilter('ALL')}
+                  className={`py-1.5 px-0.5 rounded-lg transition font-bold truncate cursor-pointer ${
+                    overlayStatusFilter === 'ALL'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }`}
+                  title="Ver todos los trabajos"
                 >
-                  {f.label}
+                  Todos ({tempOrdersList.length})
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setOverlayStatusFilter('Pendiente')}
+                  className={`py-1.5 px-0.5 rounded-lg transition font-bold truncate cursor-pointer ${
+                    overlayStatusFilter === 'Pendiente'
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Ver trabajos pendientes"
+                >
+                  <span className="sm:hidden">Pend. ({tempOrdersList.filter(o => o.status !== 'Completado' && o.status !== 'No Realizado').length})</span>
+                  <span className="hidden sm:inline">Pendientes ({tempOrdersList.filter(o => o.status !== 'Completado' && o.status !== 'No Realizado').length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOverlayStatusFilter('Completado')}
+                  className={`py-1.5 px-0.5 rounded-lg transition font-bold truncate cursor-pointer ${
+                    overlayStatusFilter === 'Completado'
+                      ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Ver trabajos hechos"
+                >
+                  Hechos ({tempOrdersList.filter(o => o.status === 'Completado').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOverlayStatusFilter('No Realizado')}
+                  className={`py-1.5 px-0.5 rounded-lg transition font-bold truncate cursor-pointer ${
+                    overlayStatusFilter === 'No Realizado'
+                      ? 'bg-slate-300 text-slate-950 font-black shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Ver trabajos cancelados"
+                >
+                  <span className="sm:hidden">Canc. ({tempOrdersList.filter(o => o.status === 'No Realizado').length})</span>
+                  <span className="hidden sm:inline">Cancelados ({tempOrdersList.filter(o => o.status === 'No Realizado').length})</span>
+                </button>
+              </div>
             </div>
 
             {/* Drag & Reorder Instruction Tip */}
