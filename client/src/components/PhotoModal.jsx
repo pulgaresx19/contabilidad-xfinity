@@ -28,7 +28,7 @@ const QUICK_CANCEL_REASONS = [
   'Sin acceso a caja de entrada'
 ];
 
-export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
+export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, initialShowCancel = false }) {
   const [uploading, setUploading] = useState(false);
   const [category, setCategory] = useState('Casa');
   const [autoAdvance, setAutoAdvance] = useState(true);
@@ -51,12 +51,12 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated }) {
   useEffect(() => {
     if (isOpen) {
       setCategory('Casa');
-      setShowCancelPrompt(false);
+      setShowCancelPrompt(Boolean(initialShowCancel));
       setCancelReason('');
       setError(null);
       setLocalReported(false);
     }
-  }, [isOpen, order?.id]);
+  }, [isOpen, order?.id, initialShowCancel]);
 
   const handleCloseModal = () => {
     setShowCancelPrompt(false);

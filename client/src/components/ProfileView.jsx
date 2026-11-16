@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { 
   ShieldCheck, Clock, DollarSign, CheckCircle2, Ruler, Briefcase, Calendar, 
   FileSpreadsheet, Download, Upload, Trash2, Smartphone, Check, AlertCircle,
-  Settings, Sun, Moon, ChevronRight
+  Sun, Moon
 } from 'lucide-react';
 import { exportOrdersToExcel } from '../services/excelExport';
 import { exportAllData, importAllData, clearAllData } from '../services/localDb';
@@ -226,48 +226,30 @@ export default function ProfileView({ techName, summaryData, onRefresh, onOpenSe
           </div>
         </div>
 
-        {/* Quick Settings & Theme Actions */}
-        <div className="space-y-2 pt-1 border-t border-slate-200 dark:border-slate-800/80">
-          <button
-            onClick={onOpenSettings}
-            className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950/70 dark:hover:bg-slate-950 rounded-2xl transition border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 active:scale-[0.98]"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-xl bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
-                <Settings className="h-4 w-4" />
-              </div>
-              <div className="text-left">
-                <p className="leading-tight">Ajustes de Tarifas y Cierres</p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">Modificar precios base, bonos y día de corte</p>
-              </div>
+        {/* Theme Action */}
+        <div className="flex items-center justify-between p-2.5 px-3 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold">
+          <div className="flex items-center gap-2.5 text-slate-800 dark:text-slate-200">
+            <div className="p-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              {actualTheme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
             </div>
-            <ChevronRight className="h-4 w-4 text-slate-400" />
-          </button>
-
-          <div className="flex items-center justify-between p-2.5 px-3 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold">
-            <div className="flex items-center gap-2.5 text-slate-800 dark:text-slate-200">
-              <div className="p-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                {actualTheme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-              </div>
-              <span className="text-xs">Tema de Pantalla</span>
-            </div>
-            <button
-              onClick={toggleTheme}
-              className="py-1 px-3 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-[11px] transition shadow-xs active:scale-95 flex items-center gap-1.5"
-            >
-              {actualTheme === 'dark' ? (
-                <>
-                  <Sun className="h-3.5 w-3.5 text-amber-400" />
-                  <span>Modo Oscuro</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="h-3.5 w-3.5 text-indigo-600" />
-                  <span>Modo Claro</span>
-                </>
-              )}
-            </button>
+            <span className="text-xs">Tema de Pantalla</span>
           </div>
+          <button
+            onClick={toggleTheme}
+            className="py-1 px-3 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-[11px] transition shadow-xs active:scale-95 flex items-center gap-1.5"
+          >
+            {actualTheme === 'dark' ? (
+              <>
+                <Sun className="h-3.5 w-3.5 text-amber-400" />
+                <span>Modo Oscuro</span>
+              </>
+            ) : (
+              <>
+                <Moon className="h-3.5 w-3.5 text-indigo-600" />
+                <span>Modo Claro</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 

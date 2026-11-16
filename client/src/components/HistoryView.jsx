@@ -661,7 +661,11 @@ ${jobLines}
 
                     {/* Fila 3: Si Cancelado, Motivo de Cancelación */}
                     {isCanc && (
-                      <div className="bg-rose-950/25 border border-rose-500/25 p-2 rounded-xl text-xs text-rose-200 flex items-start gap-1.5">
+                      <div 
+                        onClick={() => onOpenPhotos && onOpenPhotos(order)}
+                        className="bg-rose-950/25 border border-rose-500/25 p-2 rounded-xl text-xs text-rose-200 flex items-start gap-1.5 cursor-pointer hover:bg-rose-950/40 transition active:scale-[0.99]"
+                        title="Toca para ver la constancia y fotos del obstáculo"
+                      >
                         <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0 mt-0.5" />
                         <div className="min-w-0">
                           <span className="text-[9px] uppercase font-bold text-rose-400 block tracking-wider">
@@ -697,71 +701,69 @@ ${jobLines}
                       </div>
                     )}
 
-                    {/* Fila 5: Barra de Acciones Rápidas (Fotos, Editar, Comprobante, Reportar) */}
-                    <div className="pt-2 border-t border-white/8 flex items-center justify-between gap-1.5 flex-wrap">
+                    {/* Fila 5: Barra de Acciones Rápidas (Fotos, Editar, Copiar, Reportar) - Grid 4 Columnas */}
+                    <div className="pt-2 border-t border-white/8 grid grid-cols-4 gap-1 sm:gap-1.5">
                       <button
                         type="button"
                         onClick={() => onOpenPhotos ? onOpenPhotos(order) : (photos[0] && setSelectedPhoto(photos[0].photo_data || `/uploads/${photos[0].filename}`))}
-                        className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1.5 bg-[#182332] px-2.5 py-1 rounded-lg border border-white/10 transition active:scale-95 cursor-pointer"
+                        className="w-full text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center justify-center gap-1 bg-[#182332] px-1 py-1 rounded-lg border border-white/10 transition active:scale-95 cursor-pointer"
                         title="Ver o agregar fotos de evidencia"
                       >
-                        <Camera className="h-3 w-3" />
-                        <span>{photosCount} Fotos</span>
+                        <Camera className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{photosCount} Fotos</span>
                       </button>
 
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setEditingOrder(order)}
-                          className="text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-2.5 py-1 rounded-lg flex items-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
-                          title="Editar orden"
-                        >
-                          <Pencil className="h-3 w-3 text-cyan-400" />
-                          <span>Editar</span>
-                        </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingOrder(order)}
+                        className="w-full text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-1 py-1 rounded-lg flex items-center justify-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
+                        title="Editar orden"
+                      >
+                        <Pencil className="h-3 w-3 text-cyan-400 shrink-0" />
+                        <span className="truncate">Editar</span>
+                      </button>
 
-                        <button
-                          type="button"
-                          onClick={() => copySingleJobClaim(order)}
-                          className="text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-2.5 py-1 rounded-lg flex items-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
-                          title="Copiar comprobante al portapapeles"
-                        >
-                          {copiedJobId === order.id ? (
-                            <>
-                              <Check className="h-3 w-3 text-emerald-400" />
-                              <span className="text-emerald-400 font-bold">¡Copiado!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="h-3 w-3 text-cyan-400" />
-                              <span>Comprobante</span>
-                            </>
-                          )}
-                        </button>
+                      <button
+                        type="button"
+                        onClick={() => copySingleJobClaim(order)}
+                        className="w-full text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-1 py-1 rounded-lg flex items-center justify-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
+                        title="Copiar comprobante al portapapeles"
+                      >
+                        {copiedJobId === order.id ? (
+                          <>
+                            <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                            <span className="text-emerald-400 font-bold truncate">¡Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3 w-3 text-cyan-400 shrink-0" />
+                            <span className="truncate">Copiar</span>
+                          </>
+                        )}
+                      </button>
 
-                        <button
-                          type="button"
-                          onClick={() => setReportOrder(order)}
-                          className={`text-[10px] border px-2.5 py-1 rounded-lg flex items-center gap-1 font-bold transition active:scale-95 shadow-xs cursor-pointer ${
-                            order.whatsapp_shared
-                              ? 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30 hover:bg-emerald-500/25'
-                              : 'text-cyan-300 bg-cyan-500/15 border-cyan-500/30 hover:bg-cyan-500/25'
-                          }`}
-                          title="Reportar trabajo por WhatsApp"
-                        >
-                          {order.whatsapp_shared ? (
-                            <>
-                              <CheckCheck className="h-3 w-3 text-emerald-400" />
-                              <span>Reportado</span>
-                            </>
-                          ) : (
-                            <>
-                              <Share2 className="h-3 w-3 text-cyan-400" />
-                              <span>Reportar</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReportOrder(order)}
+                        className={`w-full text-[10px] border px-1 py-1 rounded-lg flex items-center justify-center gap-1 font-bold transition active:scale-95 shadow-xs cursor-pointer ${
+                          order.whatsapp_shared
+                            ? 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30 hover:bg-emerald-500/25'
+                            : 'text-cyan-300 bg-cyan-500/15 border-cyan-500/30 hover:bg-cyan-500/25'
+                        }`}
+                        title="Reportar trabajo por WhatsApp"
+                      >
+                        {order.whatsapp_shared ? (
+                          <>
+                            <CheckCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                            <span className="truncate">Reportado</span>
+                          </>
+                        ) : (
+                          <>
+                            <Share2 className="h-3 w-3 text-cyan-400 shrink-0" />
+                            <span className="truncate">Reportar</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                 );
@@ -808,24 +810,12 @@ ${jobLines}
                   <FileText className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider font-mono truncate">
-                      Semana {selectedWeekModal.displayLabel || selectedWeekModal.key}
-                    </h3>
-                    {selectedWeekModal.isPaid ? (
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full font-black flex items-center gap-1 shrink-0">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        Cobrado
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full font-black flex items-center gap-1 shrink-0">
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                        Pendiente
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400 font-mono font-semibold truncate">
-                    {selectedWeekModal.startDate} al {selectedWeekModal.endDate}
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider font-mono truncate">
+                    Semana {selectedWeekModal.displayLabel || selectedWeekModal.key}
+                  </h3>
+                  <p className="text-[11px] text-cyan-400/90 font-mono font-medium flex items-center gap-1.5 truncate">
+                    <Calendar className="w-3 h-3 text-cyan-400/70 shrink-0" />
+                    <span>{selectedWeekModal.startDate} al {selectedWeekModal.endDate}</span>
                   </p>
                 </div>
               </div>
@@ -871,8 +861,21 @@ ${jobLines}
               {/* Listado Completo de Trabajos */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between px-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <span>Historial de Trabajos ({selectedWeekModal.orders.length})</span>
-                  <span>Fotos & Comprobantes</span>
+                  <span className="flex items-center gap-1.5">
+                    <span>Historial de Trabajos</span>
+                    <span className="text-cyan-400 font-mono">({selectedWeekModal.orders.length})</span>
+                  </span>
+                  {selectedWeekModal.isPaid ? (
+                    <span className="text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-black flex items-center gap-1 shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Cobrado
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-black flex items-center gap-1 shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                      Pendiente
+                    </span>
+                  )}
                 </div>
 
                 {selectedWeekModal.orders.map((order, idx) => {
@@ -965,7 +968,11 @@ ${jobLines}
 
                       {/* Fila 3: Si Cancelado, Motivo de Cancelación */}
                       {isCanc && (
-                        <div className="bg-rose-950/25 border border-rose-500/25 p-2 rounded-xl text-xs text-rose-200 flex items-start gap-1.5">
+                        <div 
+                          onClick={() => onOpenPhotos && onOpenPhotos(order)}
+                          className="bg-rose-950/25 border border-rose-500/25 p-2 rounded-xl text-xs text-rose-200 flex items-start gap-1.5 cursor-pointer hover:bg-rose-950/40 transition active:scale-[0.99]"
+                          title="Toca para ver la constancia y fotos del obstáculo"
+                        >
                           <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0 mt-0.5" />
                           <div className="min-w-0">
                             <span className="text-[9px] uppercase font-bold text-rose-400 block tracking-wider">
@@ -1001,71 +1008,69 @@ ${jobLines}
                         </div>
                       )}
 
-                      {/* Fila 5: Barra de Acciones Rápidas (Fotos, Editar, Comprobante, Reportar) */}
-                      <div className="pt-2 border-t border-white/8 flex items-center justify-between gap-1.5 flex-wrap">
+                      {/* Fila 5: Barra de Acciones Rápidas (Fotos, Editar, Copiar, Reportar) - Grid 4 Columnas */}
+                      <div className="pt-2 border-t border-white/8 grid grid-cols-4 gap-1 sm:gap-1.5">
                         <button
                           type="button"
                           onClick={() => onOpenPhotos ? onOpenPhotos(order) : (photos[0] && setSelectedPhoto(photos[0].photo_data || `/uploads/${photos[0].filename}`))}
-                          className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1.5 bg-[#182332] px-2.5 py-1 rounded-lg border border-white/10 transition active:scale-95 cursor-pointer"
+                          className="w-full text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center justify-center gap-1 bg-[#182332] px-1 py-1 rounded-lg border border-white/10 transition active:scale-95 cursor-pointer"
                           title="Ver o agregar fotos de evidencia"
                         >
-                          <Camera className="h-3 w-3" />
-                          <span>{photosCount} Fotos</span>
+                          <Camera className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{photosCount} Fotos</span>
                         </button>
 
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setEditingOrder(order)}
-                            className="text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-2.5 py-1 rounded-lg flex items-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
-                            title="Editar orden"
-                          >
-                            <Pencil className="h-3 w-3 text-cyan-400" />
-                            <span>Editar</span>
-                          </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingOrder(order)}
+                          className="w-full text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-1 py-1 rounded-lg flex items-center justify-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
+                          title="Editar orden"
+                        >
+                          <Pencil className="h-3 w-3 text-cyan-400 shrink-0" />
+                          <span className="truncate">Editar</span>
+                        </button>
 
-                          <button
-                            type="button"
-                            onClick={() => copySingleJobClaim(order)}
-                            className="text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-2.5 py-1 rounded-lg flex items-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
-                            title="Copiar comprobante al portapapeles"
-                          >
-                            {copiedJobId === order.id ? (
-                              <>
-                                <Check className="h-3 w-3 text-emerald-400" />
-                                <span className="text-emerald-400 font-bold">¡Copiado!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="h-3 w-3 text-cyan-400" />
-                                <span>Comprobante</span>
-                              </>
-                            )}
-                          </button>
+                        <button
+                          type="button"
+                          onClick={() => copySingleJobClaim(order)}
+                          className="w-full text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-1 py-1 rounded-lg flex items-center justify-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
+                          title="Copiar comprobante al portapapeles"
+                        >
+                          {copiedJobId === order.id ? (
+                            <>
+                              <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                              <span className="text-emerald-400 font-bold truncate">¡Copiado!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3 text-cyan-400 shrink-0" />
+                              <span className="truncate">Copiar</span>
+                            </>
+                          )}
+                        </button>
 
-                          <button
-                            type="button"
-                            onClick={() => setReportOrder(order)}
-                            className={`text-[10px] border px-2.5 py-1 rounded-lg flex items-center gap-1 font-bold transition active:scale-95 shadow-xs cursor-pointer ${
-                              order.whatsapp_shared
-                                ? 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30 hover:bg-emerald-500/25'
-                                : 'text-cyan-300 bg-cyan-500/15 border-cyan-500/30 hover:bg-cyan-500/25'
-                            }`}
-                            title="Reportar trabajo por WhatsApp"
-                          >
-                            {order.whatsapp_shared ? (
-                              <>
-                                <CheckCheck className="h-3 w-3 text-emerald-400" />
-                                <span>Reportado</span>
-                              </>
-                            ) : (
-                              <>
-                                <Share2 className="h-3 w-3 text-cyan-400" />
-                                <span>Reportar</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setReportOrder(order)}
+                          className={`w-full text-[10px] border px-1 py-1 rounded-lg flex items-center justify-center gap-1 font-bold transition active:scale-95 shadow-xs cursor-pointer ${
+                            order.whatsapp_shared
+                              ? 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30 hover:bg-emerald-500/25'
+                              : 'text-cyan-300 bg-cyan-500/15 border-cyan-500/30 hover:bg-cyan-500/25'
+                          }`}
+                          title="Reportar trabajo por WhatsApp"
+                        >
+                          {order.whatsapp_shared ? (
+                            <>
+                              <CheckCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                              <span className="truncate">Reportado</span>
+                            </>
+                          ) : (
+                            <>
+                              <Share2 className="h-3 w-3 text-cyan-400 shrink-0" />
+                              <span className="truncate">Reportar</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
                   );

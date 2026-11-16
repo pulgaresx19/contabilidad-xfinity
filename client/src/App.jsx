@@ -24,6 +24,7 @@ export default function App() {
   const [focusDateRequest, setFocusDateRequest] = useState(null);
   const [selectedPhotoOrder, setSelectedPhotoOrder] = useState(null);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [photoModalInitialCancel, setPhotoModalInitialCancel] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   const fetchOrders = async () => {
@@ -149,17 +150,22 @@ export default function App() {
     }
   }, [activeTab]);
 
-  const handleOpenPhotos = async (order) => {
+  const handleOpenPhotos = async (order, options = {}) => {
     try {
       const res = await fetch(`/api/orders/${order.id}`);
       if (res.ok) {
         const fullOrder = await res.json();
         setSelectedPhotoOrder(fullOrder);
+        setPhotoModalInitialCancel(Boolean(options?.initialCancel));
         setIsPhotoModalOpen(true);
+        return;
       }
     } catch (err) {
       console.error('Error fetching order photos:', err);
     }
+    setSelectedPhotoOrder(order);
+    setPhotoModalInitialCancel(Boolean(options?.initialCancel));
+    setIsPhotoModalOpen(true);
   };
 
   const handlePhotoUpdated = async () => {
@@ -170,7 +176,7 @@ export default function App() {
         setSelectedPhotoOrder(updated);
       }
     }
-    fetchOrders();
+    refreshAll();
   };
 
   const pendingCount = orders.filter(o => o.status === 'Pendiente').length;
@@ -297,8 +303,12 @@ export default function App() {
       <PhotoModal
         order={selectedPhotoOrder}
         isOpen={isPhotoModalOpen}
-        onClose={() => setIsPhotoModalOpen(false)}
+        onClose={() => {
+          setIsPhotoModalOpen(false);
+          setPhotoModalInitialCancel(false);
+        }}
         onPhotoUpdated={handlePhotoUpdated}
+        initialShowCancel={photoModalInitialCancel}
       />
 
       {/* Settings Modal */}
