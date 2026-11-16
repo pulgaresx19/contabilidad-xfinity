@@ -2,10 +2,27 @@ import React, { useState } from 'react';
 import { 
   X, DollarSign, Calendar, Tag, FileText, Camera, 
   Upload, Fuel, Wrench, Car, Utensils, Smartphone, Shield, Package, Home, Check,
-  AlertCircle
+  AlertCircle, SlidersHorizontal, RotateCcw
 } from 'lucide-react';
 import { getLocalDateStr } from '../utils/dateUtils';
 import { compressImageFile } from '../utils/watermark';
+
+const DEFAULT_QUICK_AMOUNTS = [20, 35, 50, 75, 100];
+
+function getStoredQuickAmounts() {
+  try {
+    const saved = localStorage.getItem('xfinity_expense_quick_amounts');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((v) => Number(v) || 0).slice(0, 5);
+      }
+    }
+  } catch (e) {
+    console.warn('Error reading quick amounts from localStorage:', e);
+  }
+  return DEFAULT_QUICK_AMOUNTS;
+}
 
 const CATEGORIES = [
   { id: 'Pago de Renta', label: 'Pago de Renta', icon: Home, color: 'text-rose-400' },
@@ -27,6 +44,9 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
   const [receiptPreviews, setReceiptPreviews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [quickAmounts, setQuickAmounts] = useState(() => getStoredQuickAmounts());
+  const [isEditingQuick, setIsEditingQuick] = useState(false);
+  const [tempQuickAmounts, setTempQuickAmounts] = useState(() => getStoredQuickAmounts());
 
   if (!isOpen) return null;
 
@@ -107,7 +127,6 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
     }
   };
 
-  const quickAmounts = [20, 35, 50, 75, 100];
   const numParsed = parseFloat(String(amount).replace(/[^0-9.]/g, ''));
   const displayAmount = !isNaN(numParsed) && numParsed > 0 ? `$${numParsed.toFixed(2)}` : '$0.00';
 
@@ -187,9 +206,28 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
 
             {/* Input de Monto */}
             <div>
-              <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1.5">
-                Monto del Gasto ($ USD) *
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                  Monto del Gasto ($ USD) *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempQuickAmounts([...quickAmounts]);
+                    setIsEditingQuick((prev) => !prev);
+                  }}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold font-mono transition border cursor-pointer ${
+                    isEditingQuick
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 ring-1 ring-cyan-500/30'
+                      : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-cyan-300 border-white/10'
+                  }`}
+                  title="Personalizar atajos de precio"
+                >
+                  <SlidersHorizontal className="w-3 h-3 stroke-[2.5]" />
+                  <span>Ajustes</span>
+                </button>
+              </div>
+
               <div className="relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xl font-black text-rose-400 font-mono">
                   $
@@ -203,20 +241,132 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
                   onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                   autoFocus
                   required
-                  className="w-full bg-[#16202c] border border-white/10 focus:border-rose-500/60 focus:ring-1 focus:ring-rose-500/40 rounded-2xl py-2.5 pl-8 pr-3 text-xl font-black text-white font-mono placeholder-slate-600 outline-none transition"
+                  className="w-full bg-[#16202c] border border-white/10 focus:border-rose-500/60 focus:ring-1 focus:ring-rose-500/40 rounded-2xl py-2.5 pl-8 pr-12 text-xl font-black text-white font-mono placeholder-slate-600 outline-none transition"
                 />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempQuickAmounts([...quickAmounts]);
+                    setIsEditingQuick((prev) => !prev);
+                  }}
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl flex items-center justify-center border transition cursor-pointer active:scale-90 ${
+                    isEditingQuick
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm shadow-cyan-500/20'
+                      : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border-white/10'
+                  }`}
+                  title="Configurar atajos de precio"
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                </button>
               </div>
+
+              {/* Panel de Configuración de Atajos de Precio */}
+              {isEditingQuick && (
+                <div className="bg-[#121b28] border border-cyan-500/40 rounded-2xl p-3 my-2.5 shadow-xl shadow-cyan-950/40 animate-in fade-in zoom-in-95 duration-150 space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-5 h-5 rounded-lg bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                        <SlidersHorizontal className="w-3 h-3 stroke-[2.5]" />
+                      </div>
+                      <span className="text-[11px] font-black uppercase tracking-wider text-cyan-300 font-mono">
+                        Atajos de Precio Personalizados
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingQuick(false)}
+                      className="w-5 h-5 rounded-md hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 leading-tight">
+                    Define los 5 montos frecuentes (ej: renta <strong className="text-rose-400 font-mono">$850</strong>, combustible <strong className="text-amber-400 font-mono">$45</strong>) para aplicarlos con un solo toque:
+                  </p>
+
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {tempQuickAmounts.map((val, idx) => (
+                      <div key={idx} className="flex flex-col gap-1">
+                        <span className="text-[9px] font-mono text-slate-400 font-bold text-center block">
+                          Atajo #{idx + 1}
+                        </span>
+                        <div className="relative">
+                          <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400 font-bold">
+                            $
+                          </span>
+                          <input
+                            type="number"
+                            min="1"
+                            step="any"
+                            value={val}
+                            onChange={(e) => {
+                              const next = [...tempQuickAmounts];
+                              next[idx] = e.target.value.replace(/[^0-9.]/g, '');
+                              setTempQuickAmounts(next);
+                            }}
+                            className="w-full bg-[#182333] border border-white/15 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 rounded-xl py-1.5 pl-4 pr-1 text-xs font-mono font-black text-white text-center outline-none transition"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-white/5 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const defaults = [20, 35, 50, 75, 100];
+                        setTempQuickAmounts(defaults);
+                        setQuickAmounts(defaults);
+                        try {
+                          localStorage.setItem('xfinity_expense_quick_amounts', JSON.stringify(defaults));
+                        } catch (_) {}
+                      }}
+                      className="text-[10.5px] font-bold text-slate-400 hover:text-rose-300 flex items-center gap-1 transition px-2 py-1 rounded-lg hover:bg-white/5 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Restablecer</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cleaned = tempQuickAmounts.map((v) => {
+                          const n = parseFloat(v);
+                          return isNaN(n) || n <= 0 ? 1 : n;
+                        });
+                        setQuickAmounts(cleaned);
+                        setTempQuickAmounts(cleaned);
+                        try {
+                          localStorage.setItem('xfinity_expense_quick_amounts', JSON.stringify(cleaned));
+                        } catch (_) {}
+                        setIsEditingQuick(false);
+                      }}
+                      className="py-1 px-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-[10.5px] rounded-xl flex items-center gap-1 transition active:scale-95 shadow-sm shadow-cyan-500/30 cursor-pointer"
+                    >
+                      <Check className="w-3 h-3 stroke-[3]" />
+                      <span>Guardar</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Botones de Montos Rápidos (Grid Adaptativo sin scroll tosco) */}
               <div className="grid grid-cols-5 gap-1.5 mt-2.5">
-                {quickAmounts.map((q) => (
+                {quickAmounts.map((q, idx) => (
                   <button
                     type="button"
-                    key={q}
+                    key={idx}
                     onClick={() => setAmount(String(q))}
-                    className="py-1.5 px-1 rounded-xl text-xs font-black font-mono bg-[#141d2a] hover:bg-[#1e2a3a] text-slate-300 hover:text-white border border-white/10 hover:border-cyan-500/35 transition active:scale-95 text-center shadow-xs cursor-pointer"
+                    className={`py-1.5 px-1 rounded-xl text-xs font-black font-mono transition active:scale-95 text-center shadow-xs cursor-pointer border ${
+                      Number(amount) === Number(q)
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 ring-1 ring-rose-500/30 font-black'
+                        : 'bg-[#141d2a] hover:bg-[#1e2a3a] text-slate-300 hover:text-white border-white/10 hover:border-cyan-500/35'
+                    }`}
+                    title={`Fijar monto en $${q}`}
                   >
-                    +${q}
+                    ${q}
                   </button>
                 ))}
               </div>
