@@ -6,6 +6,14 @@ import {
 } from 'lucide-react';
 import { cleanPhoneNumber, getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
 
+const formatCoordinates = (lat, lng) => {
+  if (!lat || !lng) return 'No disponibles';
+  const numLat = Number(lat);
+  const numLng = Number(lng);
+  if (isNaN(numLat) || isNaN(numLng)) return 'No disponibles';
+  return `${numLat.toFixed(5)}, ${numLng.toFixed(5)}`;
+};
+
 export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, initialMode = 'view' }) {
   const [isEditing, setIsEditing] = useState(initialMode === 'edit');
   const [photos, setPhotos] = useState(order?.photos || []);
@@ -249,10 +257,10 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
             </div>
             <div className="min-w-0">
               <h3 className="text-sm font-black text-slate-900 dark:text-white truncate">
-                {isEditing ? 'Editar Trabajo' : 'Ficha del Trabajo'}
+                {isEditing ? 'Editar Trabajo' : 'Ficha de Trabajo'}
               </h3>
               <p className="text-[10.5px] text-slate-600 dark:text-slate-400 font-semibold truncate font-mono">
-                Job #{formData.job_id || order.job_id} • {formData.address || order.address || 'Sin dirección'}
+                Job #{formData.job_id || order?.job_id} • Información del trabajo
               </p>
             </div>
           </div>
@@ -279,138 +287,212 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
               </div>
             )}
 
-            {/* SECCIÓN 1: ESTADO DEL TRABAJO & REPORTE (Dentro de la información) */}
-            <div className="bg-[#131c27] border border-white/8 rounded-2xl p-3 space-y-2 shadow-xs">
-              {!isEditing ? (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Estado:</span>
-                    <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
-                      formData.status === 'Completado' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                      : formData.status === 'No Realizado' ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                      : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                    }`}>
-                      {formData.status}
-                    </span>
-                  </div>
-
-                  {order.whatsapp_shared ? (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
-                      <CheckCheck className="w-3 h-3 stroke-[2.5]" />
-                      <span>Reportado WhatsApp</span>
-                    </span>
-                  ) : formData.status === 'Completado' ? (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-800 text-slate-400 border border-white/5">
-                      Por Compartir
-                    </span>
-                  ) : null}
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
-                    Estado del Trabajo *
-                  </label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {['Pendiente', 'Completado', 'No Realizado'].map((st) => (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, status: st })}
-                        className={`py-1.5 px-1 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
-                          formData.status === st
-                            ? st === 'Completado'
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-xs'
-                              : st === 'No Realizado'
-                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-xs'
-                              : 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs'
-                            : 'bg-[#0b1118] border-white/5 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        {st}
-                      </button>
-                    ))}
-                  </div>
-
-                  {formData.status === 'No Realizado' && (
-                    <div className="pt-2">
-                      <label className="block text-[9px] font-bold text-rose-300 mb-1 uppercase tracking-wider">
-                        Motivo de Cancelación / No Realizado *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="ej. Sin acceso al patio, perro suelto..."
-                        value={formData.cancel_reason}
-                        onChange={(e) => setFormData({ ...formData, cancel_reason: e.target.value })}
-                        className="w-full bg-[#0b1118] border border-rose-500/30 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-rose-400 transition"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* SECCIÓN 2: DIRECCIÓN, UBICACIÓN & CONTACTO */}
-            <div className="bg-[#131c27] border border-white/8 rounded-2xl p-3 space-y-2.5 shadow-xs">
-              <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider block">
-                Dirección & Contacto
-              </span>
-
+            {/* CONTENEDOR UNIFICADO: DETALLES DEL TRABAJO (Estilo exacto de Jornada) */}
+            <div className="bg-[#131c27] border border-white/8 rounded-2xl p-3.5 space-y-2.5 shadow-xs">
               {!isEditing ? (
                 <>
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-white leading-tight">
-                      {formData.address || 'Sin dirección asignada'}
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <h4 className="text-xs font-black text-white uppercase tracking-wider">
+                      Detalles del Trabajo
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {formData.city || 'Skokie'}, IN {formData.zip_code || ''}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
+                        formData.status === 'Completado' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                        : formData.status === 'No Realizado' ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                        : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                      }`}>
+                        {formData.status}
+                      </span>
+                      {order?.whatsapp_shared ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
+                          <CheckCheck className="w-3 h-3 stroke-[2.5]" />
+                          <span>WhatsApp</span>
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
 
-                  {/* Acciones de Contacto & Navegación */}
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-white/5">
-                    <a
-                      href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${formData.address}, ${formData.city || 'Skokie'}, IN`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2.5 py-1 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 rounded-lg font-bold text-[11px] flex items-center gap-1 transition active:scale-95 shadow-xs"
-                      title="Abrir ruta en Google Maps"
-                    >
-                      <Navigation className="w-3 h-3" />
-                      <span>GPS Maps</span>
-                      <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-                    </a>
+                  {/* Dirección */}
+                  <div className="flex justify-between items-start text-xs border-b border-white/5 pb-2">
+                    <span className="text-slate-400 font-medium">Dirección</span>
+                    <div className="text-right text-slate-100 font-semibold leading-tight">
+                      <div>{formData.address || 'Sin dirección asignada'}</div>
+                      <div className="text-[11px] text-slate-400">
+                        {formData.city || 'Skokie'}, IN {formData.zip_code || ''}
+                      </div>
+                      <div className="mt-1 flex justify-end">
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${formData.address}, ${formData.city || 'Skokie'}, IN`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2 py-0.5 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 rounded-md font-bold text-[10px] inline-flex items-center gap-1 transition"
+                        >
+                          <Navigation className="w-2.5 h-2.5" />
+                          <span>GPS Maps</span>
+                          <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
 
-                    {formData.phone ? (
-                      <>
+                  {/* Coordenadas */}
+                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                    <span className="text-slate-400 font-medium">Coordenadas</span>
+                    <span className="text-slate-200 font-mono text-[11px]">
+                      {formatCoordinates(order?.latitude, order?.longitude)}
+                    </span>
+                  </div>
+
+                  {/* Metraje */}
+                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                    <span className="text-slate-400 font-medium">Metraje</span>
+                    <span className="text-amber-300 font-mono font-bold text-[11px]">
+                      {formData.drop_footage || 0} ft {(formData.bore_type || '').includes('DW') ? '• Bore DW' : ''}
+                    </span>
+                  </div>
+
+                  {/* Tipo de Cable */}
+                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                    <span className="text-slate-400 font-medium">Tipo de Cable</span>
+                    <span className="text-cyan-300 font-mono font-bold text-[11px]">
+                      {formData.cable_type || 'RG-6'}
+                    </span>
+                  </div>
+
+                  {/* Perforación (Bore) */}
+                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                    <span className="text-slate-400 font-medium">Perforación (Bore)</span>
+                    <span className="text-slate-200 font-semibold text-[11px]">
+                      {(formData.bore_type || '').includes('DW') ? 'Driveway (+$30)' : formData.bore_type === 'SW:1' ? 'Sidewalk' : 'Sin Bore'}
+                    </span>
+                  </div>
+
+                  {/* Tarifa / Total */}
+                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                    <span className="text-slate-400 font-medium">Tarifa Total</span>
+                    <span className="text-emerald-400 font-mono font-black text-xs">
+                      ${formData.rate_calculated || 100} USD
+                    </span>
+                  </div>
+
+                  {/* Fecha Asignada */}
+                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                    <span className="text-slate-400 font-medium">Fecha</span>
+                    <span className="text-slate-200 font-mono text-[11px]">
+                      {formData.work_date || 'No asignada'}
+                    </span>
+                  </div>
+
+                  {/* Teléfono Cliente */}
+                  {formData.phone ? (
+                    <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                      <span className="text-slate-400 font-medium">Teléfono Cliente</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-cyan-400 font-mono font-bold text-[11px]">
+                          {formatPhoneDisplay(formData.phone)}
+                        </span>
                         <a
                           href={`tel:${cleanPhoneNumber(formData.phone)}`}
-                          className="px-2.5 py-1 bg-[#1f2b3a] hover:bg-[#28374a] text-slate-200 border border-white/10 rounded-lg font-bold text-[11px] flex items-center gap-1 transition active:scale-95"
-                          title="Llamar al cliente"
+                          className="p-1 bg-[#1f2b3a] hover:bg-[#28374a] text-cyan-400 rounded-md border border-white/10"
+                          title="Llamar"
                         >
-                          <Phone className="w-3 h-3 text-cyan-400" />
-                          <span>{formatPhoneDisplay(formData.phone)}</span>
+                          <Phone className="w-3 h-3" />
                         </a>
-
                         <a
                           href={getCustomerSmsUrl(formData.phone, formData.address)}
-                          className="px-2.5 py-1 bg-[#1f2b3a] hover:bg-[#28374a] text-slate-200 border border-white/10 rounded-lg font-bold text-[11px] flex items-center gap-1 transition active:scale-95"
-                          title="Enviar SMS"
+                          className="p-1 bg-[#1f2b3a] hover:bg-[#28374a] text-cyan-400 rounded-md border border-white/10"
+                          title="SMS"
                         >
-                          <MessageSquare className="w-3 h-3 text-cyan-400" />
-                          <span>SMS</span>
+                          <MessageSquare className="w-3 h-3" />
                         </a>
-                      </>
-                    ) : null}
+                      </div>
+                    </div>
+                  ) : null}
 
-                    {formData.call_first && (
-                      <span className="text-[9.5px] bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-lg font-bold">
-                        CALL FIRST
+                  {/* Call First */}
+                  {formData.call_first ? (
+                    <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                      <span className="text-slate-400 font-medium">Aviso Previo</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                        CALL FIRST (Llamar al cliente)
                       </span>
-                    )}
-                  </div>
+                    </div>
+                  ) : null}
+
+                  {/* Observaciones */}
+                  {formData.raw_notes ? (
+                    <div className="flex justify-between items-start text-xs border-b border-white/5 pb-2">
+                      <span className="text-slate-400 font-medium">Observaciones</span>
+                      <span className="text-slate-300 font-medium text-right max-w-[65%] text-[11px]">
+                        {formData.raw_notes}
+                      </span>
+                    </div>
+                  ) : null}
+
+                  {/* Ajuste Supervisor (si tiene) */}
+                  {formData.manual_adjustment !== 0 ? (
+                    <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                      <span className="text-slate-400 font-medium">Ajuste Supervisor</span>
+                      <span className={`font-mono font-bold text-[11px] ${formData.manual_adjustment > 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {formData.manual_adjustment > 0 ? `+$${formData.manual_adjustment}` : `-$${Math.abs(formData.manual_adjustment)}`} ({formData.adjustment_reason || 'Manual'})
+                      </span>
+                    </div>
+                  ) : null}
+
+                  {/* Motivo de Cancelación (si no realizado) */}
+                  {formData.status === 'No Realizado' && formData.cancel_reason ? (
+                    <div className="flex justify-between items-start text-xs">
+                      <span className="text-rose-400 font-medium">Motivo Cancelación</span>
+                      <span className="text-rose-300 font-semibold text-right max-w-[65%] text-[11px]">
+                        {formData.cancel_reason}
+                      </span>
+                    </div>
+                  ) : null}
                 </>
               ) : (
-                <div className="space-y-2">
+                /* FORMULARIO DE EDICIÓN FLUIDO */
+                <div className="space-y-2.5">
+                  <div className="border-b border-white/5 pb-2">
+                    <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
+                      Estado del Trabajo *
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {['Pendiente', 'Completado', 'No Realizado'].map((st) => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, status: st })}
+                          className={`py-1.5 px-1 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
+                            formData.status === st
+                              ? st === 'Completado'
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-xs'
+                                : st === 'No Realizado'
+                                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-xs'
+                                : 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs'
+                              : 'bg-[#0b1118] border-white/5 text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+
+                    {formData.status === 'No Realizado' && (
+                      <div className="pt-2">
+                        <label className="block text-[9px] font-bold text-rose-300 mb-1 uppercase tracking-wider">
+                          Motivo de Cancelación / No Realizado *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="ej. Sin acceso al patio, perro suelto..."
+                          value={formData.cancel_reason}
+                          onChange={(e) => setFormData({ ...formData, cancel_reason: e.target.value })}
+                          className="w-full bg-[#0b1118] border border-rose-500/30 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-rose-400 transition"
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
                       Dirección de la Vivienda *
@@ -459,68 +541,6 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
                     </div>
                   </div>
 
-                  <label className="flex items-center gap-2 pt-1 text-[11px] text-slate-300 font-semibold cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={formData.call_first}
-                      onChange={(e) => setFormData({ ...formData, call_first: e.target.checked })}
-                      className="rounded border-white/20 bg-slate-800 text-cyan-500 focus:ring-0 w-3.5 h-3.5"
-                    />
-                    <span>Llamar al cliente primero (Call First)</span>
-                  </label>
-                </div>
-              )}
-            </div>
-
-            {/* SECCIÓN 3: ESPECIFICACIONES TÉCNICAS Y TARIFA */}
-            <div className="bg-[#131c27] border border-white/8 rounded-2xl p-3 space-y-2.5 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                  Especificaciones & Tarifa
-                </span>
-                <div className="flex items-baseline gap-1 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 rounded-lg">
-                  <span className="text-[10px] text-emerald-400 font-bold uppercase">Total:</span>
-                  <span className="font-mono font-black text-sm text-emerald-400">${formData.rate_calculated}</span>
-                  <span className="text-[9px] text-emerald-400/80 font-bold">USD</span>
-                </div>
-              </div>
-
-              {!isEditing ? (
-                <>
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <div className="bg-[#0b1118] p-2 rounded-xl border border-white/5">
-                      <span className="text-slate-400 text-[10px] block">Longitud Drop</span>
-                      <span className="font-mono font-bold text-white text-xs">{formData.drop_footage || 0} ft</span>
-                    </div>
-                    <div className="bg-[#0b1118] p-2 rounded-xl border border-white/5">
-                      <span className="text-slate-400 text-[10px] block">Tipo de Cable</span>
-                      <span className="font-mono font-bold text-cyan-300 text-xs">{formData.cable_type || 'RG-6'}</span>
-                    </div>
-                    <div className="bg-[#0b1118] p-2 rounded-xl border border-white/5">
-                      <span className="text-slate-400 text-[10px] block">Perforación (Bore)</span>
-                      <span className="font-semibold text-slate-200">
-                        {(formData.bore_type || '').includes('DW') ? 'Driveway (+$30)' : formData.bore_type === 'SW:1' ? 'Sidewalk' : 'Sin Bore'}
-                      </span>
-                    </div>
-                    <div className="bg-[#0b1118] p-2 rounded-xl border border-white/5">
-                      <span className="text-slate-400 text-[10px] block">Fecha Asignada</span>
-                      <span className="font-mono font-semibold text-slate-200">{formData.work_date || 'No asignada'}</span>
-                    </div>
-                  </div>
-
-                  {formData.manual_adjustment !== 0 && (
-                    <div className="bg-[#0b1118] p-2 rounded-xl border border-white/5 flex items-center justify-between">
-                      <span className="text-slate-400 text-[10px]">
-                        Ajuste Supervisor: <span className="text-slate-200 font-semibold">{formData.adjustment_reason || 'Manual'}</span>
-                      </span>
-                      <span className={`font-mono font-bold text-xs ${formData.manual_adjustment > 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                        {formData.manual_adjustment > 0 ? `+$${formData.manual_adjustment}` : `-$${Math.abs(formData.manual_adjustment)}`}
-                      </span>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider truncate">
@@ -624,7 +644,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
                   <div className="bg-[#0b1118] p-2.5 rounded-xl border border-white/5 space-y-1.5">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Ajuste de Supervisor:
+                        Ajuste Supervisor:
                       </span>
                       <span className="text-[9px] text-slate-400 font-mono">
                         {formData.manual_adjustment !== 0 ? (
@@ -693,28 +713,30 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
                       </div>
                     )}
                   </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
+                      Observaciones & Notas
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Notas, portón, perro, zanja..."
+                      value={formData.raw_notes}
+                      onChange={(e) => setFormData({ ...formData, raw_notes: e.target.value })}
+                      className="w-full bg-[#0b1118] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 transition"
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-2 pt-1 text-[11px] text-slate-300 font-semibold cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={formData.call_first}
+                      onChange={(e) => setFormData({ ...formData, call_first: e.target.checked })}
+                      className="rounded border-white/20 bg-slate-800 text-cyan-500 focus:ring-0 w-3.5 h-3.5"
+                    />
+                    <span>Llamar al cliente primero (Call First)</span>
+                  </label>
                 </div>
-              )}
-            </div>
-
-            {/* SECCIÓN 4: OBSERVACIONES & OBSTÁCULOS */}
-            <div className="bg-[#131c27] border border-white/8 rounded-2xl p-3 space-y-1 shadow-xs">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                Observaciones & Obstáculos
-              </span>
-
-              {!isEditing ? (
-                <p className="text-xs text-slate-300 font-medium leading-relaxed">
-                  {formData.raw_notes || 'Sin observaciones registradas.'}
-                </p>
-              ) : (
-                <input
-                  type="text"
-                  placeholder="Notas, portón, perro, zanja..."
-                  value={formData.raw_notes}
-                  onChange={(e) => setFormData({ ...formData, raw_notes: e.target.value })}
-                  className="w-full bg-[#0b1118] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 transition"
-                />
               )}
             </div>
 

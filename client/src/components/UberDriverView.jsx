@@ -470,19 +470,27 @@ export default function UberDriverView({
 
   // Determine Origin Point ("Desde dónde estoy")
   const getOriginPoint = (targetOrder) => {
-    if (userLocation && userLocation.lng && userLocation.lat) {
-      return { coords: [userLocation.lng, userLocation.lat], label: 'GPS en vivo' };
-    }
     const targetIdx = activeOrders.findIndex(o => o.id === targetOrder?.id);
-    if (targetIdx > 0 && activeOrders[targetIdx - 1]?.latitude && activeOrders[targetIdx - 1]?.longitude) {
+
+    // 1. Primer trabajo del día (Parada 1): desde donde estoy actualmente (GPS en vivo) hacia el primer trabajo!
+    if (targetIdx <= 0) {
+      if (userLocation && userLocation.lng && userLocation.lat) {
+        return { coords: [userLocation.lng, userLocation.lat], label: 'GPS en vivo' };
+      }
+      return { coords: DEFAULT_LNG_LAT, label: 'Base Comcast' };
+    }
+
+    // 2. Paradas siguientes (Parada 2, 3, 4, etc.): el tramo es de la parada anterior a esta ("el tramo de un trabajo a otro"!)
+    const prevOrder = activeOrders[targetIdx - 1];
+    if (prevOrder && prevOrder.latitude && prevOrder.longitude) {
       return { 
-        coords: [activeOrders[targetIdx - 1].longitude, activeOrders[targetIdx - 1].latitude], 
+        coords: [prevOrder.longitude, prevOrder.latitude], 
         label: `Parada ${targetIdx}` 
       };
     }
-    const firstValid = activeOrders.find(o => o.latitude && o.longitude);
-    if (firstValid && firstValid.id !== targetOrder?.id) {
-      return { coords: [firstValid.longitude, firstValid.latitude], label: 'Inicio de ruta' };
+
+    if (userLocation && userLocation.lng && userLocation.lat) {
+      return { coords: [userLocation.lng, userLocation.lat], label: 'GPS en vivo' };
     }
     return { coords: DEFAULT_LNG_LAT, label: 'Base Comcast' };
   };
@@ -623,24 +631,34 @@ export default function UberDriverView({
     }
 
     const validStops = list.filter(o => o.latitude && o.longitude);
-    if (validStops.length < 2) {
+    if (validStops.length === 0) {
       setTravesiaLegs([]);
       setTravesiaSummary({ totalMiles: 0, totalMinutes: 0 });
       travesiaGeometryRef.current = [];
-      const map = mapInstanceRef.current;
-      if (map && map.getSource('route-travesia')) {
-        map.getSource('route-travesia').setData({
-          type: 'Feature',
-          properties: {},
-          geometry: { type: 'LineString', coordinates: [] }
-        });
-      }
-      travesiaBadgeMarkersRef.current.forEach(m => m.remove());
-      travesiaBadgeMarkersRef.current = [];
       return;
     }
 
-    const coordsStr = validStops.map(o => `${Number(o.longitude).toFixed(5)},${Number(o.latitude).toFixed(5)}`).join(';');
+    // Sequence starts from user's live GPS location -> Stop 1 -> Stop 2 -> Stop 3...
+    const sequenceStops = [];
+    if (userLocation && userLocation.lng && userLocation.lat) {
+      sequenceStops.push({
+        id: 'start-current-gps',
+        latitude: userLocation.lat,
+        longitude: userLocation.lng,
+        isCurrentGps: true,
+        address: 'Ubicación actual'
+      });
+    }
+    sequenceStops.push(...validStops);
+
+    if (sequenceStops.length < 2) {
+      setTravesiaLegs([]);
+      setTravesiaSummary({ totalMiles: 0, totalMinutes: 0 });
+      travesiaGeometryRef.current = [];
+      return;
+    }
+
+    const coordsStr = sequenceStops.map(o => `${Number(o.longitude).toFixed(5)},${Number(o.latitude).toFixed(5)}`).join(';');
     const cacheKey = `travesia:${coordsStr}`;
 
     if (routeCacheRef.current.has(cacheKey)) {
@@ -669,7 +687,7 @@ export default function UberDriverView({
     travesiaAbortControllerRef.current = controller;
 
     // 1. Primary Attempt: Mapbox Multi-Stop Directions API (up to 25 waypoints)
-    if (MAPBOX_ACCESS_TOKEN && validStops.length <= 25) {
+    if (MAPBOX_ACCESS_TOKEN && sequenceStops.length <= 25) {
       try {
         const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsStr}?overview=full&geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`;
         const res = await fetch(url, { signal: controller.signal });
@@ -680,11 +698,13 @@ export default function UberDriverView({
             const coordinates = r.geometry.coordinates;
             const totalMiles = r.distance / 1609.34;
             const totalMinutes = Math.max(1, Math.round(r.duration / 60));
+            const hasGpsStart = Boolean(sequenceStops[0]?.isCurrentGps);
             const legs = (r.legs || []).map((leg, idx) => ({
-              fromOrder: validStops[idx],
-              toOrder: validStops[idx + 1],
-              fromIndex: idx,
-              toIndex: idx + 1,
+              fromOrder: sequenceStops[idx],
+              toOrder: sequenceStops[idx + 1],
+              fromIndex: hasGpsStart ? (idx === 0 ? -1 : idx - 1) : idx,
+              toIndex: hasGpsStart ? idx : idx + 1,
+              isFromGps: hasGpsStart && idx === 0,
               miles: leg.distance / 1609.34,
               minutes: Math.max(1, Math.round(leg.duration / 60))
             }));
@@ -733,11 +753,13 @@ export default function UberDriverView({
           const coordinates = r.geometry.coordinates;
           const totalMiles = r.distance / 1609.34;
           const totalMinutes = Math.max(1, Math.round(r.duration / 60));
+          const hasGpsStart = Boolean(sequenceStops[0]?.isCurrentGps);
           const legs = (r.legs || []).map((leg, idx) => ({
-            fromOrder: validStops[idx],
-            toOrder: validStops[idx + 1],
-            fromIndex: idx,
-            toIndex: idx + 1,
+            fromOrder: sequenceStops[idx],
+            toOrder: sequenceStops[idx + 1],
+            fromIndex: hasGpsStart ? (idx === 0 ? -1 : idx - 1) : idx,
+            toIndex: hasGpsStart ? idx : idx + 1,
+            isFromGps: hasGpsStart && idx === 0,
             miles: leg.distance / 1609.34,
             minutes: Math.max(1, Math.round(leg.duration / 60))
           }));
@@ -892,15 +914,19 @@ export default function UberDriverView({
     if (!legs || legs.length === 0) return;
 
     legs.forEach((leg) => {
-      const { fromOrder, toOrder, minutes, miles, fromIndex, toIndex } = leg;
+      const { fromOrder, toOrder, minutes, miles, fromIndex, toIndex, isFromGps } = leg;
       if (!fromOrder?.latitude || !fromOrder?.longitude || !toOrder?.latitude || !toOrder?.longitude) return;
+
+      // Skip large highway badge from distant GPS to keep town view clean
+      if (isFromGps && miles > 25) return;
 
       const midLng = (Number(fromOrder.longitude) + Number(toOrder.longitude)) / 2;
       const midLat = (Number(fromOrder.latitude) + Number(toOrder.latitude)) / 2;
 
       const legBadgeEl = document.createElement('div');
       legBadgeEl.className = 'apple-travesia-leg-badge';
-      legBadgeEl.title = `De #${fromIndex + 1} a #${toIndex + 1}: ${minutes} min (~${miles.toFixed(1)} mi). Toca para seleccionar.`;
+      const labelText = isFromGps ? `Al primer trabajo: ${minutes} min (~${miles.toFixed(1)} mi)` : `De #${fromIndex + 1} a #${toIndex + 1}: ${minutes} min (~${miles.toFixed(1)} mi)`;
+      legBadgeEl.title = `${labelText}. Toca para seleccionar.`;
       legBadgeEl.innerHTML = `
         <span class="leg-time">+${minutes} min</span>
         <span class="leg-dot">•</span>
@@ -920,10 +946,10 @@ export default function UberDriverView({
     });
   };
 
-  // Keep travesia route updated whenever activeOrders changes
+  // Keep travesia route updated whenever activeOrders or userLocation changes
   useEffect(() => {
     updateTravesiaRoute(activeOrders);
-  }, [activeOrders]);
+  }, [activeOrders, userLocation?.lat, userLocation?.lng]);
 
   // Helper to get driving time and distance for each stop in sequence
   const getLegInfoForOrder = (order, indexInList) => {
@@ -1718,16 +1744,29 @@ export default function UberDriverView({
     if (shouldFrameCamera) {
       framedOrderIdRef.current = activeTarget?.id;
       if (activeTarget && activeTarget.latitude && activeTarget.longitude) {
-        const activeBounds = new mapboxgl.LngLatBounds();
-        activeBounds.extend(startCoords);
-        activeBounds.extend([activeTarget.longitude, activeTarget.latitude]);
+        const targetIdx = activeOrders.findIndex(o => o.id === activeTarget.id);
+        const estDist = getEstimatedDrivingMiles(startCoords[1], startCoords[0], activeTarget.latitude, activeTarget.longitude);
 
-        map.fitBounds(activeBounds, {
-          padding: { top: 120, bottom: 280, left: 50, right: 50 },
-          pitch: is3DMode ? 48 : 0,
-          maxZoom: 15.5,
-          duration: 800
-        });
+        // If target is stop 1 and distance from GPS is far (> 25 miles, e.g. technician checking from home), focus directly on the job area
+        if (targetIdx <= 0 && estDist > 25) {
+          map.flyTo({
+            center: [activeTarget.longitude, activeTarget.latitude],
+            zoom: 14.8,
+            pitch: is3DMode ? 48 : 0,
+            duration: 800
+          });
+        } else {
+          const activeBounds = new mapboxgl.LngLatBounds();
+          activeBounds.extend(startCoords);
+          activeBounds.extend([activeTarget.longitude, activeTarget.latitude]);
+
+          map.fitBounds(activeBounds, {
+            padding: { top: 120, bottom: 280, left: 50, right: 50 },
+            pitch: is3DMode ? 48 : 0,
+            maxZoom: 15.5,
+            duration: 800
+          });
+        }
       } else if (startCoords) {
         map.flyTo({
           center: startCoords,
