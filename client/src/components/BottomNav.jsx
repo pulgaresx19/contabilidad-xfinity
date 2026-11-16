@@ -12,8 +12,8 @@ export default function BottomNav({ activeTab, setActiveTab, pendingCount }) {
     <nav 
       className="shrink-0 z-40 w-full bg-slate-900 border-t border-slate-800/80 backdrop-blur-md select-none"
       style={{
-        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
-        paddingTop: '6px'
+        paddingBottom: 'max(calc(env(safe-area-inset-bottom, 0px) - 22px), 6px)',
+        paddingTop: '4px'
       }}
     >
       <div className="w-full max-w-md mx-auto px-4 flex items-center justify-between gap-2">
