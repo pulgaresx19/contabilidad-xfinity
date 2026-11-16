@@ -26,7 +26,7 @@ function getStoredQuickAmounts() {
 
 const CATEGORIES = [
   { id: 'Pago de Renta', label: 'Pago de Renta', icon: Home, color: 'text-rose-400' },
-  { id: 'Seguros', label: 'Seguros', icon: Shield, color: 'text-blue-400' },
+  { id: 'Vehículo', label: 'Vehículo / Van', icon: Car, color: 'text-blue-400' },
   { id: 'Combustible', label: 'Combustible', icon: Fuel, color: 'text-amber-400' },
   { id: 'Comida', label: 'Comida', icon: Utensils, color: 'text-orange-400' },
   { id: 'Seguros y Licencia', label: 'Seguros y Licencia', icon: Shield, color: 'text-purple-400' },

@@ -18,8 +18,10 @@ const CATEGORY_ICONS = {
   // Orden oficial solicitado:
   'Pago de Renta': { icon: Home, color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
   Renta: { icon: Home, color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
-  Seguros: { icon: Shield, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  'Vehículo / Van': { icon: Car, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  'Vehículo (Van / Auto)': { icon: Car, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
   Vehículo: { icon: Car, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  Seguros: { icon: Shield, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
   Combustible: { icon: Fuel, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
   Comida: { icon: Utensils, color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
   Alimentación: { icon: Utensils, color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
@@ -665,19 +667,21 @@ ${weeksLines || '  (No hay semanas registradas)'}
                         <Icon className="w-5 h-5" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="font-bold text-white text-xs truncate group-hover:text-cyan-300 transition">
-                          {exp.description}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-bold text-white text-xs truncate group-hover:text-cyan-300 transition">
+                            {exp.description}
+                          </span>
+                          {totalTickets > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded-md border border-cyan-500/20 shrink-0">
+                              <Camera className="w-2.5 h-2.5" />
+                              <span>{totalTickets} {totalTickets === 1 ? 'ticket' : 'tickets'}</span>
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <span className="font-medium text-amber-300/90">{exp.category}</span>
                           <span>•</span>
                           <span>{exp.expense_date}</span>
-                          {totalTickets > 0 && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded-md border border-cyan-500/20">
-                              <Camera className="w-2.5 h-2.5" />
-                              <span>{totalTickets} {totalTickets === 1 ? 'ticket' : 'tickets'}</span>
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
