@@ -877,7 +877,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {/* Medallón de Dinero Profesional / Saldo */}
+                    {/* Medallón de Dinero Profesional / Saldo en la esquina */}
                     <div 
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border shadow-sm select-none transition-all ${
                         isCancelled
@@ -902,20 +902,10 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                         USD
                       </span>
                     </div>
-
-                    {/* Botón de Edición Completa */}
-                    <button
-                      type="button"
-                      onClick={() => setEditingOrder(order)}
-                      className="p-1.5 rounded-full bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-cyan-400 border border-white/10 hover:border-cyan-500/40 transition active:scale-90"
-                      title="Editar datos del trabajo"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
                   </div>
                 </div>
 
-                {/* Dirección, Acciones (GPS, Llamar, Mensaje) y Teléfono */}
+                {/* Dirección, Acciones (GPS, Llamar, Mensaje, Editar) y Teléfono */}
                 <div className="space-y-1">
                   <div className="flex items-start justify-between gap-1.5 text-xs text-white">
                     <div className="flex items-start gap-1.5 min-w-0">
@@ -926,7 +916,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                       </div>
                     </div>
 
-                    {/* Grupo de Acciones: GPS, Llamar y Mensaje circulares idénticos */}
+                    {/* Grupo de Acciones: GPS, Llamar, Mensaje y Editar circulares idénticos */}
                     <div className="flex items-center gap-1.5 shrink-0">
                       <a
                         href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${order.address}, ${order.city || 'Elkhart'}, IN ${order.zip_code || ''}`)}`}
@@ -955,6 +945,14 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                           </a>
                         </>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => setEditingOrder(order)}
+                        className="w-7 h-7 rounded-full bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-cyan-400 border border-white/10 hover:border-cyan-500/40 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer"
+                        title="Editar datos del trabajo"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
 
@@ -970,73 +968,87 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   )}
                 </div>
 
-                {/* Especificaciones Técnicas */}
+                {/* Especificaciones Técnicas Profesionales */}
                 {(() => {
                   const orderRemark = getOrderRemark(order);
                   const photosCount = (order.work_photos_count !== undefined ? order.work_photos_count : order.photos_count) || (order.photos ? order.photos.filter(p => p.category !== 'Constancia No Realizado').length : 0) || 0;
                   return (
-                    <div className="flex items-center gap-1.5 text-[10px] font-mono overflow-x-auto scrollbar-none pb-0.5 whitespace-nowrap">
+                    <div className="flex items-center gap-1.5 text-[10px] overflow-x-auto scrollbar-none py-0.5 whitespace-nowrap">
+                      {/* 1. Fotos de Evidencia */}
                       {photosCount > 0 && (
                         <span 
                           onClick={() => onOpenPhotos(order)}
-                          className="shrink-0 bg-cyan-950/40 text-cyan-300 hover:text-white px-2 py-0.5 rounded border border-cyan-500/40 text-[9.5px] font-bold flex items-center gap-1 cursor-pointer transition active:scale-95 shadow-2xs"
+                          className="shrink-0 bg-slate-800/90 hover:bg-slate-700/90 text-cyan-300 px-2 py-0.5 rounded-md border border-cyan-500/30 text-[10px] font-medium flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-2xs"
                           title={`${photosCount} foto(s) de evidencia archivada(s). Toca para ver.`}
                         >
-                          <Camera className="h-3 w-3 text-cyan-400" />
-                          <span>{photosCount} {photosCount === 1 ? 'foto' : 'fotos'}</span>
+                          <Camera className="h-3 w-3 text-cyan-400 shrink-0" />
+                          <span className="font-semibold">{photosCount} {photosCount === 1 ? 'foto' : 'fotos'}</span>
                         </span>
                       )}
 
-                      <span className="shrink-0 bg-[#0f1722] px-2 py-0.5 rounded border border-white/10 text-amber-300 font-bold">
-                        {order.drop_footage} ft
+                      {/* 2. Metraje del Drop */}
+                      <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 text-[10px] font-mono flex items-center gap-1">
+                        <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Drop</span>
+                        <span className="font-bold text-slate-100">{order.drop_footage || 0} ft</span>
                       </span>
 
-                      <span className="shrink-0 bg-[#0f1722] px-2 py-0.5 rounded border border-white/10 text-slate-300">
-                        {order.cable_type}
+                      {/* 3. Tipo de Cable */}
+                      <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 text-[10px] font-mono flex items-center gap-1">
+                        <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Cable</span>
+                        <span className="font-semibold text-slate-200">{order.cable_type || 'RG-6'}</span>
                       </span>
 
+                      {/* 4. Perforación / Driveway Bore */}
                       {hasDrivewayBore ? (
-                        <span className="shrink-0 bg-cyan-500/15 text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/30 font-bold">
-                          DW Bore: +$30
+                        <span className="shrink-0 bg-cyan-950/30 text-cyan-300 px-2 py-0.5 rounded-md border border-cyan-500/25 text-[10px] font-medium flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
+                          <span>DW Bore</span>
+                          <span className="text-cyan-400/80 font-mono text-[9px]">(+$30)</span>
                         </span>
                       ) : order.bore_type && order.bore_type !== 'N' ? (
-                        <span className="shrink-0 bg-[#0f1722] text-slate-300 px-2 py-0.5 rounded border border-white/10">
-                          Bore: {order.bore_type}
+                        <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-mono flex items-center gap-1">
+                          <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Bore</span>
+                          <span className="font-semibold text-slate-200">{order.bore_type}</span>
                         </span>
                       ) : null}
 
-                      {/* Bono por Metraje Largo (>300 ft) */}
+                      {/* 5. Bono por Metraje Largo (>300 ft) */}
                       {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
-                        <span className="shrink-0 bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
-                          Drop &gt;300ft: +${Math.floor((order.drop_footage - 300) / 100) * 25}
+                        <span className="shrink-0 bg-emerald-950/30 text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-500/25 text-[10px] font-mono font-medium flex items-center gap-1">
+                          <span className="text-emerald-400/80 font-sans text-[9px] font-bold">+Drop</span>
+                          <span className="font-bold">${Math.floor((order.drop_footage - 300) / 100) * 25}</span>
                         </span>
                       )}
 
-                      {/* Píldora compacta de Ajuste Manual */}
+                      {/* 6. Ajuste Manual de Tarifa */}
                       {order.manual_adjustment !== undefined && order.manual_adjustment !== 0 && (
                         <span 
-                          className={`shrink-0 px-2 py-0.5 rounded font-mono font-bold border flex items-center gap-1 shadow-2xs cursor-pointer ${
+                          className={`shrink-0 px-2 py-0.5 rounded-md font-mono text-[10px] font-medium border flex items-center gap-1 shadow-2xs cursor-pointer ${
                             order.manual_adjustment > 0 
-                              ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' 
-                              : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                              ? 'bg-cyan-950/30 text-cyan-300 border-cyan-500/25' 
+                              : 'bg-amber-950/30 text-amber-300 border-amber-500/25'
                           }`}
                           onClick={() => setEditingOrder(order)}
                           title={`Ajuste Supervisor: ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}${order.adjustment_reason ? ` • ${order.adjustment_reason}` : ''} (Toca para editar)`}
                         >
-                          <Sparkles className="h-2.5 w-2.5" />
+                          <Sparkles className="h-2.5 w-2.5 opacity-80" />
                           <span>{order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}</span>
                           {order.adjustment_reason && (
-                            <span className="font-normal opacity-85 text-[9px] max-w-[85px] truncate">
+                            <span className="font-normal opacity-75 text-[9px] max-w-[85px] truncate font-sans">
                               ({order.adjustment_reason})
                             </span>
                           )}
                         </span>
                       )}
 
-                      {/* Píldora de Información Extra / Urgente */}
+                      {/* 7. Nota / Detalle Especial */}
                       {orderRemark && (
-                        <span className="shrink-0 bg-blue-500/15 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30 text-[9px] font-bold">
-                          {orderRemark}
+                        <span 
+                          className="shrink-0 bg-slate-800/80 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-medium flex items-center gap-1 max-w-[190px]"
+                          title={`Nota del trabajo: ${orderRemark}`}
+                        >
+                          <span className="text-slate-400 text-[9px] uppercase tracking-wider font-semibold">Nota</span>
+                          <span className="text-slate-200 truncate">{orderRemark}</span>
                         </span>
                       )}
                     </div>
