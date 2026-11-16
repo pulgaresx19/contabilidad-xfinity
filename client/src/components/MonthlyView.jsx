@@ -815,6 +815,7 @@ ${weeksLines || '  (No hay semanas registradas)'}
         <EditJobModal
           order={editingOrder}
           isOpen={Boolean(editingOrder)}
+          initialMode="edit"
           onClose={() => setEditingOrder(null)}
           onJobUpdated={() => {
             fetchMonthlyData(selectedMonth);

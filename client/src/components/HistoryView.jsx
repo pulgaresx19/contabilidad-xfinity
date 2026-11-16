@@ -1159,6 +1159,7 @@ ${jobLines}
         <EditJobModal
           order={editingOrder}
           isOpen={Boolean(editingOrder)}
+          initialMode="edit"
           onClose={() => setEditingOrder(null)}
           onJobUpdated={() => {
             setEditingOrder(null);

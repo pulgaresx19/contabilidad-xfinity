@@ -95,6 +95,7 @@ export default function TodayView({
   const [isLiveCameraOpenForCancel, setIsLiveCameraOpenForCancel] = useState(false);
   const [isAddJobOpen, setIsAddJobOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
+  const [editModalInitialMode, setEditModalInitialMode] = useState('view');
   const [targetFocusOrderId, setTargetFocusOrderId] = useState(null);
 
   // WhatsApp Share Modal State (Texto Editable + Fotos Todo en Uno)
@@ -676,7 +677,10 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           onMarkCompleted={handleMarkCompleted}
           onOpenCancelModal={(ord) => onOpenPhotos ? onOpenPhotos(ord, { initialCancel: true }) : openCancelModal(ord)}
           onOpenCancelDetail={(ord) => onOpenPhotos ? onOpenPhotos(ord) : openCancelDetail(ord)}
-          onOpenEditModal={(ord) => setEditingOrder(ord)}
+          onOpenEditModal={(ord) => {
+            setEditModalInitialMode('edit');
+            setEditingOrder(ord);
+          }}
           onOpenAdjustModal={openAdjustModal}
           onOpenShareModal={openShareModal}
           localSharedMap={localSharedMap}
@@ -849,7 +853,11 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             return (
               <div
                 key={order.id}
-                className={`bg-[#131b26] border rounded-2xl p-3.5 space-y-2.5 transition shadow-md ${
+                onClick={() => {
+                  setEditModalInitialMode('view');
+                  setEditingOrder(order);
+                }}
+                className={`bg-[#131b26] border rounded-2xl p-3.5 space-y-2.5 transition shadow-md cursor-pointer hover:border-cyan-500/40 active:scale-[0.99] select-none ${
                   isCompleted
                     ? 'border-emerald-500/35 hover:border-emerald-500/60 shadow-emerald-500/5'
                     : isCancelled
@@ -905,7 +913,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   </div>
                 </div>
 
-                {/* Dirección, Acciones (GPS, Llamar, Mensaje, Editar) y Teléfono */}
+                {/* Dirección, Acciones (GPS, Llamar, Mensaje) y Teléfono */}
                 <div className="space-y-1">
                   <div className="flex items-start justify-between gap-1.5 text-xs text-white">
                     <div className="flex items-start gap-1.5 min-w-0">
@@ -916,12 +924,13 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                       </div>
                     </div>
 
-                    {/* Grupo de Acciones: GPS, Llamar, Mensaje y Editar circulares idénticos */}
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Grupo de Acciones: GPS, Llamar y Mensaje circulares */}
+                    <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                       <a
                         href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${order.address}, ${order.city || 'Elkhart'}, IN ${order.zip_code || ''}`)}`}
                         target="_blank"
                         rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                         className="w-7 h-7 rounded-full bg-slate-800/80 hover:bg-slate-700/80 text-cyan-400 hover:text-cyan-300 border border-white/10 flex items-center justify-center active:scale-95 transition shadow-xs"
                         title="Abrir navegación GPS en Google Maps"
                       >
@@ -931,6 +940,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                         <>
                           <a 
                             href={`tel:${order.phone}`} 
+                            onClick={(e) => e.stopPropagation()}
                             className="w-7 h-7 rounded-full bg-slate-800/80 hover:bg-slate-700/80 text-cyan-400 hover:text-cyan-300 border border-white/10 flex items-center justify-center transition active:scale-95 shadow-xs"
                             title={`Llamar: ${order.phone}`}
                           >
@@ -938,6 +948,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                           </a>
                           <a
                             href={getCustomerSmsUrl(order.phone, order.address)}
+                            onClick={(e) => e.stopPropagation()}
                             className="w-7 h-7 rounded-full bg-slate-800/80 hover:bg-slate-700/80 text-cyan-400 hover:text-cyan-300 border border-white/10 flex items-center justify-center transition active:scale-95 shadow-xs"
                             title="Enviar SMS con aviso al cliente"
                           >
@@ -945,14 +956,6 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                           </a>
                         </>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => setEditingOrder(order)}
-                        className="w-7 h-7 rounded-full bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-cyan-400 border border-white/10 hover:border-cyan-500/40 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer"
-                        title="Editar datos del trabajo"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
                     </div>
                   </div>
 
@@ -1028,7 +1031,11 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                               ? 'bg-cyan-950/30 text-cyan-300 border-cyan-500/25' 
                               : 'bg-amber-950/30 text-amber-300 border-amber-500/25'
                           }`}
-                          onClick={() => setEditingOrder(order)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditModalInitialMode('edit');
+                            setEditingOrder(order);
+                          }}
                           title={`Ajuste Supervisor: ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}${order.adjustment_reason ? ` • ${order.adjustment_reason}` : ''} (Toca para editar)`}
                         >
                           <Sparkles className="h-2.5 w-2.5 opacity-80" />
@@ -1956,10 +1963,11 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         defaultTech="Javier (P0G1)"
       />
 
-      {/* Modal para Edición Completa de Trabajo */}
+      {/* Modal para Edición Completa / Ficha Técnica de Trabajo */}
       <EditJobModal
         order={editingOrder}
         isOpen={Boolean(editingOrder)}
+        initialMode={editModalInitialMode}
         onClose={() => setEditingOrder(null)}
         onJobUpdated={() => {
           setEditingOrder(null);
