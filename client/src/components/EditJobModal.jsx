@@ -712,9 +712,6 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated }) {
                     className="hidden"
                   />
                 </label>
-                {photos.length > 0 && (
-                  <span className="text-[9px] text-slate-400">Toca para ampliar</span>
-                )}
               </div>
             </div>
 
