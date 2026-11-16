@@ -759,14 +759,18 @@ html.light .mapbox-3d-canvas {
   background-color: #f4f3f0 !important;
 }
 
-.mapboxgl-canvas {
+.mapboxgl-canvas,
+.maplibregl-canvas {
   outline: none !important;
 }
 
 /* Hide default attribution/logo inside phone drawer frame */
 .mapboxgl-ctrl-logo,
 .mapboxgl-ctrl-attrib,
-.mapboxgl-compact {
+.mapboxgl-compact,
+.maplibregl-ctrl-logo,
+.maplibregl-ctrl-attrib,
+.maplibregl-compact {
   display: none !important;
   opacity: 0 !important;
   visibility: hidden !important;

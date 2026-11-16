@@ -1,6 +1,11 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import * as mapboxgl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+
+// Set worker URL explicitly to local static asset
+if (typeof window !== 'undefined' && mapboxgl.setWorkerUrl) {
+  mapboxgl.setWorkerUrl('/assets/maplibre-gl-worker.mjs');
+}
 import { 
   Navigation, MapPin, Compass, Sparkles, CheckCircle2, 
   Clock, AlertTriangle, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Phone, MessageSquare,
@@ -16,25 +21,69 @@ import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
 import { useTheme } from '../context/ThemeContext';
 
 const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
-mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
+
+// Open High-Resolution Map Styles (100% reliable, zero token required, never black screen)
+const createRasterMapStyle = (tiles, attribution = '') => ({
+  version: 8,
+  sources: {
+    'open-raster-tiles': {
+      type: 'raster',
+      tiles: Array.isArray(tiles) ? tiles : [tiles],
+      tileSize: 256,
+      attribution
+    }
+  },
+  layers: [
+    {
+      id: 'open-raster-layer',
+      type: 'raster',
+      source: 'open-raster-tiles',
+      minzoom: 0,
+      maxzoom: 22
+    }
+  ]
+});
+
+export const OPEN_MAP_STYLES = {
+  dark: 'https://tiles.openfreemap.org/styles/dark',
+  streets: 'https://tiles.openfreemap.org/styles/liberty',
+  satellite: createRasterMapStyle([
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+  ], '&copy; Esri World Imagery')
+};
+
+// Check if a custom valid token exists; otherwise use open reliable styles
+const isCustomMapboxToken = Boolean(
+  import.meta.env.VITE_MAPBOX_TOKEN && 
+  !import.meta.env.VITE_MAPBOX_TOKEN.includes('cmvxbyjo210hi2zpzu6hu2bb8')
+);
+
+export const getMapThemeStyle = (themeKey) => {
+  if (isCustomMapboxToken) {
+    if (themeKey === 'streets') return 'mapbox://styles/mapbox/streets-v12';
+    if (themeKey === 'satellite') return 'mapbox://styles/mapbox/satellite-streets-v12';
+    return 'mapbox://styles/mapbox/dark-v11';
+  }
+  return OPEN_MAP_STYLES[themeKey] || OPEN_MAP_STYLES.dark;
+};
 
 // Map Theme Definitions (Nombres profesionales y explícitos)
 const MAP_THEMES = {
   dark: {
     name: 'Mapa Oscuro',
-    style: 'mapbox://styles/mapbox/dark-v11',
+    style: getMapThemeStyle('dark'),
     icon: Moon,
     description: 'Calles visibles y contraste nocturno'
   },
   streets: {
     name: 'Mapa Claro',
-    style: 'mapbox://styles/mapbox/streets-v12',
+    style: getMapThemeStyle('streets'),
     icon: Sun,
     description: 'Mapa claro de alta visibilidad'
   },
   satellite: {
     name: 'Satélite Real',
-    style: 'mapbox://styles/mapbox/satellite-streets-v12',
+    style: getMapThemeStyle('satellite'),
     icon: Globe,
     description: 'Fotos aéreas para postes y acometidas'
   }
@@ -494,32 +543,34 @@ export default function UberDriverView({
       return routeCacheRef.current.get(cacheKey);
     }
 
-    // 1. Primary: Mapbox Directions API
-    try {
-      const dirUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords[0]},${startCoords[1]};${destCoords[0]},${destCoords[1]}?alternatives=true&overview=full&geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`;
-      const res = await fetch(dirUrl, { signal });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.routes && data.routes.length > 0) {
-          const parsed = data.routes.map((r, idx) => ({
-            index: idx,
-            coordinates: r.geometry.coordinates,
-            miles: r.distance / 1609.34,
-            minutes: Math.max(1, Math.round(r.duration / 60)),
-            summary: r.legs?.[0]?.summary || `Vía opción ${idx + 1}`
-          })).sort((a, b) => a.miles - b.miles);
+    // 1. Primary: Mapbox Directions API (only if valid custom token configured)
+    if (isCustomMapboxToken) {
+      try {
+        const dirUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords[0]},${startCoords[1]};${destCoords[0]},${destCoords[1]}?alternatives=true&overview=full&geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`;
+        const res = await fetch(dirUrl, { signal });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.routes && data.routes.length > 0) {
+            const parsed = data.routes.map((r, idx) => ({
+              index: idx,
+              coordinates: r.geometry.coordinates,
+              miles: r.distance / 1609.34,
+              minutes: Math.max(1, Math.round(r.duration / 60)),
+              summary: r.legs?.[0]?.summary || `Vía opción ${idx + 1}`
+            })).sort((a, b) => a.miles - b.miles);
 
-          const result = {
-            shortest: parsed[0],
-            allRoutes: parsed
-          };
-          routeCacheRef.current.set(cacheKey, result);
-          return result;
+            const result = {
+              shortest: parsed[0],
+              allRoutes: parsed
+            };
+            routeCacheRef.current.set(cacheKey, result);
+            return result;
+          }
         }
+      } catch (e) {
+        if (e.name === 'AbortError' || signal?.aborted) return null;
+        console.warn('Mapbox directions note:', e.message);
       }
-    } catch (e) {
-      if (e.name === 'AbortError' || signal?.aborted) return null;
-      console.warn('Mapbox directions note:', e.message);
     }
 
     if (signal?.aborted) return null;
@@ -666,8 +717,8 @@ export default function UberDriverView({
     const controller = new AbortController();
     travesiaAbortControllerRef.current = controller;
 
-    // 1. Primary Attempt: Mapbox Multi-Stop Directions API (up to 25 waypoints)
-    if (validStops.length <= 25) {
+    // 1. Primary Attempt: Mapbox Multi-Stop Directions API (up to 25 waypoints, only if valid custom token configured)
+    if (isCustomMapboxToken && validStops.length <= 25) {
       try {
         const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsStr}?overview=full&geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`;
         const res = await fetch(url, { signal: controller.signal });
@@ -1418,7 +1469,16 @@ export default function UberDriverView({
       setupRouteLayers(map);
     });
 
+    map.on('error', (e) => {
+      if (e && e.error && (e.error.status === 401 || e.error.status === 403 || String(e.error.message || '').includes('access token') || String(e.error.message || '').includes('401'))) {
+        console.warn('Mapbox token error detectado, activando mapa abierto de alta velocidad...');
+        const fallback = OPEN_MAP_STYLES[mapThemeRef.current] || OPEN_MAP_STYLES.dark;
+        map.setStyle(fallback);
+      }
+    });
+
     mapInstanceRef.current = map;
+    if (typeof window !== 'undefined') window.__mapInstance = map;
 
     return () => {
       map.off('dragstart', handleUserInteraction);

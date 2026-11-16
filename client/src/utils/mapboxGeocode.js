@@ -88,6 +88,26 @@ export async function geocodeAddressWithMapbox(address, city = '', zipCode = '')
     }
   }
 
+  // Open Geocoder fallback (Photon / OSM) - 100% free, zero token required
+  try {
+    const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(`${cleanAddr} ${effectiveCity} ${state}`)}&limit=1`;
+    const pRes = await fetch(photonUrl);
+    if (pRes.ok) {
+      const pData = await pRes.json();
+      if (pData.features && pData.features.length > 0) {
+        const feat = pData.features[0];
+        const [lng, lat] = feat.geometry.coordinates;
+        return {
+          latitude: lat,
+          longitude: lng,
+          displayName: [feat.properties?.housenumber, feat.properties?.street, feat.properties?.city, feat.properties?.state].filter(Boolean).join(', ') || feat.properties?.name || `${effectiveCity}, ${state}`
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('Photon open geocoding fallback note:', e.message);
+  }
+
   // Safe Fallback based on state center so pin and route ALWAYS show
   const baseLat = state === 'IL' ? 42.03359 : 41.681995;
   const baseLng = state === 'IL' ? -87.73455 : -85.97667;
@@ -115,57 +135,86 @@ export async function searchAddressSuggestions(query) {
   try {
     const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cleanQ)}.json?access_token=${MAPBOX_TOKEN}&country=US&types=address&autocomplete=true&limit=5`;
     const res = await fetch(url);
-    if (!res.ok) return [];
+    if (res.ok) {
+      const data = await res.json();
+      if (data.features && Array.isArray(data.features) && data.features.length > 0) {
+        return data.features.map(f => {
+          let city = '';
+          let state = '';
+          let zipCode = '';
 
-    const data = await res.json();
-    if (!data.features || !Array.isArray(data.features)) return [];
-
-    return data.features.map(f => {
-      let city = '';
-      let state = '';
-      let zipCode = '';
-
-      if (Array.isArray(f.context)) {
-        for (const item of f.context) {
-          if (item.id.startsWith('place') || item.id.startsWith('locality')) {
-            const cand = item.text ? item.text.trim() : '';
-            if (!isUsState(cand)) {
-              city = cand;
+          if (Array.isArray(f.context)) {
+            for (const item of f.context) {
+              if (item.id.startsWith('place') || item.id.startsWith('locality')) {
+                const cand = item.text ? item.text.trim() : '';
+                if (!isUsState(cand)) {
+                  city = cand;
+                }
+              } else if (item.id.startsWith('region')) {
+                state = item.short_code ? item.short_code.replace('US-', '') : item.text;
+              } else if (item.id.startsWith('postcode')) {
+                zipCode = item.text;
+              }
             }
-          } else if (item.id.startsWith('region')) {
-            state = item.short_code ? item.short_code.replace('US-', '') : item.text;
-          } else if (item.id.startsWith('postcode')) {
-            zipCode = item.text;
           }
-        }
-      }
 
-      if (!city && f.place_name) {
-        const parts = f.place_name.split(',').map(p => p.trim());
-        for (let i = 1; i < parts.length - 1; i++) {
-          const cand = parts[i].replace(/\s+\d{5}.*$/, '').trim();
-          if (cand && !isUsState(cand) && cand.toLowerCase() !== 'united states') {
-            city = cand;
-            break;
+          if (!city && f.place_name) {
+            const parts = f.place_name.split(',').map(p => p.trim());
+            for (let i = 1; i < parts.length - 1; i++) {
+              const cand = parts[i].replace(/\s+\d{5}.*$/, '').trim();
+              if (cand && !isUsState(cand) && cand.toLowerCase() !== 'united states') {
+                city = cand;
+                break;
+              }
+            }
           }
-        }
+
+          const street = f.address ? `${f.address} ${f.text}` : (f.text || (f.place_name ? f.place_name.split(',')[0] : cleanQ));
+
+          return {
+            id: f.id,
+            streetAddress: street,
+            fullAddress: f.place_name || street,
+            city: city ? city.toUpperCase() : '',
+            state: state || '',
+            zipCode: zipCode || '',
+            latitude: f.center ? f.center[1] : null,
+            longitude: f.center ? f.center[0] : null
+          };
+        });
       }
-
-      const street = f.address ? `${f.address} ${f.text}` : (f.text || (f.place_name ? f.place_name.split(',')[0] : cleanQ));
-
-      return {
-        id: f.id,
-        streetAddress: street,
-        fullAddress: f.place_name || street,
-        city: city ? city.toUpperCase() : '',
-        state: state || '',
-        zipCode: zipCode || '',
-        latitude: f.center ? f.center[1] : null,
-        longitude: f.center ? f.center[0] : null
-      };
-    });
+    }
   } catch (err) {
-    console.warn('Address autocomplete search failed:', err.message);
-    return [];
+    console.warn('Mapbox address autocomplete search failed:', err.message);
   }
+
+  // Open Photon Autocomplete Fallback (100% token-free)
+  try {
+    const pUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(cleanQ)}&limit=5`;
+    const pRes = await fetch(pUrl);
+    if (pRes.ok) {
+      const pData = await pRes.json();
+      if (pData.features && Array.isArray(pData.features) && pData.features.length > 0) {
+        return pData.features.map((f, idx) => {
+          const p = f.properties || {};
+          const street = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name || cleanQ;
+          const fullAddress = [street, p.city, p.state, p.postcode].filter(Boolean).join(', ');
+          return {
+            id: `osm-${p.osm_id || idx}`,
+            streetAddress: street,
+            fullAddress: fullAddress || street,
+            city: (p.city || '').toUpperCase(),
+            state: p.state || '',
+            zipCode: p.postcode || '',
+            latitude: f.geometry?.coordinates ? f.geometry.coordinates[1] : null,
+            longitude: f.geometry?.coordinates ? f.geometry.coordinates[0] : null
+          };
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Photon autocomplete fallback note:', e.message);
+  }
+
+  return [];
 }
