@@ -2477,10 +2477,18 @@ export default function UberDriverView({
                 </p>
               </div>
 
-              {/* Subtle indicator instead of pencil */}
-              <div className="p-1 text-slate-500 group-hover:text-cyan-400 transition shrink-0">
-                <ChevronRight className="h-4 w-4" />
-              </div>
+              {/* Pencil Edit Icon */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenEditModal(selectedOrder, 'view');
+                }}
+                className="p-1.5 text-slate-400 hover:text-cyan-400 transition active:scale-90 shrink-0 rounded-lg hover:bg-white/5 cursor-pointer"
+                title="Ver o editar orden"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
             </div>
 
             {/* ROW 4: BOTTOM CONTROL BAR (NO REALIZADO | $SALDO EN MEDIO | 3 BOTONES MILESTONES) */}
