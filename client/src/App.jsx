@@ -182,8 +182,8 @@ export default function App() {
   const pendingCount = orders.filter(o => o.status === 'Pendiente').length;
 
   return (
-    <div className="fixed inset-0 w-full bg-slate-950 text-slate-100 flex flex-col items-center overflow-hidden font-sans select-none selection:bg-cyan-500 selection:text-slate-950">
-      <div className="w-full max-w-md h-full flex flex-col min-h-0 overflow-hidden relative">
+    <div className="fixed inset-0 w-full h-full bg-slate-900 text-slate-100 flex flex-col items-center overflow-hidden font-sans select-none selection:bg-cyan-500 selection:text-slate-950">
+      <div className="w-full max-w-md h-full flex-1 flex flex-col min-h-0 overflow-hidden relative">
         {/* Top Mobile Header with Safe Area Inset to clear phone status bar / notch / dynamic island */}
         <header 
           className="app-top-header w-full bg-slate-900/90 border-b border-slate-800/80 shrink-0 z-30 backdrop-blur-md"

@@ -40,7 +40,7 @@ export function ThemeProvider({ children }) {
         metaThemeColor.name = 'theme-color';
         document.head.appendChild(metaThemeColor);
       }
-      metaThemeColor.setAttribute('content', resolved === 'dark' ? '#090d16' : '#f8fafc');
+      metaThemeColor.setAttribute('content', resolved === 'dark' ? '#0f172a' : '#f8fafc');
     };
 
     updateActualTheme();
