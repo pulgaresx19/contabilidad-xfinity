@@ -1920,7 +1920,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         order={shareModalOrder}
         onClose={() => setShareModalOrder(null)}
         onOrderUpdated={onOrderUpdated}
-        onShared={(orderId) => setLocalSharedMap(prev => ({ ...prev, [orderId]: true }))}
+        onShared={(orderId, isShared = true) => setLocalSharedMap(prev => ({ ...prev, [orderId]: Boolean(isShared) }))}
       />
 
       {/* Modal para Añadir Trabajo Manualmente */}
