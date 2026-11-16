@@ -1929,32 +1929,73 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
 
             {/* Footer con 2 Botones Limpios y Elegantes */}
             <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  handleReopenOrder(cancelDetailOrder);
-                  setCancelDetailOrder(null);
-                }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
-                title="Reactivar trabajo para continuar con la instalación"
-              >
-                <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                <span>Reactivar Trabajo</span>
-              </button>
+              {(() => {
+                const isCancelReported = Boolean(cancelDetailOrder.whatsapp_shared || localSharedMap[cancelDetailOrder.id]);
+                return (
+                  <>
+                    {isCancelReported ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCancelDetailOrder(null)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-xs font-bold transition active:scale-95 cursor-pointer border border-white/10 shadow-sm"
+                        >
+                          <span>Cerrar</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleReopenOrder(cancelDetailOrder);
+                            setCancelDetailOrder(null);
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
+                          title="Reactivar trabajo para continuar con la instalación"
+                        >
+                          <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                          <span>Reactivar</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleReopenOrder(cancelDetailOrder);
+                          setCancelDetailOrder(null);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
+                        title="Reactivar trabajo para continuar con la instalación"
+                      >
+                        <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                        <span>Reactivar Trabajo</span>
+                      </button>
+                    )}
 
-              <button
-                type="button"
-                onClick={() => {
-                  const ord = cancelDetailOrder;
-                  setCancelDetailOrder(null);
-                  openShareModal(ord);
-                }}
-                className="px-4 py-2 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black text-xs rounded-xl shadow-md shadow-rose-600/20 active:scale-95 transition flex items-center gap-1.5 cursor-pointer"
-                title="Abrir reporte con motivo y fotos de constancia para WhatsApp"
-              >
-                <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
-                <span>Enviar a WhatsApp</span>
-              </button>
+                    {isCancelReported ? (
+                      <div 
+                        className="px-3.5 py-2 text-xs font-black rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm flex items-center gap-1.5 select-none"
+                        title="Constancia de trabajo no realizado reportada exitosamente"
+                      >
+                        <span>Reportado</span>
+                        <CheckCheck className="h-4 w-4 stroke-[2.5] text-rose-400" />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ord = cancelDetailOrder;
+                          setCancelDetailOrder(null);
+                          openShareModal(ord);
+                        }}
+                        className="px-4 py-2 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black text-xs rounded-xl shadow-md shadow-rose-600/20 active:scale-95 transition flex items-center gap-1.5 cursor-pointer"
+                        title="Abrir reporte con motivo y fotos de constancia para WhatsApp"
+                      >
+                        <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
+                        <span>Enviar Constancia</span>
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>

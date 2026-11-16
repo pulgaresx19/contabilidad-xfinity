@@ -155,7 +155,12 @@ export default function App() {
       const res = await fetch(`/api/orders/${order.id}`);
       if (res.ok) {
         const fullOrder = await res.json();
-        setSelectedPhotoOrder(fullOrder);
+        setSelectedPhotoOrder({
+          ...order,
+          ...fullOrder,
+          whatsapp_shared: fullOrder.whatsapp_shared || order.whatsapp_shared,
+          whatsapp_shared_at: fullOrder.whatsapp_shared_at || order.whatsapp_shared_at
+        });
         setPhotoModalInitialCancel(Boolean(options?.initialCancel));
         setIsPhotoModalOpen(true);
         return;

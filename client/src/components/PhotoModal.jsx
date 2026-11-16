@@ -80,9 +80,9 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
   const workPhotos = allPhotos.filter(p => p.category !== 'Constancia No Realizado');
   const cancelPhotos = allPhotos.filter(p => p.category === 'Constancia No Realizado');
   const workPhotosCount = workPhotos.length;
-  const isCompleted = order.status === 'Completado';
-  const isCancelled = order.status === 'No Realizado' || order.status === 'Cancelado';
-  const isReported = Boolean(order.whatsapp_shared || localReported);
+  const isCompleted = order.status === 'Completado' || order.status === 'completed';
+  const isCancelled = order.status === 'No Realizado' || order.status === 'Cancelado' || order.status === 'cancelled' || order.status === 'no_realizado';
+  const isReported = Boolean(order.whatsapp_shared || order.whatsapp_shared_at || localReported);
 
   const handleUpload = async (e) => {
     const files = e.target.files;
@@ -795,25 +795,56 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
             </>
           ) : isCancelled ? (
             <>
-              <button
-                type="button"
-                onClick={handleReactivateOrder}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
-                title="Reactivar trabajo para continuar con la instalación"
-              >
-                <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                <span>Reactivar Trabajo</span>
-              </button>
+              {isReported ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-xs font-bold transition active:scale-95 cursor-pointer border border-white/10 shadow-sm"
+                  >
+                    <span>Cerrar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReactivateOrder}
+                    className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
+                    title="Reactivar trabajo para continuar con la instalación"
+                  >
+                    <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                    <span>Reactivar</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleReactivateOrder}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
+                  title="Reactivar trabajo para continuar con la instalación"
+                >
+                  <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                  <span>Reactivar Trabajo</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => setIsShareModalOpen(true)}
-                className="px-4 py-2 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-rose-600/20 transition active:scale-95 cursor-pointer"
-                title="Enviar constancia por WhatsApp"
-              >
-                <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
-                <span>Enviar Constancia</span>
-              </button>
+              {isReported ? (
+                <div 
+                  className="px-3.5 py-2 text-xs font-black rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm flex items-center gap-1.5 select-none"
+                  title="Constancia de trabajo no realizado reportada exitosamente"
+                >
+                  <span>Reportado</span>
+                  <CheckCheck className="h-4 w-4 stroke-[2.5] text-rose-400" />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsShareModalOpen(true)}
+                  className="px-4 py-2 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-rose-600/20 transition active:scale-95 cursor-pointer"
+                  title="Enviar constancia por WhatsApp"
+                >
+                  <Share2 className="h-3.5 w-3.5 stroke-[2.5]" />
+                  <span>Enviar Constancia</span>
+                </button>
+              )}
             </>
           ) : (
             <>
