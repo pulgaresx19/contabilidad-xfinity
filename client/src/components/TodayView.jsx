@@ -929,8 +929,18 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                       </div>
                     </div>
 
-                    {/* Grupo de Acciones: Llamar, Mensaje y GPS circulares */}
+                    {/* Grupo de Acciones: GPS, Llamar y Mensaje circulares */}
                     <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${order.address}, ${order.city || 'Elkhart'}, IN ${order.zip_code || ''}`)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-7 h-7 rounded-full bg-slate-800/80 hover:bg-slate-700/80 text-cyan-400 hover:text-cyan-300 border border-white/10 flex items-center justify-center active:scale-95 transition shadow-xs"
+                        title="Abrir navegación GPS en Google Maps"
+                      >
+                        <Navigation className="h-3.5 w-3.5" />
+                      </a>
                       {order.phone && (
                         <>
                           <a 
@@ -951,16 +961,6 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                           </a>
                         </>
                       )}
-                      <a
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${order.address}, ${order.city || 'Elkhart'}, IN ${order.zip_code || ''}`)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-7 h-7 rounded-full bg-slate-800/80 hover:bg-slate-700/80 text-cyan-400 hover:text-cyan-300 border border-white/10 flex items-center justify-center active:scale-95 transition shadow-xs"
-                        title="Abrir navegación GPS en Google Maps"
-                      >
-                        <Navigation className="h-3.5 w-3.5" />
-                      </a>
                     </div>
                   </div>
 

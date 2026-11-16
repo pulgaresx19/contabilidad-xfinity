@@ -2470,27 +2470,25 @@ export default function UberDriverView({
             
             {/* ROW 1: TOP BAR WITH ACTION/PHONE + [ ← PARADA X DE Y → ] + EXPAND */}
             <div className="flex items-center justify-between gap-2 pt-0.5">
-              {/* Left Action: Circular Llamar y Mensaje */}
+              {/* Left Action: Circular GPS en la esquina, al lado Llamar */}
               <div className="flex items-center gap-1.5 justify-start">
-                {selectedOrder.phone ? (
-                  <>
-                    <a
-                      href={`tel:${selectedOrder.phone}`}
-                      className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
-                      title={`Llamar: ${selectedOrder.phone}`}
-                    >
-                      <Phone className="h-4 w-4" />
-                    </a>
-                    <a
-                      href={getCustomerSmsUrl(selectedOrder.phone, selectedOrder.address)}
-                      className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
-                      title={`Enviar SMS con aviso al cliente (${selectedOrder.phone})`}
-                    >
-                      <MessageSquare className="h-4 w-4" />
-                    </a>
-                  </>
-                ) : (
-                  <div className="w-9 h-9" />
+                <a
+                  href={getNavUrl(selectedOrder)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
+                  title="Abrir navegación GPS (Google Maps / Apple Maps)"
+                >
+                  <Navigation className="h-4 w-4 fill-cyan-400/20 text-cyan-400" />
+                </a>
+                {selectedOrder.phone && (
+                  <a
+                    href={`tel:${selectedOrder.phone}`}
+                    className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
+                    title={`Llamar: ${selectedOrder.phone}`}
+                  >
+                    <Phone className="h-4 w-4" />
+                  </a>
                 )}
               </div>
 
@@ -2522,17 +2520,17 @@ export default function UberDriverView({
                 </button>
               </div>
 
-              {/* Right Action: Circular GPS (al lado de la flecha) y Circular Expand/Collapse Chevron Button */}
+              {/* Right Action: Circular Mensaje (SMS) y Circular Expand/Collapse Chevron Button */}
               <div className="flex items-center gap-1.5 justify-end">
-                <a
-                  href={getNavUrl(selectedOrder)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
-                  title="Abrir navegación GPS (Google Maps / Apple Maps)"
-                >
-                  <Navigation className="h-4 w-4 fill-cyan-400/20 text-cyan-400" />
-                </a>
+                {selectedOrder.phone && (
+                  <a
+                    href={getCustomerSmsUrl(selectedOrder.phone, selectedOrder.address)}
+                    className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
+                    title={`Enviar SMS con aviso al cliente (${selectedOrder.phone})`}
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                  </a>
+                )}
                 <button
                   type="button"
                   onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
@@ -2611,14 +2609,26 @@ export default function UberDriverView({
             <div className="flex items-center justify-between gap-2 pt-1 pb-0.5">
               {/* 1. Left: Estado del Trabajo (Pendiente / Completado / Por Compartir / Reportado / No Realizado) */}
               {isSelectedCancelled ? (
-                <div
-                  onClick={() => onOpenCancelDetail ? onOpenCancelDetail(selectedOrder) : null}
-                  className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-xs cursor-pointer hover:bg-rose-500/30 transition shrink-0 active:scale-95"
-                  title="Estado: No Realizado - Toca para ver motivo y constancia"
-                >
-                  <X className="h-3.5 w-3.5 stroke-[2.5]" />
-                  <span>No Realizado</span>
-                </div>
+                isSelectedShared ? (
+                  <div
+                    onClick={() => onOpenShareModal(selectedOrder)}
+                    className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-xs cursor-pointer hover:bg-rose-500/30 transition shrink-0 active:scale-95"
+                    title={`No Realizado: Reportado por WhatsApp${selectedOrder.whatsapp_shared_at ? ` (${selectedOrder.whatsapp_shared_at.slice(11, 16)})` : ''}. Toca para abrir.`}
+                  >
+                    <CheckCheck className="h-3.5 w-3.5 stroke-[2.5] text-rose-400" />
+                    <span>Reportado</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onOpenShareModal(selectedOrder)}
+                    className="px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1.5 bg-rose-500/25 text-rose-300 border border-rose-500/60 shadow-md shadow-rose-500/30 animate-pulse cursor-pointer hover:bg-rose-500/35 transition shrink-0 active:scale-95"
+                    title="No Realizado: Por Compartir - Toca para enviar constancia por WhatsApp"
+                  >
+                    <Share2 className="h-3.5 w-3.5 stroke-[2.2] text-rose-300" />
+                    <span>Por Compartir</span>
+                  </button>
+                )
               ) : isSelectedCompleted && isSelectedShared ? (
                 <div
                   className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-xs shrink-0 select-none"
@@ -2664,11 +2674,7 @@ export default function UberDriverView({
 
               {/* 3. Right: Cápsula con los 3 botones (1. Iniciar/Fotos -> 2. Compartir -> 3. Reportado) */}
               <div 
-                className={`flex items-center gap-1 rounded-full px-2 py-1 shadow-sm shrink-0 border transition-all ${
-                  isSelectedCancelled
-                    ? 'bg-rose-950/25 border-rose-500/25'
-                    : 'bg-[#182332] border-white/10'
-                }`}
+                className="flex items-center gap-1 rounded-full px-2 py-1 shadow-sm shrink-0 border transition-all bg-[#182332] border-white/10"
                 title={
                   isSelectedCancelled
                     ? 'Historial: Trabajo no realizado'
@@ -2679,14 +2685,24 @@ export default function UberDriverView({
                     : 'Historial: Trabajo pendiente'
                 }
               >
-                {/* 1. Paso Iniciar / Tirar Fotos de Evidencia */}
+                {/* 1. Paso Iniciar / Motivo (si Cancelado) o Tirar Fotos de Evidencia */}
                 {isSelectedCancelled ? (
-                  <div 
-                    className="p-1.5 rounded-full text-rose-400/30 select-none cursor-not-allowed"
-                    title="Paso 1: Cancelado / No realizado"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onOpenCancelDetail) onOpenCancelDetail(selectedOrder);
+                      else if (onOpenPhotos) onOpenPhotos(selectedOrder);
+                    }}
+                    className="p-1.5 rounded-full transition active:scale-90 cursor-pointer flex items-center justify-center relative text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 shadow-xs"
+                    title={`Motivo: ${selectedOrder.cancel_reason || 'Sin motivo detallado'} - Toca para ver detalle y fotos`}
                   >
-                    <Camera className="h-4 w-4 stroke-[2.2]" />
-                  </div>
+                    <AlertTriangle className="h-4 w-4 text-rose-400 stroke-[2.2]" />
+                    {(selectedOrder.cancel_photos_count > 0 || (selectedOrder.photos_count > 0 && (!selectedOrder.work_photos_count || selectedOrder.work_photos_count === 0))) && (
+                      <span className="absolute -top-1 -right-1 px-1 min-w-[14px] h-[14px] bg-rose-500 text-slate-950 text-[8.5px] font-black rounded-full flex items-center justify-center leading-none shadow-xs">
+                        {selectedOrder.cancel_photos_count || 1}
+                      </span>
+                    )}
+                  </button>
                 ) : (
                   <button
                     type="button"
@@ -2716,12 +2732,22 @@ export default function UberDriverView({
 
                 {/* 2. Paso Compartir por WhatsApp */}
                 {isSelectedCancelled ? (
-                  <div 
-                    className="p-1.5 rounded-full text-rose-400/30 select-none cursor-not-allowed"
-                    title="Paso 2: Cancelado / No realizado"
+                  <button
+                    type="button"
+                    onClick={() => onOpenShareModal(selectedOrder)}
+                    className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer ${
+                      isSelectedShared
+                        ? 'text-rose-400 bg-rose-500/15 border border-rose-500/30 shadow-xs'
+                        : 'text-rose-300 bg-rose-500/25 border border-rose-400 shadow-md shadow-rose-500/40 animate-pulse'
+                    }`}
+                    title={
+                      isSelectedShared
+                        ? 'Constancia compartida por WhatsApp (Toca para volver a compartir)'
+                        : 'Toca para compartir constancia de no realizado por WhatsApp'
+                    }
                   >
                     <Share2 className="h-4 w-4 stroke-[2.2]" />
-                  </div>
+                  </button>
                 ) : (
                   <button
                     type="button"
@@ -2752,12 +2778,22 @@ export default function UberDriverView({
 
                 {/* 3. Paso Reportado / Confirmar Reportado (Dos palomitas) */}
                 {isSelectedCancelled ? (
-                  <div 
-                    className="p-1.5 rounded-full text-rose-400/30 select-none cursor-not-allowed"
-                    title="Paso 3: Cancelado / No realizado"
+                  <button
+                    type="button"
+                    onClick={() => onOpenShareModal(selectedOrder)}
+                    className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer ${
+                      isSelectedShared
+                        ? 'text-rose-400 bg-rose-500/20 border border-rose-500/40 shadow-xs'
+                        : 'text-rose-400/30 border border-transparent cursor-default opacity-40'
+                    }`}
+                    title={
+                      isSelectedShared
+                        ? 'No Realizado: ¡Constancia reportada y confirmada!'
+                        : 'No Realizado: Se marca reportado al compartir la constancia por WhatsApp'
+                    }
                   >
                     <CheckCheck className="h-4 w-4 stroke-[2.5]" />
-                  </div>
+                  </button>
                 ) : (
                   <button
                     type="button"
