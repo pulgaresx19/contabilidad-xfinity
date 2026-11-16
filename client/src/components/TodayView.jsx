@@ -3,7 +3,7 @@ import {
   Camera, Check, CheckCheck, X, Phone, MessageSquare, MapPin, Share2, Clock, Copy,
   CheckCircle2, AlertCircle, Plus, Sparkles, AlertTriangle, Shield,
   SlidersHorizontal, Edit3, Minus, DollarSign, Calendar, ChevronLeft, ChevronRight, Pencil, Info,
-  Image as ImageIcon, Map, List, Navigation, Trash2, ExternalLink
+  Image as ImageIcon, Map, List, Navigation, Trash2, ExternalLink, RotateCcw
 } from 'lucide-react';
 import AddJobModal from './AddJobModal';
 import EditJobModal from './EditJobModal';
@@ -90,6 +90,7 @@ export default function TodayView({
   const [cancelPhotoPreviews, setCancelPhotoPreviews] = useState([]);
   const [savingCancel, setSavingCancel] = useState(false);
   const [cancelDetailOrder, setCancelDetailOrder] = useState(null);
+  const [confirmingReopen, setConfirmingReopen] = useState(false);
   const [cancelDetailPhotos, setCancelDetailPhotos] = useState([]);
   const [loadingCancelPhotos, setLoadingCancelPhotos] = useState(false);
   const [isLiveCameraOpenForCancel, setIsLiveCameraOpenForCancel] = useState(false);
@@ -1827,12 +1828,49 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
 
             {/* Body */}
             <div className="p-3.5 sm:p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0 scrollbar-none bg-[#101722]">
-              {/* Motivo Registrado */}
-              <div className="p-3.5 rounded-2xl bg-rose-950/25 border border-rose-500/30 space-y-1">
+              {/* Motivo Registrado con botón de Reactivar en esquina superior derecha */}
+              <div className="relative p-3.5 rounded-2xl bg-rose-950/25 border border-rose-500/30 space-y-1 overflow-hidden">
+                {confirmingReopen ? (
+                  <div className="absolute inset-0 bg-[#160c14]/95 backdrop-blur-xs rounded-2xl p-3 flex flex-col items-center justify-center text-center z-20 animate-fade-in border border-rose-500/40">
+                    <p className="text-xs font-bold text-white mb-2">
+                      ¿Reactivar este trabajo y pasarlo a Pendiente?
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingReopen(false)}
+                        className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-slate-300 text-xs font-semibold transition active:scale-95 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleReopenOrder(cancelDetailOrder);
+                          setConfirmingReopen(false);
+                          setCancelDetailOrder(null);
+                        }}
+                        className="px-3 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
+                      >
+                        Sí, Reactivar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingReopen(true)}
+                    className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/35 text-[11px] font-bold transition active:scale-95 cursor-pointer shadow-xs z-10"
+                    title="Reactivar trabajo para continuar con la instalación"
+                  >
+                    <RotateCcw className="h-3 w-3 stroke-[2.5]" />
+                    <span>Reactivar</span>
+                  </button>
+                )}
                 <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block">
                   Motivo Registrado:
                 </span>
-                <p className="text-xs font-semibold text-rose-100 leading-relaxed">
+                <p className="text-xs font-semibold text-rose-100 leading-relaxed max-w-[85%]">
                   "{cancelDetailOrder.cancel_reason || 'Inconveniente en la propiedad'}"
                 </p>
               </div>
@@ -1933,42 +1971,16 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                 const isCancelReported = Boolean(cancelDetailOrder.whatsapp_shared || localSharedMap[cancelDetailOrder.id]);
                 return (
                   <>
-                    {isCancelReported ? (
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setCancelDetailOrder(null)}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-xs font-bold transition active:scale-95 cursor-pointer border border-white/10 shadow-sm"
-                        >
-                          <span>Cerrar</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleReopenOrder(cancelDetailOrder);
-                            setCancelDetailOrder(null);
-                          }}
-                          className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
-                          title="Reactivar trabajo para continuar con la instalación"
-                        >
-                          <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                          <span>Reactivar</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleReopenOrder(cancelDetailOrder);
-                          setCancelDetailOrder(null);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
-                        title="Reactivar trabajo para continuar con la instalación"
-                      >
-                        <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                        <span>Reactivar Trabajo</span>
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCancelDetailOrder(null);
+                        setConfirmingReopen(false);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-xs font-bold transition active:scale-95 cursor-pointer border border-white/10 shadow-sm"
+                    >
+                      <span>Cerrar</span>
+                    </button>
 
                     {isCancelReported ? (
                       <div 

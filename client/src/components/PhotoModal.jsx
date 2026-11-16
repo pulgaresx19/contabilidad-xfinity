@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, Upload, Trash2, Camera, Image as ImageIcon, 
   CheckCircle2, AlertCircle, Check, CheckCheck,
-  ExternalLink, Share2, Copy, Clock
+  ExternalLink, Share2, Copy, Clock, RotateCcw
 } from 'lucide-react';
 import ShareReportModal from './ShareReportModal';
 import LiveCameraModal from './LiveCameraModal';
@@ -42,6 +42,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
   const [cancelReason, setCancelReason] = useState('');
   const [savingCancel, setSavingCancel] = useState(false);
   const [localReported, setLocalReported] = useState(false);
+  const [confirmingReactivate, setConfirmingReactivate] = useState(false);
 
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
@@ -55,6 +56,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
       setCancelReason('');
       setError(null);
       setLocalReported(false);
+      setConfirmingReactivate(false);
     }
   }, [isOpen, order?.id, initialShowCancel]);
 
@@ -63,6 +65,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
     setCancelReason('');
     setError(null);
     setCategory('Casa');
+    setConfirmingReactivate(false);
     if (onClose) onClose();
   };
 
@@ -271,7 +274,6 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
   };
 
   const handleReactivateOrder = async () => {
-    if (!confirm('¿Deseas reactivar este trabajo para continuar con la instalación?')) return;
     try {
       const res = await fetch(`/api/orders/${order.id}`, {
         method: 'PUT',
@@ -281,6 +283,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
       if (res.ok) {
         order.status = 'Pendiente';
         order.cancel_reason = '';
+        setConfirmingReactivate(false);
         if (onPhotoUpdated) onPhotoUpdated();
       }
     } catch (err) {
@@ -612,13 +615,47 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
           ) : isCancelled ? (
             /* CASO 2: El Trabajo ya está marcado como No Realizado */
             <div className="space-y-3.5">
-              <div className="p-4 bg-rose-950/25 border border-rose-500/35 rounded-2xl text-center space-y-2.5">
+              <div className="relative p-4 bg-rose-950/25 border border-rose-500/35 rounded-2xl text-center space-y-2.5 overflow-hidden">
+                {confirmingReactivate ? (
+                  <div className="absolute inset-0 bg-[#160c14]/95 backdrop-blur-xs rounded-2xl p-3 flex flex-col items-center justify-center text-center z-20 animate-fade-in border border-rose-500/40">
+                    <p className="text-xs font-bold text-white mb-2">
+                      ¿Reactivar este trabajo y pasarlo a Pendiente?
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingReactivate(false)}
+                        className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-slate-300 text-xs font-semibold transition active:scale-95 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleReactivateOrder}
+                        className="px-3 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
+                      >
+                        Sí, Reactivar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingReactivate(true)}
+                    className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/35 text-[11px] font-bold transition active:scale-95 cursor-pointer shadow-xs z-10"
+                    title="Reactivar trabajo para continuar con la instalación"
+                  >
+                    <RotateCcw className="h-3 w-3 stroke-[2.5]" />
+                    <span>Reactivar</span>
+                  </button>
+                )}
+
                 <div className="w-10 h-10 mx-auto rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center">
                   <AlertCircle className="h-5 w-5" />
                 </div>
                 <div>
                   <h4 className="text-sm font-black text-rose-300">Trabajo No Realizado</h4>
-                  <p className="text-xs text-slate-200 mt-1 font-semibold">
+                  <p className="text-xs text-slate-200 mt-1 font-semibold max-w-[85%] mx-auto">
                     "{order.cancel_reason || 'Inconveniente en la propiedad'}"
                   </p>
                 </div>
@@ -795,36 +832,13 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
             </>
           ) : isCancelled ? (
             <>
-              {isReported ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-xs font-bold transition active:scale-95 cursor-pointer border border-white/10 shadow-sm"
-                  >
-                    <span>Cerrar</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleReactivateOrder}
-                    className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
-                    title="Reactivar trabajo para continuar con la instalación"
-                  >
-                    <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                    <span>Reactivar</span>
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleReactivateOrder}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
-                  title="Reactivar trabajo para continuar con la instalación"
-                >
-                  <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                  <span>Reactivar Trabajo</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-xs font-bold transition active:scale-95 cursor-pointer border border-white/10 shadow-sm"
+              >
+                <span>Cerrar</span>
+              </button>
 
               {isReported ? (
                 <div 
