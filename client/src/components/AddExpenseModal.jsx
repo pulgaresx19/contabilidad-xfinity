@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { 
   X, DollarSign, Calendar, Tag, FileText, Camera, 
-  Upload, Fuel, Wrench, Car, Utensils, Smartphone, Shield, Package, Check,
+  Upload, Fuel, Wrench, Car, Utensils, Smartphone, Shield, Package, Home, Check,
   AlertCircle
 } from 'lucide-react';
 import { getLocalDateStr } from '../utils/dateUtils';
+import { compressImageFile } from '../utils/watermark';
 
 const CATEGORIES = [
   { id: 'Combustible', label: 'Gasolina / Combustible', icon: Fuel, color: 'text-amber-400' },
@@ -13,6 +14,7 @@ const CATEGORIES = [
   { id: 'Alimentación', label: 'Comida / Viáticos', icon: Utensils, color: 'text-orange-400' },
   { id: 'Telefonía', label: 'Teléfono / Internet', icon: Smartphone, color: 'text-emerald-400' },
   { id: 'Seguro', label: 'Seguros / Licencias', icon: Shield, color: 'text-purple-400' },
+  { id: 'Renta', label: 'Pago de la Renta', icon: Home, color: 'text-rose-400' },
   { id: 'Otros', label: 'Otros Gastos', icon: Package, color: 'text-slate-400' },
 ];
 
@@ -28,13 +30,18 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
 
   if (!isOpen) return null;
 
-  const handlePhotoSelect = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+  const handlePhotoSelect = async (e) => {
+    const rawFiles = Array.from(e.target.files || []);
+    if (rawFiles.length === 0) return;
 
-    setReceiptFiles((prev) => [...prev, ...files]);
+    // Calibración y compresión ligera automática para que los tickets no saturen almacenamiento
+    const compressedFiles = await Promise.all(
+      rawFiles.map((f) => compressImageFile(f, { maxDim: 1280, quality: 0.75 }))
+    );
 
-    files.forEach((file) => {
+    setReceiptFiles((prev) => [...prev, ...compressedFiles]);
+
+    compressedFiles.forEach((file) => {
       const reader = new FileReader();
       reader.onload = (ev) => {
         setReceiptPreviews((prev) => [...prev, ev.target.result]);
@@ -132,31 +139,39 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
           </button>
         </div>
 
-        {/* 3-box KPI bar */}
-        <div className="grid grid-cols-3 gap-2 px-4 py-2.5 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
-          <div className="bg-[#16202c] border border-white/5 rounded-xl py-1.5 px-1">
-            <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Monto USD</span>
+        {/* 3-box KPI bar con Estética Cockpit Refinada */}
+        <div className="grid grid-cols-3 gap-2 px-4 py-3 bg-[#0d141e]/90 border-b border-white/10 shrink-0 text-center">
+          <div className="bg-[#141d2a] border border-rose-500/25 rounded-2xl py-2 px-2 flex flex-col items-center justify-center min-h-[58px] shadow-sm">
+            <span className="block text-[9.5px] uppercase tracking-wider text-slate-400 font-bold mb-1">
+              Monto USD
+            </span>
             <span className="text-xs sm:text-sm font-black font-mono text-rose-400 leading-none">
               {displayAmount}
             </span>
           </div>
-          <div className="bg-[#16202c] border border-white/5 rounded-xl py-1.5 px-1">
-            <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Categoría</span>
-            <span className="text-xs sm:text-sm font-black text-amber-300 font-mono leading-none truncate block">
+
+          <div className="bg-[#141d2a] border border-amber-500/25 rounded-2xl py-2 px-2 flex flex-col items-center justify-center min-h-[58px] shadow-sm min-w-0">
+            <span className="block text-[9.5px] uppercase tracking-wider text-slate-400 font-bold mb-1">
+              Categoría
+            </span>
+            <span className="text-xs sm:text-sm font-black text-amber-300 font-mono leading-none truncate w-full px-1 block" title={category}>
               {category}
             </span>
           </div>
-          <div className="bg-[#16202c] border border-white/5 rounded-xl py-1.5 px-1">
-            <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Tickets</span>
+
+          <div className="bg-[#141d2a] border border-cyan-500/25 rounded-2xl py-2 px-2 flex flex-col items-center justify-center min-h-[58px] shadow-sm">
+            <span className="block text-[9.5px] uppercase tracking-wider text-slate-400 font-bold mb-1">
+              Tickets
+            </span>
             <span className="text-xs sm:text-sm font-black text-cyan-400 font-mono leading-none">
               {receiptFiles.length} {receiptFiles.length === 1 ? 'adjunto' : 'adjuntos'}
             </span>
           </div>
         </div>
 
-        {/* Form Body con Scroll */}
+        {/* Form Body con Scroll Refinado */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
-          <div className="p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0">
+          <div className="p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0 sleek-scroll">
             
             {/* Mensaje de error si ocurre */}
             {error && (
@@ -188,14 +203,14 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
                 />
               </div>
 
-              {/* Botones de Montos Rápidos */}
-              <div className="flex gap-1.5 mt-2 overflow-x-auto pb-1 no-scrollbar">
+              {/* Botones de Montos Rápidos (Grid Adaptativo sin scroll tosco) */}
+              <div className="grid grid-cols-5 gap-1.5 mt-2.5">
                 {quickAmounts.map((q) => (
                   <button
                     type="button"
                     key={q}
                     onClick={() => setAmount(String(q))}
-                    className="px-2.5 py-1 rounded-xl text-xs font-black font-mono bg-[#16202c] hover:bg-[#1f2d3d] text-slate-300 hover:text-white border border-white/10 transition active:scale-95 shrink-0"
+                    className="py-1.5 px-1 rounded-xl text-xs font-black font-mono bg-[#141d2a] hover:bg-[#1e2a3a] text-slate-300 hover:text-white border border-white/10 hover:border-cyan-500/35 transition active:scale-95 text-center shadow-xs cursor-pointer"
                   >
                     +${q}
                   </button>
@@ -306,24 +321,24 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
                 </label>
               </div>
 
-              {/* Tira Horizontal de Tickets */}
+              {/* Tira Horizontal de Tickets con Scroll Estilizado */}
               {receiptPreviews.length > 0 && (
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 no-scrollbar">
+                <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 sleek-scroll">
                   {receiptPreviews.map((src, idx) => (
                     <div
                       key={idx}
-                      className="relative w-20 h-16 flex-shrink-0 rounded-xl overflow-hidden border border-white/10 bg-[#0d141e] shadow-sm"
+                      className="relative w-20 h-16 flex-shrink-0 rounded-2xl overflow-hidden border border-white/15 bg-[#0d141e] shadow-sm group hover:border-cyan-500/40 transition"
                     >
                       <img src={src} alt={`Ticket ${idx + 1}`} className="w-full h-full object-cover" />
                       <button
                         type="button"
                         onClick={() => handleRemoveReceiptPhoto(idx)}
-                        className="absolute top-1 right-1 p-1 rounded-full bg-rose-600 hover:bg-rose-500 text-white shadow active:scale-90 transition"
+                        className="absolute top-1 right-1 p-1 rounded-full bg-rose-600/90 hover:bg-rose-500 text-white shadow active:scale-90 transition cursor-pointer"
                         title="Quitar ticket"
                       >
                         <X className="w-2.5 h-2.5 stroke-[2.5]" />
                       </button>
-                      <span className="absolute bottom-1 left-1 px-1.5 py-0.2 rounded bg-black/75 text-[9px] font-mono text-white/90">
+                      <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-xs text-[9px] font-mono text-cyan-300 font-bold border border-white/10">
                         #{idx + 1}
                       </span>
                     </div>

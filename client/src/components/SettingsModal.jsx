@@ -151,7 +151,23 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
 
         {/* Cuerpo Scrolleable con Opciones */}
         <div className="p-3.5 sm:p-4 space-y-3 overflow-y-auto flex-1 min-h-0 scrollbar-none">
-          {/* APARIENCIA / MODO CLARO Y OSCURO */}
+          {/* 1. TECNICO / IDENTIFICADOR (ARRIBA DE TODO) */}
+          <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-1.5 shadow-sm">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+              <ShieldCheck className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
+              <span>Nombre de Técnico / Identificador</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={settings.tech_default || ''}
+              onChange={(e) => setSettings({ ...settings, tech_default: e.target.value })}
+              placeholder="ej. Javier (P0G1)"
+              className="w-full bg-[#0f1722] border border-white/10 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 dark:text-white font-mono focus:outline-none focus:border-cyan-500 transition shadow-inner"
+            />
+          </div>
+
+          {/* 2. APARIENCIA / TEMA DE LA APLICACIÓN */}
           <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
@@ -205,23 +221,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             </div>
           </div>
 
-          {/* 1. TECNICO */}
-          <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-1.5 shadow-sm">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-              <ShieldCheck className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-              <span>Nombre de Técnico / Identificador</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={settings.tech_default || ''}
-              onChange={(e) => setSettings({ ...settings, tech_default: e.target.value })}
-              placeholder="ej. Javier (P0G1)"
-              className="w-full bg-[#0f1722] border border-white/10 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 dark:text-white font-mono focus:outline-none focus:border-cyan-500 transition shadow-inner"
-            />
-          </div>
-
-          {/* 2. TARIFAS DE PAGO (SOLO 2: BASE Y BORE DRIVEWAY) */}
+          {/* 3. TARIFAS DE PAGO (BASE, BORE DW Y METRAJE LARGO) */}
           <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-3 shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -319,7 +319,63 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             </div>
           </div>
 
-          {/* 2B. SERVIDOR AURACORE IA */}
+          {/* 4. DÍA DE CIERRE SEMANAL (SEMANARIO LINEAL) */}
+          <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-3 shadow-sm">
+            <div>
+              <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Calendar className="h-4 w-4" />
+                <span>Semanario & Día de Cierre</span>
+              </span>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 leading-snug">
+                Selecciona el día de la semana en que corta tu compañía. Ese día se tomará lógicamente como el fin de cada cierre semanal:
+              </p>
+            </div>
+
+            {/* Selector Lineal Horizontal de 7 Días */}
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5 pt-0.5">
+              {WEEK_DAYS.map((d) => {
+                const isSelected = String(settings.cutoff_day) === d.id;
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => setSettings({ ...settings, cutoff_day: d.id })}
+                    className={`py-2.5 px-1 rounded-xl text-xs font-black transition flex flex-col items-center justify-center gap-0.5 border select-none cursor-pointer ${
+                      isSelected
+                        ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md shadow-amber-400/25 scale-105 z-10'
+                        : 'bg-[#0f1722] border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-white/20 active:scale-95'
+                    }`}
+                  >
+                    <span>{d.short}</span>
+                    <span className={`text-[8px] font-bold uppercase ${isSelected ? 'text-slate-950/90' : 'text-slate-400 dark:text-slate-500'}`}>
+                      {isSelected ? 'Cierre' : 'Día'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Previsualización del Ciclo Seleccionado */}
+            <div className="p-3 bg-[#0f1722] border border-white/10 rounded-xl text-xs flex items-center justify-between shadow-xs">
+              <div className="space-y-0.5">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold block">
+                  Cierre de Semana Configurado:
+                </span>
+                <p className="text-sm font-black text-amber-600 dark:text-amber-300 font-mono">
+                  {currentOption.full}
+                </p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                  Período: {currentOption.cycle}
+                </p>
+              </div>
+
+              <div className="p-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-500/20">
+                <Check className="h-4 w-4 stroke-[3]" />
+              </div>
+            </div>
+          </div>
+
+          {/* 5. SERVIDOR AURACORE IA (DE ÚLTIMO) */}
           <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -382,62 +438,6 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             <p className="text-[10px] text-slate-400 leading-tight">
               Toca <strong className="text-amber-300">Auto</strong> para probar directo con la IA de tu computadora por el túnel QR, o pega tu enlace HTTPS de Vercel cuando esté activo.
             </p>
-          </div>
-
-          {/* 3. DÍA DE CIERRE SEMANAL (SEMANARIO LINEAL) */}
-          <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-3 shadow-sm">
-            <div>
-              <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Calendar className="h-4 w-4" />
-                <span>Semanario & Día de Cierre</span>
-              </span>
-              <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 leading-snug">
-                Selecciona el día de la semana en que corta tu compañía. Ese día se tomará lógicamente como el fin de cada cierre semanal:
-              </p>
-            </div>
-
-            {/* Selector Lineal Horizontal de 7 Días */}
-            <div className="grid grid-cols-7 gap-1 sm:gap-1.5 pt-0.5">
-              {WEEK_DAYS.map((d) => {
-                const isSelected = String(settings.cutoff_day) === d.id;
-                return (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => setSettings({ ...settings, cutoff_day: d.id })}
-                    className={`py-2.5 px-1 rounded-xl text-xs font-black transition flex flex-col items-center justify-center gap-0.5 border select-none cursor-pointer ${
-                      isSelected
-                        ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md shadow-amber-400/25 scale-105 z-10'
-                        : 'bg-[#0f1722] border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-white/20 active:scale-95'
-                    }`}
-                  >
-                    <span>{d.short}</span>
-                    <span className={`text-[8px] font-bold uppercase ${isSelected ? 'text-slate-950/90' : 'text-slate-400 dark:text-slate-500'}`}>
-                      {isSelected ? 'Cierre' : 'Día'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Previsualización del Ciclo Seleccionado */}
-            <div className="p-3 bg-[#0f1722] border border-white/10 rounded-xl text-xs flex items-center justify-between shadow-xs">
-              <div className="space-y-0.5">
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold block">
-                  Cierre de Semana Configurado:
-                </span>
-                <p className="text-sm font-black text-amber-600 dark:text-amber-300 font-mono">
-                  {currentOption.full}
-                </p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                  Período: {currentOption.cycle}
-                </p>
-              </div>
-
-              <div className="p-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-500/20">
-                <Check className="h-4 w-4 stroke-[3]" />
-              </div>
-            </div>
           </div>
 
           {saved && (

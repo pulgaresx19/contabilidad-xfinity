@@ -2,9 +2,33 @@ import * as XLSX from 'xlsx';
 import { getOrders, getWeeklySummary, getSettings } from './localDb';
 
 export async function exportOrdersToExcel(filename = null) {
-  const orders = await getOrders();
-  const summary = await getWeeklySummary();
-  const settings = await getSettings();
+  let orders = [];
+  let summary = null;
+  let settings = {};
+
+  try {
+    const [ordRes, sumRes, setRes] = await Promise.all([
+      fetch('/api/orders'),
+      fetch('/api/weekly-summary'),
+      fetch('/api/settings')
+    ]);
+    if (ordRes.ok) orders = await ordRes.json();
+    if (sumRes.ok) summary = await sumRes.json();
+    if (setRes.ok) settings = await setRes.json();
+  } catch (err) {
+    console.warn('Backend fetch for Excel export failed, falling back to localDb:', err);
+  }
+
+  // Offline fallback if server not reachable
+  if (!orders || orders.length === 0) {
+    orders = await getOrders();
+  }
+  if (!summary || !summary.summary) {
+    summary = await getWeeklySummary();
+  }
+  if (!settings || Object.keys(settings).length === 0) {
+    settings = await getSettings();
+  }
 
   // 1. Prepare Orders Sheet Data
   const rows = orders.map((o) => {

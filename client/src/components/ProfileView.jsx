@@ -55,7 +55,24 @@ export default function ProfileView({ techName, summaryData, onRefresh, onOpenSe
   const handleExportBackup = async () => {
     try {
       setProcessing(true);
-      const jsonStr = await exportAllData();
+      let jsonStr = '';
+
+      // 1. Intentar volcado directo desde la base de datos real SQLite
+      try {
+        const res = await fetch('/api/backup/export');
+        if (res.ok) {
+          const data = await res.json();
+          jsonStr = JSON.stringify(data, null, 2);
+        }
+      } catch (err) {
+        console.warn('Backend backup export failed, falling back to localDb:', err);
+      }
+
+      // 2. Respaldo offline de IndexedDB si el servidor no respondió
+      if (!jsonStr) {
+        jsonStr = await exportAllData();
+      }
+
       const blob = new Blob([jsonStr], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -82,8 +99,34 @@ export default function ProfileView({ techName, summaryData, onRefresh, onOpenSe
     try {
       setProcessing(true);
       const text = await file.text();
-      const res = await importAllData(text);
-      showNotification(`¡Respaldo restaurado! Se importaron ${res.count} trabajos.`);
+      const parsed = JSON.parse(text);
+
+      let importedCount = 0;
+      let backendSuccess = false;
+
+      // 1. Restaurar directamente en SQLite en el servidor
+      try {
+        const res = await fetch('/api/backup/restore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(parsed)
+        });
+        if (res.ok) {
+          const result = await res.json();
+          importedCount = result.count || 0;
+          backendSuccess = true;
+        }
+      } catch (err) {
+        console.warn('Backend restore failed, falling back to localDb:', err);
+      }
+
+      // 2. Sincronizar también con IndexedDB para modo offline
+      try {
+        const localRes = await importAllData(parsed);
+        if (!backendSuccess) importedCount = localRes.count || 0;
+      } catch (err) {}
+
+      showNotification(`¡Respaldo restaurado! Se importaron ${importedCount} trabajos.`);
       if (onRefresh) onRefresh();
     } catch (err) {
       console.error(err);
@@ -97,6 +140,9 @@ export default function ProfileView({ techName, summaryData, onRefresh, onOpenSe
   const handleClearData = async () => {
     try {
       setProcessing(true);
+      try {
+        await fetch('/api/backup/clear', { method: 'POST' });
+      } catch (err) {}
       await clearAllData();
       setShowConfirmClear(false);
       showNotification('Datos reiniciados. La aplicación está lista en blanco.', 'success');

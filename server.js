@@ -1485,7 +1485,7 @@ app.get('/api/expenses', (req, res) => {
   }
 });
 
-app.post('/api/expenses', uploadExpense.any(), (req, res) => {
+app.post('/api/expenses', uploadExpense.any(), async (req, res) => {
   try {
     const { expense_date, category, description, amount } = req.body;
     const finalDesc = (description && description.trim()) || category || 'Gasto General';
@@ -1500,6 +1500,24 @@ app.post('/api/expenses', uploadExpense.any(), (req, res) => {
     let receiptPath = null;
     const uploadedFiles = req.files || (req.file ? [req.file] : []);
     if (uploadedFiles.length > 0) {
+      // Backend auto-compression with sharp: guarantees every stored expense receipt stays crisp and lightweight (~150-250KB)
+      for (const file of uploadedFiles) {
+        const filePath = path.join(expensesDir, file.filename);
+        try {
+          const meta = await sharp(filePath).metadata();
+          if ((meta.width && meta.width > 1280) || (meta.height && meta.height > 1280) || file.size > 300 * 1024) {
+            const tempPath = filePath + '.opt.jpg';
+            await sharp(filePath)
+              .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
+              .jpeg({ quality: 75, mozjpeg: true })
+              .toFile(tempPath);
+            fs.renameSync(tempPath, filePath);
+          }
+        } catch (sharpErr) {
+          // Fallback silently if format isn't supported by sharp
+        }
+      }
+
       const paths = uploadedFiles.map(f => path.join('expenses', f.filename).replace(/\\/g, '/'));
       receiptPath = paths.length === 1 ? paths[0] : JSON.stringify(paths);
     }
@@ -1573,6 +1591,206 @@ app.post('/api/settings', (req, res) => {
     for (const [k, v] of Object.entries(updates)) {
       stmt.run(k, String(v));
     }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11b. Database Backup & Restore (Full SQLite Synchronization)
+app.get('/api/backup/export', (req, res) => {
+  try {
+    const settings = db.prepare('SELECT * FROM settings').all();
+    const orders = db.prepare('SELECT * FROM work_orders ORDER BY work_date ASC, id ASC').all();
+    const photos = db.prepare('SELECT * FROM job_photos ORDER BY id ASC').all();
+    const expenses = db.prepare('SELECT * FROM monthly_expenses ORDER BY expense_date ASC, id ASC').all();
+    const sheets = db.prepare('SELECT * FROM dispatch_sheets ORDER BY id ASC').all();
+
+    const backup = {
+      version: 1,
+      app: 'Contabilidad XFinity',
+      exported_at: new Date().toISOString(),
+      counts: {
+        orders: orders.length,
+        photos: photos.length,
+        expenses: expenses.length,
+        sheets: sheets.length,
+        settings: settings.length
+      },
+      settings,
+      orders,
+      photos,
+      expenses,
+      sheets
+    };
+
+    res.set('Content-Disposition', `attachment; filename="Respaldo_Contabilidad_Xfinity_${new Date().toISOString().split('T')[0]}.json"`);
+    res.json(backup);
+  } catch (error) {
+    console.error('Error generating SQLite backup:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/backup/restore', (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload || (typeof payload !== 'object')) {
+      return res.status(400).json({ error: 'Formato de respaldo no válido o archivo corrupto' });
+    }
+
+    const ordersList = Array.isArray(payload) ? payload : (Array.isArray(payload.orders) ? payload.orders : null);
+    if (!ordersList && !Array.isArray(payload.settings)) {
+      return res.status(400).json({ error: 'El archivo no contiene órdenes ni ajustes válidos' });
+    }
+
+    const restoreTransaction = db.transaction((data) => {
+      // 1. Settings
+      if (Array.isArray(data.settings) && data.settings.length > 0) {
+        const stmtSetting = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+        for (const s of data.settings) {
+          if (s && s.key) stmtSetting.run(String(s.key), String(s.value !== undefined ? s.value : ''));
+        }
+      }
+
+      // 2. Photos & Orders (deleting photos first to satisfy foreign keys)
+      if (ordersList) {
+        db.prepare('DELETE FROM job_photos').run();
+        db.prepare('DELETE FROM work_orders').run();
+
+        const stmtOrder = db.prepare(`
+          INSERT INTO work_orders (
+            id, work_date, tech_id, job_id, address, city, zip_code, phone,
+            call_first, drop_footage, cable_type, bore_type, is_temp, obstacles,
+            premise_access, neighbor_notice, raw_notes, rate_calculated, status,
+            payment_status, created_at, updated_at, cancel_reason, manual_adjustment,
+            adjustment_reason, whatsapp_shared, whatsapp_shared_at, latitude, longitude,
+            route_order
+          ) VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?,
+            ?
+          )
+        `);
+
+        for (const o of ordersList) {
+          stmtOrder.run(
+            o.id || null,
+            o.work_date || new Date().toISOString().split('T')[0],
+            o.tech_id || 'Javier (P0G1)',
+            o.job_id || String(Date.now() + Math.floor(Math.random() * 1000)),
+            o.address || '',
+            o.city || '',
+            o.zip_code || '',
+            o.phone || '',
+            o.call_first ? 1 : 0,
+            parseFloat(o.drop_footage) || 0,
+            o.cable_type || 'RG-6',
+            o.bore_type || 'N',
+            o.is_temp ? 1 : 0,
+            o.obstacles || 'N',
+            o.premise_access || 'N',
+            o.neighbor_notice || 'N',
+            o.raw_notes || '',
+            parseFloat(o.rate_calculated) || 0,
+            o.status || 'Pendiente',
+            o.payment_status || 'Pendiente',
+            o.created_at || new Date().toISOString(),
+            o.updated_at || new Date().toISOString(),
+            o.cancel_reason || '',
+            parseFloat(o.manual_adjustment) || 0,
+            o.adjustment_reason || '',
+            o.whatsapp_shared ? 1 : 0,
+            o.whatsapp_shared_at || null,
+            o.latitude ? parseFloat(o.latitude) : null,
+            o.longitude ? parseFloat(o.longitude) : null,
+            parseInt(o.route_order, 10) || 0
+          );
+        }
+
+        // Job Photos
+        if (Array.isArray(data.photos) && data.photos.length > 0) {
+          const stmtPhoto = db.prepare(`
+            INSERT INTO job_photos (id, work_order_id, filename, original_name, category, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `);
+          for (const p of data.photos) {
+            stmtPhoto.run(
+              p.id || null,
+              p.work_order_id,
+              p.filename,
+              p.original_name || p.filename,
+              p.category || 'General',
+              p.created_at || new Date().toISOString()
+            );
+          }
+        }
+      }
+
+      // 3. Monthly Expenses
+      if (Array.isArray(data.expenses) && data.expenses.length > 0) {
+        db.prepare('DELETE FROM monthly_expenses').run();
+        const stmtExpense = db.prepare(`
+          INSERT INTO monthly_expenses (id, month_key, expense_date, category, description, amount, receipt_photo, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const e of data.expenses) {
+          stmtExpense.run(
+            e.id || null,
+            e.month_key || (e.expense_date ? e.expense_date.slice(0, 7) : new Date().toISOString().slice(0, 7)),
+            e.expense_date || new Date().toISOString().split('T')[0],
+            e.category || 'Combustible',
+            e.description || '',
+            parseFloat(e.amount) || 0,
+            e.receipt_photo || null,
+            e.created_at || new Date().toISOString(),
+            e.updated_at || new Date().toISOString()
+          );
+        }
+      }
+
+      // 4. Dispatch Sheets
+      if (Array.isArray(data.sheets) && data.sheets.length > 0) {
+        db.prepare('DELETE FROM dispatch_sheets').run();
+        const stmtSheet = db.prepare(`
+          INSERT INTO dispatch_sheets (id, sheet_date, filename, original_name, extracted_text, orders_count, notes, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const sh of data.sheets) {
+          stmtSheet.run(
+            sh.id || null,
+            sh.sheet_date || new Date().toISOString().split('T')[0],
+            sh.filename || '',
+            sh.original_name || '',
+            sh.extracted_text || sh.ocr_raw_text || '',
+            parseInt(sh.orders_count, 10) || 0,
+            sh.notes || '',
+            sh.created_at || new Date().toISOString()
+          );
+        }
+      }
+    });
+
+    restoreTransaction(payload);
+    res.json({ success: true, count: ordersList ? ordersList.length : 0 });
+  } catch (error) {
+    console.error('Error restoring SQLite backup:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/backup/clear', (req, res) => {
+  try {
+    const clearTransaction = db.transaction(() => {
+      db.prepare('DELETE FROM job_photos').run();
+      db.prepare('DELETE FROM work_orders').run();
+      db.prepare('DELETE FROM monthly_expenses').run();
+      db.prepare('DELETE FROM dispatch_sheets').run();
+    });
+    clearTransaction();
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

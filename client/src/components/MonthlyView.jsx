@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Calendar, DollarSign, TrendingUp, TrendingDown, Clock, 
   CheckCircle2, ChevronLeft, ChevronRight, Plus, Fuel, Wrench, 
-  Car, Utensils, Smartphone, Shield, Package, Trash2, Copy, 
+  Car, Utensils, Smartphone, Shield, Package, Home, Trash2, Copy, 
   Check, CheckCheck, Share2, AlertCircle, FileText, ChevronDown, ChevronUp, Image as ImageIcon,
   ShieldCheck, CheckCircle, Edit3, Pencil, Camera, Sparkles, AlertTriangle, ExternalLink, X
 } from 'lucide-react';
@@ -21,6 +21,7 @@ const CATEGORY_ICONS = {
   Alimentación: { icon: Utensils, color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
   Telefonía: { icon: Smartphone, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
   Seguro: { icon: Shield, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+  Renta: { icon: Home, color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
   Otros: { icon: Package, color: 'text-slate-400 bg-slate-500/10 border-slate-500/20' },
 };
 
@@ -38,12 +39,33 @@ export default function MonthlyView({
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [selectedWeekModal, setSelectedWeekModal] = useState(null);
+  const [selectedExpenseModal, setSelectedExpenseModal] = useState(null);
   const [copiedWeekKey, setCopiedWeekKey] = useState(null);
   const [copiedReport, setCopiedReport] = useState(false);
   const [updatingWeekKey, setUpdatingWeekKey] = useState(null);
   const [reportOrder, setReportOrder] = useState(null);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [copiedJobId, setCopiedJobId] = useState(null);
+
+  const getReceiptSrc = (p) => {
+    if (!p) return '';
+    if (p.startsWith('http') || p.startsWith('data:')) return p;
+    if (p.startsWith('/uploads/')) return p;
+    if (p.startsWith('uploads/')) return `/${p}`;
+    return `/uploads/${p}`;
+  };
+
+  const parseExpensePhotos = (receipt_photo) => {
+    if (!receipt_photo) return [];
+    try {
+      if (typeof receipt_photo === 'string' && receipt_photo.startsWith('[')) {
+        return JSON.parse(receipt_photo);
+      }
+      return [receipt_photo];
+    } catch (e) {
+      return [receipt_photo];
+    }
+  };
 
   const copySingleJobClaim = (order) => {
     const hasDriveway = Boolean(
@@ -614,76 +636,62 @@ ${weeksLines || '  (No hay semanas registradas)'}
             {expenses.length === 0 ? (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-xs">
                 No has registrado gastos para este mes.
-                <p className="text-[11px] text-slate-500 mt-1">Registra combustible, herramientas y repuestos para llevar tu contabilidad real.</p>
+                <p className="text-[11px] text-slate-500 mt-1">Registra combustible, herramientas, renta y repuestos para llevar tu contabilidad real.</p>
               </div>
             ) : (
               expenses.map((exp) => {
                 const catCfg = CATEGORY_ICONS[exp.category] || CATEGORY_ICONS.Otros;
                 const Icon = catCfg.icon;
+                const photos = parseExpensePhotos(exp.receipt_photo);
 
                 return (
                   <div
                     key={exp.id}
-                    className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between transition shadow-sm"
+                    onClick={() => setSelectedExpenseModal(exp)}
+                    className="bg-[#131b26] hover:bg-[#182332] border border-white/10 hover:border-cyan-500/35 rounded-2xl p-3.5 flex items-center justify-between transition shadow-md cursor-pointer group active:scale-[0.99]"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${catCfg.color}`}>
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 ${catCfg.color}`}>
                         <Icon className="w-5 h-5" />
                       </div>
-                      <div>
-                        <div className="font-bold text-white text-xs">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-white text-xs truncate group-hover:text-cyan-300 transition">
                           {exp.description}
                         </div>
-                        <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                          <span>{exp.category}</span>
+                        <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className="font-medium text-amber-300/90">{exp.category}</span>
                           <span>•</span>
                           <span>{exp.expense_date}</span>
-                          {exp.receipt_photo && (() => {
-                            let photos = [];
-                            try {
-                              if (exp.receipt_photo.startsWith('[')) {
-                                photos = JSON.parse(exp.receipt_photo);
-                              } else {
-                                photos = [exp.receipt_photo];
-                              }
-                            } catch (e) {
-                              photos = [exp.receipt_photo];
-                            }
-                            return (
-                              <span className="flex items-center gap-1">
-                                {photos.map((p, pIdx) => (
-                                  <a
-                                    key={pIdx}
-                                    href={exp.receipt_data || `/uploads/${p}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-cyan-400 hover:text-cyan-300 underline flex items-center gap-0.5 font-medium"
-                                    title={`Abrir ticket #${pIdx + 1}`}
-                                  >
-                                    <ImageIcon className="w-3 h-3" />
-                                    <span>Ticket{photos.length > 1 ? ` #${pIdx + 1}` : ''}</span>
-                                  </a>
-                                ))}
-                              </span>
-                            );
-                          })()}
+                          {photos.length > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded-md border border-cyan-500/20">
+                              <Camera className="w-2.5 h-2.5" />
+                              <span>{photos.length} {photos.length === 1 ? 'ticket' : 'tickets'}</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
                       <div className="text-right">
-                        <div className="font-black text-rose-400 text-sm">
+                        <div className="font-black text-rose-400 font-mono text-sm sm:text-base">
                           -${Number(exp.amount).toFixed(2)}
                         </div>
                       </div>
                       <button
-                        onClick={(e) => handleDeleteExpense(exp.id, e)}
-                        className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteExpense(exp.id, e);
+                        }}
+                        className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/15 rounded-lg transition active:scale-90"
                         title="Eliminar gasto"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
+                      <div className="h-6 w-6 rounded-full bg-slate-800/80 border border-white/5 flex items-center justify-center text-slate-400 group-hover:text-cyan-400 group-hover:border-cyan-500/30 transition shrink-0">
+                        <ChevronRight className="h-3 w-3" />
+                      </div>
                     </div>
                   </div>
                 );
@@ -1132,6 +1140,170 @@ ${weeksLines || '  (No hay semanas registradas)'}
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DETALLE DE GASTO Y EVIDENCIA DE TICKETS */}
+      {selectedExpenseModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-5 bg-black/85 backdrop-blur-md animate-fade-in modal-overlay-safe"
+          onClick={() => setSelectedExpenseModal(null)}
+        >
+          <div 
+            className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[82dvh] sm:max-h-[85dvh] flex flex-col overflow-hidden shadow-2xl text-white my-auto animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Cockpit */}
+            <div className="px-4 sm:px-5 py-3.5 border-b border-white/10 flex items-center justify-between bg-slate-900/80 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                {(() => {
+                  const catCfg = CATEGORY_ICONS[selectedExpenseModal.category] || CATEGORY_ICONS.Otros;
+                  const Icon = catCfg.icon;
+                  return (
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center border shadow-sm shrink-0 ${catCfg.color}`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                  );
+                })()}
+                <div className="min-w-0">
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono truncate">
+                    Detalle de Gasto
+                  </h3>
+                  <p className="text-[10.5px] text-slate-400 font-mono truncate">
+                    {selectedExpenseModal.category} • {formatDateFriendly(selectedExpenseModal.expense_date)}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedExpenseModal(null)}
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition shrink-0 cursor-pointer"
+                title="Cerrar detalle"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Cuerpo del Modal */}
+            <div className="p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0 sleek-scroll">
+              {/* Tarjeta de Monto y Concepto */}
+              <div className="bg-[#141d2a] border border-rose-500/20 rounded-2xl p-4 text-center space-y-1.5 shadow-sm">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
+                  Monto Deducible
+                </span>
+                <div className="text-2xl sm:text-3xl font-black font-mono text-rose-400 drop-shadow-[0_0_10px_rgba(244,63,94,0.2)]">
+                  -${Number(selectedExpenseModal.amount || 0).toFixed(2)}
+                </div>
+                <div className="text-xs font-semibold text-slate-200 pt-1">
+                  {selectedExpenseModal.description || 'Gasto General'}
+                </div>
+              </div>
+
+              {/* Grid de Metadatos */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-[#16202c] border border-white/5 rounded-xl p-2.5 space-y-0.5">
+                  <span className="text-[9.5px] uppercase font-bold text-slate-400 block">Categoría</span>
+                  <span className="font-bold text-amber-300 font-mono">{selectedExpenseModal.category}</span>
+                </div>
+                <div className="bg-[#16202c] border border-white/5 rounded-xl p-2.5 space-y-0.5">
+                  <span className="text-[9.5px] uppercase font-bold text-slate-400 block">Fecha Registrada</span>
+                  <span className="font-bold text-slate-200 font-mono">{selectedExpenseModal.expense_date}</span>
+                </div>
+              </div>
+
+              {/* Sección de Comprobantes Fotográficos / Tickets */}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-cyan-400" />
+                    <span>Comprobantes / Tickets Adjuntos</span>
+                  </span>
+                  {(() => {
+                    const photos = parseExpensePhotos(selectedExpenseModal.receipt_photo);
+                    return photos.length > 0 ? (
+                      <span className="text-[10px] text-cyan-400 font-mono font-bold bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
+                        {photos.length} {photos.length === 1 ? 'ticket' : 'tickets'}
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
+
+                {(() => {
+                  const photos = parseExpensePhotos(selectedExpenseModal.receipt_photo);
+                  if (photos.length === 0) {
+                    return (
+                      <div className="bg-[#16202c] border border-white/5 rounded-2xl p-6 text-center text-slate-400 text-xs space-y-1">
+                        <ImageIcon className="w-6 h-6 mx-auto text-slate-600 mb-1" />
+                        <p className="font-medium text-slate-300">Sin foto de ticket</p>
+                        <p className="text-[10.5px] text-slate-500 leading-tight">
+                          Este gasto fue registrado únicamente con valor numérico sin adjuntos.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        {photos.map((p, idx) => {
+                          const src = getReceiptSrc(p);
+                          return (
+                            <div
+                              key={idx}
+                              onClick={() => setSelectedPhoto(src)}
+                              className="group relative rounded-2xl overflow-hidden border border-white/10 hover:border-cyan-500/40 bg-black/40 aspect-[4/3] cursor-pointer shadow-md transition"
+                            >
+                              <img
+                                src={src}
+                                alt={`Ticket ${idx + 1}`}
+                                className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90 group-hover:opacity-100 transition flex items-end p-2 justify-between">
+                                <span className="text-[9.5px] font-mono text-white/90 font-bold bg-black/60 px-1.5 py-0.5 rounded-md border border-white/10">
+                                  #{idx + 1}
+                                </span>
+                                <span className="text-[9.5px] text-cyan-300 font-bold flex items-center gap-0.5 bg-black/60 px-1.5 py-0.5 rounded-md border border-cyan-500/20">
+                                  <span>Ampliar</span>
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] text-slate-500 text-center font-medium">
+                        Toca cualquier ticket para abrirlo en tamaño completo.
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Footer Fijo con Acciones */}
+            <div className="px-4 py-3 border-t border-white/10 bg-slate-900/90 flex items-center justify-between gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const idToDelete = selectedExpenseModal.id;
+                  setSelectedExpenseModal(null);
+                  handleDeleteExpense(idToDelete);
+                }}
+                className="py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 hover:border-rose-500/40 text-rose-300 font-bold text-xs rounded-xl flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Eliminar</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedExpenseModal(null)}
+                className="flex-1 py-2.5 px-4 bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 border border-white/10 text-white font-bold text-xs rounded-xl text-center transition active:scale-95 cursor-pointer"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>
