@@ -325,7 +325,8 @@ const expenseStorage = multer.diskStorage({
     cb(null, expensesDir);
   },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
+    let ext = path.extname(file.originalname || '');
+    if (!ext || ext.length < 2) ext = '.jpg';
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, 'expense-' + uniqueSuffix + ext);
   }

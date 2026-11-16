@@ -26,6 +26,7 @@ export function initApiAdapter() {
         const db = await localDb.getDb();
         const tx = db.transaction(['job_photos', 'monthly_expenses', 'dispatch_sheets'], 'readonly');
 
+        // Check job_photos
         const photos = await new Promise((res) => {
           const req = tx.objectStore('job_photos').getAll();
           req.onsuccess = () => res(req.result || []);
@@ -39,6 +40,49 @@ export function initApiAdapter() {
             status: 200,
             headers: { 'Content-Type': blob.type || 'image/jpeg' }
           });
+        }
+
+        // Check monthly_expenses (tickets y comprobantes de gastos)
+        const expenses = await new Promise((res) => {
+          const req = tx.objectStore('monthly_expenses').getAll();
+          req.onsuccess = () => res(req.result || []);
+          req.onerror = () => res([]);
+        });
+
+        const cleanTarget = filename.replace(/^expenses\//, '');
+        for (const exp of expenses) {
+          if (!exp.receipt_photo || !exp.receipt_data) continue;
+          let photoNames = [];
+          let photoDataList = [];
+
+          try {
+            if (typeof exp.receipt_photo === 'string' && exp.receipt_photo.startsWith('[')) {
+              photoNames = JSON.parse(exp.receipt_photo);
+              photoDataList = typeof exp.receipt_data === 'string' && exp.receipt_data.startsWith('[')
+                ? JSON.parse(exp.receipt_data)
+                : [exp.receipt_data];
+            } else {
+              photoNames = [exp.receipt_photo];
+              photoDataList = [exp.receipt_data];
+            }
+          } catch (e) {
+            photoNames = [exp.receipt_photo];
+            photoDataList = [exp.receipt_data];
+          }
+
+          const idx = photoNames.findIndex((name) => {
+            if (!name) return false;
+            const cleanName = String(name).replace(/^expenses\//, '');
+            return cleanName === cleanTarget || name === filename || name.endsWith(cleanTarget);
+          });
+
+          if (idx !== -1 && photoDataList[idx]) {
+            const blob = dataUrlToBlob(photoDataList[idx]);
+            return new Response(blob, {
+              status: 200,
+              headers: { 'Content-Type': blob.type || 'image/jpeg' }
+            });
+          }
         }
       } catch (err) {
         console.warn('Local uploads fallback to network:', err);
@@ -231,15 +275,52 @@ export function initApiAdapter() {
                 amount: parseFloat(formData.get('amount')) || 0
               };
 
-              const receiptFile = formData.get('receipt_photo');
-              if (receiptFile && receiptFile.size > 0) {
-                const { dataUrl } = await compressImage(receiptFile, 1280, 1280, 0.75);
-                const ext = (receiptFile.name || 'receipt.jpg').split('.').pop();
-                expenseData.receipt_photo = `expense-${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
-                expenseData.receipt_data = dataUrl;
+              // Collect files from 'receipt_photos' (or fallback 'receipt_photo')
+              const photosArr = formData.getAll('receipt_photos');
+              const allFiles = (photosArr.length > 0 ? photosArr : formData.getAll('receipt_photo')).filter(
+                (f) => f && f.size > 0
+              );
+
+              const photosList = [];
+              if (allFiles.length > 0) {
+                for (const rf of allFiles) {
+                  const { dataUrl } = await compressImage(rf, 1280, 1280, 0.75);
+                  const ext = (rf.name || 'receipt.jpg').split('.').pop() || 'jpg';
+                  const storedFilename = `expenses/expense-${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
+                  photosList.push({
+                    filename: storedFilename,
+                    dataUrl
+                  });
+                }
+                expenseData.receipt_photo = photosList.length === 1 
+                  ? photosList[0].filename 
+                  : JSON.stringify(photosList.map(p => p.filename));
+                expenseData.receipt_data = photosList.length === 1
+                  ? photosList[0].dataUrl
+                  : JSON.stringify(photosList.map(p => p.dataUrl));
               }
             } else {
               expenseData = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
+            }
+
+            // Forward to Express SQLite backend first so the real server filename is synchronized
+            let serverCreated = null;
+            try {
+              if (originalFetch) {
+                const sRes = await originalFetch('/api/expenses', {
+                  method: 'POST',
+                  body: init.body
+                });
+                if (sRes.ok) {
+                  serverCreated = await sRes.json();
+                }
+              }
+            } catch (netErr) {
+              console.warn('Network sync for expense failed (offline mode):', netErr);
+            }
+
+            if (serverCreated && serverCreated.receipt_photo) {
+              expenseData.receipt_photo = serverCreated.receipt_photo;
             }
 
             const created = await localDb.createExpense(expenseData);
@@ -251,6 +332,11 @@ export function initApiAdapter() {
         if (expDeleteMatch && method === 'DELETE') {
           const expId = expDeleteMatch[1];
           await localDb.deleteExpense(expId);
+          try {
+            if (originalFetch) {
+              await originalFetch(`/api/expenses/${expId}`, { method: 'DELETE' });
+            }
+          } catch (netErr) {}
           return jsonResponse({ success: true });
         }
 

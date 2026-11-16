@@ -8,18 +8,18 @@ import { getLocalDateStr } from '../utils/dateUtils';
 import { compressImageFile } from '../utils/watermark';
 
 const CATEGORIES = [
-  { id: 'Combustible', label: 'Gasolina / Combustible', icon: Fuel, color: 'text-amber-400' },
-  { id: 'Herramientas', label: 'Herramientas / Material', icon: Wrench, color: 'text-cyan-400' },
-  { id: 'Vehículo', label: 'Mantenimiento Van / Auto', icon: Car, color: 'text-blue-400' },
-  { id: 'Alimentación', label: 'Comida / Viáticos', icon: Utensils, color: 'text-orange-400' },
-  { id: 'Telefonía', label: 'Teléfono / Internet', icon: Smartphone, color: 'text-emerald-400' },
-  { id: 'Seguro', label: 'Seguros / Licencias', icon: Shield, color: 'text-purple-400' },
-  { id: 'Renta', label: 'Pago de la Renta', icon: Home, color: 'text-rose-400' },
-  { id: 'Otros', label: 'Otros Gastos', icon: Package, color: 'text-slate-400' },
+  { id: 'Pago de Renta', label: 'Pago de Renta', icon: Home, color: 'text-rose-400' },
+  { id: 'Seguros', label: 'Seguros', icon: Shield, color: 'text-blue-400' },
+  { id: 'Combustible', label: 'Combustible', icon: Fuel, color: 'text-amber-400' },
+  { id: 'Comida', label: 'Comida', icon: Utensils, color: 'text-orange-400' },
+  { id: 'Seguros y Licencia', label: 'Seguros y Licencia', icon: Shield, color: 'text-purple-400' },
+  { id: 'Teléfono', label: 'Teléfono', icon: Smartphone, color: 'text-emerald-400' },
+  { id: 'Herramientas', label: 'Herramientas', icon: Wrench, color: 'text-cyan-400' },
+  { id: 'Otros Gastos', label: 'Otros Gastos', icon: Package, color: 'text-slate-400' },
 ];
 
 export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initialDate }) {
-  const [category, setCategory] = useState('Combustible');
+  const [category, setCategory] = useState(CATEGORIES[0].id);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [expenseDate, setExpenseDate] = useState(initialDate || getLocalDateStr());
@@ -30,31 +30,27 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
 
   if (!isOpen) return null;
 
-  const handlePhotoSelect = async (e) => {
+  const handlePhotoSelect = (e) => {
     const rawFiles = Array.from(e.target.files || []);
     if (rawFiles.length === 0) return;
 
-    // Calibración y compresión ligera automática para que los tickets no saturen almacenamiento
-    const compressedFiles = await Promise.all(
-      rawFiles.map((f) => compressImageFile(f, { maxDim: 1280, quality: 0.75 }))
-    );
-
-    setReceiptFiles((prev) => [...prev, ...compressedFiles]);
-
-    compressedFiles.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        setReceiptPreviews((prev) => [...prev, ev.target.result]);
-      };
-      reader.readAsDataURL(file);
-    });
+    // Generar previews instantáneos con URL.createObjectURL para feedback visual inmediato
+    const newPreviews = rawFiles.map((f) => URL.createObjectURL(f));
+    setReceiptPreviews((prev) => [...prev, ...newPreviews]);
+    setReceiptFiles((prev) => [...prev, ...rawFiles]);
 
     e.target.value = '';
   };
 
   const handleRemoveReceiptPhoto = (idx) => {
+    setReceiptPreviews((prev) => {
+      const target = prev[idx];
+      if (target && target.startsWith('blob:')) {
+        try { URL.revokeObjectURL(target); } catch (_) {}
+      }
+      return prev.filter((_, i) => i !== idx);
+    });
     setReceiptFiles((prev) => prev.filter((_, i) => i !== idx));
-    setReceiptPreviews((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleSubmit = async (e) => {
@@ -76,7 +72,8 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
       formData.append('description', description.trim() || category);
       formData.append('amount', numAmount);
       receiptFiles.forEach((file) => {
-        formData.append('receipt_photos', file);
+        const safeName = file.name || 'ticket.jpg';
+        formData.append('receipt_photos', file, safeName);
       });
 
       const res = await fetch('/api/expenses', {
@@ -88,6 +85,13 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
         const data = await res.json();
         throw new Error(data.error || 'Error al guardar el gasto');
       }
+
+      // Revocar previews temporales
+      receiptPreviews.forEach((url) => {
+        if (url && url.startsWith('blob:')) {
+          try { URL.revokeObjectURL(url); } catch (_) {}
+        }
+      });
 
       // Reset & notify
       setAmount('');

@@ -15,13 +15,21 @@ import EditJobModal from './EditJobModal';
 import ShareReportModal from './ShareReportModal';
 
 const CATEGORY_ICONS = {
-  Combustible: { icon: Fuel, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-  Herramientas: { icon: Wrench, color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
-  Vehículo: { icon: Car, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
-  Alimentación: { icon: Utensils, color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
-  Telefonía: { icon: Smartphone, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
-  Seguro: { icon: Shield, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+  // Orden oficial solicitado:
+  'Pago de Renta': { icon: Home, color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
   Renta: { icon: Home, color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
+  Seguros: { icon: Shield, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  Vehículo: { icon: Car, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  Combustible: { icon: Fuel, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  Comida: { icon: Utensils, color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
+  Alimentación: { icon: Utensils, color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
+  'Seguros y Licencia': { icon: Shield, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+  'Seguros y Licencias': { icon: Shield, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+  Seguro: { icon: Shield, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+  Teléfono: { icon: Smartphone, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+  Telefonía: { icon: Smartphone, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+  Herramientas: { icon: Wrench, color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
+  'Otros Gastos': { icon: Package, color: 'text-slate-400 bg-slate-500/10 border-slate-500/20' },
   Otros: { icon: Package, color: 'text-slate-400 bg-slate-500/10 border-slate-500/20' },
 };
 
@@ -643,6 +651,8 @@ ${weeksLines || '  (No hay semanas registradas)'}
                 const catCfg = CATEGORY_ICONS[exp.category] || CATEGORY_ICONS.Otros;
                 const Icon = catCfg.icon;
                 const photos = parseExpensePhotos(exp.receipt_photo);
+                const dataUrls = parseExpensePhotos(exp.receipt_data);
+                const totalTickets = Math.max(photos.length, dataUrls.length);
 
                 return (
                   <div
@@ -662,10 +672,10 @@ ${weeksLines || '  (No hay semanas registradas)'}
                           <span className="font-medium text-amber-300/90">{exp.category}</span>
                           <span>•</span>
                           <span>{exp.expense_date}</span>
-                          {photos.length > 0 && (
+                          {totalTickets > 0 && (
                             <span className="inline-flex items-center gap-1 text-[9px] font-bold text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded-md border border-cyan-500/20">
                               <Camera className="w-2.5 h-2.5" />
-                              <span>{photos.length} {photos.length === 1 ? 'ticket' : 'tickets'}</span>
+                              <span>{totalTickets} {totalTickets === 1 ? 'ticket' : 'tickets'}</span>
                             </span>
                           )}
                         </div>
@@ -1223,9 +1233,11 @@ ${weeksLines || '  (No hay semanas registradas)'}
                   </span>
                   {(() => {
                     const photos = parseExpensePhotos(selectedExpenseModal.receipt_photo);
-                    return photos.length > 0 ? (
+                    const dataUrls = parseExpensePhotos(selectedExpenseModal.receipt_data);
+                    const totalTickets = Math.max(photos.length, dataUrls.length);
+                    return totalTickets > 0 ? (
                       <span className="text-[10px] text-cyan-400 font-mono font-bold bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
-                        {photos.length} {photos.length === 1 ? 'ticket' : 'tickets'}
+                        {totalTickets} {totalTickets === 1 ? 'ticket' : 'tickets'}
                       </span>
                     ) : null;
                   })()}
@@ -1233,7 +1245,10 @@ ${weeksLines || '  (No hay semanas registradas)'}
 
                 {(() => {
                   const photos = parseExpensePhotos(selectedExpenseModal.receipt_photo);
-                  if (photos.length === 0) {
+                  const dataUrls = parseExpensePhotos(selectedExpenseModal.receipt_data);
+                  const totalTickets = Math.max(photos.length, dataUrls.length);
+
+                  if (totalTickets === 0) {
                     return (
                       <div className="bg-[#16202c] border border-white/5 rounded-2xl p-6 text-center text-slate-400 text-xs space-y-1">
                         <ImageIcon className="w-6 h-6 mx-auto text-slate-600 mb-1" />
@@ -1245,11 +1260,18 @@ ${weeksLines || '  (No hay semanas registradas)'}
                     );
                   }
 
+                  const displayList = Array.from({ length: totalTickets });
+
                   return (
                     <div className="space-y-2">
                       <div className="grid grid-cols-2 gap-2">
-                        {photos.map((p, idx) => {
-                          const src = getReceiptSrc(p);
+                        {displayList.map((_, idx) => {
+                          const dataUrl = dataUrls[idx];
+                          const p = photos[idx];
+                          const src = (dataUrl && (dataUrl.startsWith('data:') || dataUrl.startsWith('blob:')))
+                            ? dataUrl
+                            : getReceiptSrc(p);
+
                           return (
                             <div
                               key={idx}
@@ -1260,6 +1282,11 @@ ${weeksLines || '  (No hay semanas registradas)'}
                                 src={src}
                                 alt={`Ticket ${idx + 1}`}
                                 className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                                onError={(e) => {
+                                  if (dataUrl && e.target.src !== dataUrl) {
+                                    e.target.src = dataUrl;
+                                  }
+                                }}
                               />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90 group-hover:opacity-100 transition flex items-end p-2 justify-between">
                                 <span className="text-[9.5px] font-mono text-white/90 font-bold bg-black/60 px-1.5 py-0.5 rounded-md border border-white/10">
