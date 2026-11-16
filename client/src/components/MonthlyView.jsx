@@ -379,9 +379,9 @@ ${weeksLines || '  (No hay semanas registradas)'}
             </p>
           </div>
 
-          {/* Sub-cards: Cobrado vs Gastos vs Pendiente */}
+          {/* Sub-cards: 1. Cobrado, 2. Pendiente, 3. Gastos */}
           <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/8">
-            {/* Cobrado */}
+            {/* 1. Cobrado */}
             <div className="bg-[#131b26] border border-emerald-500/30 rounded-2xl p-2.5 shadow-sm space-y-0.5">
               <div className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold mb-0.5">
                 <TrendingUp className="w-3 h-3 stroke-[3]" />
@@ -395,21 +395,7 @@ ${weeksLines || '  (No hay semanas registradas)'}
               </div>
             </div>
 
-            {/* Gastos */}
-            <div className="bg-[#131b26] border border-rose-500/30 rounded-2xl p-2.5 shadow-sm space-y-0.5">
-              <div className="flex items-center gap-1 text-[10px] text-rose-400 font-bold mb-0.5">
-                <TrendingDown className="w-3 h-3 stroke-[3]" />
-                <span>Gastos</span>
-              </div>
-              <div className="text-sm sm:text-base font-black font-mono text-rose-400">
-                -${totals.totalExpenses.toFixed(2)}
-              </div>
-              <div className="text-[9px] text-slate-400 font-medium">
-                {expenses.length} registros
-              </div>
-            </div>
-
-            {/* Pendiente */}
+            {/* 2. Pendiente */}
             <div className="bg-[#131b26] border border-amber-500/30 rounded-2xl p-2.5 shadow-sm space-y-0.5">
               <div className="flex items-center gap-1 text-[10px] text-amber-400 font-bold mb-0.5">
                 <Clock className="w-3 h-3 stroke-[2.5]" />
@@ -420,6 +406,20 @@ ${weeksLines || '  (No hay semanas registradas)'}
               </div>
               <div className="text-[9px] text-slate-400 font-medium">
                 Por cobrar
+              </div>
+            </div>
+
+            {/* 3. Gastos */}
+            <div className="bg-[#131b26] border border-rose-500/30 rounded-2xl p-2.5 shadow-sm space-y-0.5">
+              <div className="flex items-center gap-1 text-[10px] text-rose-400 font-bold mb-0.5">
+                <TrendingDown className="w-3 h-3 stroke-[3]" />
+                <span>Gastos</span>
+              </div>
+              <div className="text-sm sm:text-base font-black font-mono text-rose-400">
+                -${totals.totalExpenses.toFixed(2)}
+              </div>
+              <div className="text-[9px] text-slate-400 font-medium">
+                {expenses.length} registros
               </div>
             </div>
           </div>
