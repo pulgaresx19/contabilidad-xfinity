@@ -300,22 +300,22 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         {/* 3. Cuerpo del Modal Scrollable */}
         <div className="p-3.5 sm:p-4 overflow-y-auto space-y-3.5 flex-1 min-h-0 scrollbar-none bg-[#101722] flex flex-col">
 
-          {/* Texto del Reporte Editable */}
+          {/* Texto del Reporte */}
           <div className="space-y-1.5 shrink-0">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1.5 min-w-0">
                 {isCancelled && (
-                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0"></span>
                 )}
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  {isCancelled ? 'Mensaje de Constancia (Editable)' : 'Mensaje del Reporte (Editable)'}
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                  Mensaje del Reporte
                 </label>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={handleCopyText}
-                  className="px-2.5 py-1 bg-[#16202c] hover:bg-[#1e2b3b] text-slate-300 border border-white/10 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+                  className="px-2.5 py-1 bg-[#16202c] hover:bg-[#1e2b3b] text-slate-300 border border-white/10 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
                 >
                   {copiedText ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3 text-cyan-400" />}
                   <span>{copiedText ? '¡Copiado!' : 'Copiar'}</span>
@@ -325,7 +325,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                     type="button"
                     onClick={handleSendReportAndPhotos}
                     disabled={sharing}
-                    className="px-2.5 py-1 bg-[#16202c] hover:bg-[#1e2b3b] text-cyan-300 border border-cyan-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+                    className="px-2.5 py-1 bg-[#16202c] hover:bg-[#1e2b3b] text-cyan-300 border border-cyan-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
                     title="Volver a compartir por WhatsApp"
                   >
                     <Share2 className="h-3 w-3 text-cyan-400" />
