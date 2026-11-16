@@ -2439,8 +2439,12 @@ export default function UberDriverView({
               </div>
             </div>
 
-            {/* ROW 3: NOTES & WORK SPECS CARD (STATUS ICON + SPECS + REMARKS + EDIT) */}
-            <div className="bg-[#131b26] border border-white/8 rounded-2xl p-2.5 flex items-center justify-between gap-2.5 my-1">
+            {/* ROW 3: NOTES & WORK SPECS CARD (STATUS ICON + SPECS + REMARKS) - TOCA PARA VER FICHA */}
+            <div 
+              onClick={() => onOpenEditModal(selectedOrder, 'view')}
+              className="group bg-[#131b26] border border-white/8 hover:border-cyan-500/30 rounded-2xl p-2.5 flex items-center justify-between gap-2.5 my-1 cursor-pointer transition active:scale-[0.99] select-none"
+              title="Toca para ver la ficha técnica completa y fotos de evidencia"
+            >
               {/* Site / Parada Circle Badge */}
               <div 
                 className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0 select-none transition-all shadow-sm bg-gradient-to-tr from-cyan-500/25 to-blue-600/25 text-cyan-300 border border-cyan-400/40 font-mono shadow-cyan-500/15"
@@ -2450,11 +2454,7 @@ export default function UberDriverView({
               </div>
 
               {/* Center: Specs Summary & Notes */}
-              <div 
-                className="min-w-0 flex-1 cursor-pointer"
-                onClick={() => onOpenEditModal(selectedOrder)}
-                title="Toca para ver o editar información"
-              >
+              <div className="min-w-0 flex-1">
                 <div className="text-xs font-bold text-white truncate leading-tight flex items-center gap-1.5">
                   <span>{selectedOrder.drop_footage || 0} ft</span>
                   <span className="text-slate-500">•</span>
@@ -2473,19 +2473,14 @@ export default function UberDriverView({
                   )}
                 </div>
                 <p className="text-[10.5px] text-slate-400 truncate mt-0.5 font-medium">
-                  {selectedRemark || (selectedOrder.raw_notes ? selectedOrder.raw_notes.slice(0, 45) : 'Agregar una nota o detalle...')}
+                  {selectedRemark || (selectedOrder.raw_notes ? selectedOrder.raw_notes.slice(0, 45) : 'Ver detalles o notas del trabajo...')}
                 </p>
               </div>
 
-              {/* Pencil Edit Icon */}
-              <button
-                type="button"
-                onClick={() => onOpenEditModal(selectedOrder)}
-                className="p-1.5 text-slate-400 hover:text-cyan-400 transition active:scale-90 shrink-0 rounded-lg hover:bg-white/5"
-                title="Editar orden"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
+              {/* Subtle indicator instead of pencil */}
+              <div className="p-1 text-slate-500 group-hover:text-cyan-400 transition shrink-0">
+                <ChevronRight className="h-4 w-4" />
+              </div>
             </div>
 
             {/* ROW 4: BOTTOM CONTROL BAR (NO REALIZADO | $SALDO EN MEDIO | 3 BOTONES MILESTONES) */}

@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, DollarSign, MapPin, Phone, Ruler, SlidersHorizontal, AlertCircle, Save, Pencil, MessageSquare, FileText, Sparkles, CheckCheck } from 'lucide-react';
+import { 
+  X, Check, DollarSign, MapPin, Phone, Ruler, SlidersHorizontal, 
+  AlertCircle, Save, Pencil, MessageSquare, FileText, Sparkles, 
+  CheckCheck, Camera, ZoomIn, Navigation, ExternalLink, Image as ImageIcon 
+} from 'lucide-react';
 import { cleanPhoneNumber, getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
 
 export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, initialMode = 'view' }) {
   const [isEditing, setIsEditing] = useState(initialMode === 'edit');
+  const [photos, setPhotos] = useState(order?.photos || []);
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
+  const [previewPhoto, setPreviewPhoto] = useState(null);
   const [formData, setFormData] = useState({
     job_id: '',
     work_date: '',
@@ -63,6 +70,27 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
       setAdjustVal(val);
       setError(null);
       setIsEditing(initialMode === 'edit');
+
+      // Cargar o refrescar fotos de evidencia de la orden
+      if (Array.isArray(order.photos) && order.photos.length > 0) {
+        setPhotos(order.photos);
+      }
+      if (order.id) {
+        let isMounted = true;
+        setLoadingPhotos(true);
+        fetch(`/api/orders/${order.id}/photos`)
+          .then(res => res.json())
+          .then(data => {
+            if (isMounted && data && Array.isArray(data.photos)) {
+              setPhotos(data.photos);
+            }
+          })
+          .catch(err => console.warn('No se pudieron recargar las fotos:', err))
+          .finally(() => {
+            if (isMounted) setLoadingPhotos(false);
+          });
+        return () => { isMounted = false; };
+      }
     }
   }, [order, isOpen, initialMode]);
 
@@ -172,7 +200,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
       }}
     >
       <div 
-        className="bg-[#101722] border border-white/10 rounded-3xl max-w-sm sm:max-w-md w-full max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white my-auto"
+        className="bg-[#101722] border border-white/10 rounded-3xl max-w-md sm:max-w-xl w-full max-h-[86dvh] sm:max-h-[90dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Cockpit */}
@@ -184,7 +212,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider font-mono truncate">
-                  {isEditing ? `Editar Job #${order.job_id}` : `Información del Trabajo`}
+                  {isEditing ? `Editar Job #${order.job_id}` : `Ficha Técnica del Trabajo`}
                 </h3>
                 <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
                   formData.status === 'Completado' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
@@ -193,9 +221,15 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
                 }`}>
                   {formData.status}
                 </span>
+                {order.whatsapp_shared && (
+                  <span className="text-[9px] px-2 py-0.5 rounded-full font-bold shrink-0 bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 flex items-center gap-1">
+                    <CheckCheck className="w-3 h-3 stroke-[2.5]" />
+                    <span>Reportado</span>
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-slate-600 dark:text-slate-400 font-mono font-semibold truncate">
-                {isEditing ? 'Modificar tarifa, metraje o especificaciones' : `Job #${order.job_id} • Ficha Técnica Completa`}
+                {isEditing ? 'Modificar tarifa, metraje o especificaciones' : `Job #${order.job_id} • Resumen Informativo y Fotos`}
               </p>
             </div>
           </div>
@@ -257,101 +291,225 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
 
         {/* CONTENIDO PRINCIPAL: MODO VISTA (FICHA) O MODO EDICIÓN */}
         {!isEditing ? (
-          /* MODO VISTA / DETALLES DE TRABAJO COMPLETO */
+          /* MODO VISTA / DETALLES DE TRABAJO COMPLETO (FICHA INFORMATIVA) */
           <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-            <div className="p-4 overflow-y-auto sleek-scroll space-y-3 flex-1 min-h-0 text-xs">
-              {/* Desglose de Tarifa */}
-              <div className="bg-[#16202c] border border-white/5 rounded-2xl p-3 flex items-center justify-between shadow-xs">
-                <div>
-                  <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">
-                    Desglose de Tarifa
+            <div className="p-4 overflow-y-auto sleek-scroll space-y-3.5 flex-1 min-h-0 text-xs">
+              {/* 1. Enunciado y Localización del Trabajo */}
+              <div className="bg-[#131c27] border border-white/8 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5" />
+                    <span>Enunciado & Ubicación</span>
                   </span>
-                  <span className="text-[11px] text-slate-300 font-mono">
-                    Base $100 {(formData.bore_type || '').includes('DW') ? '+ $30 Bore' : ''} {formData.drop_footage > 300 ? `+ $${Math.floor((formData.drop_footage - 300) / 100) * 25} Metraje` : ''} {formData.manual_adjustment > 0 ? `+ $${formData.manual_adjustment} Bono` : formData.manual_adjustment < 0 ? `- $${Math.abs(formData.manual_adjustment)} Descuento` : ''}
+                  <span className="text-[10.5px] font-mono text-slate-400 font-bold">
+                    Job #{formData.job_id || order.id}
                   </span>
                 </div>
-                <div className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 rounded-xl font-mono font-black shadow-xs shrink-0">
-                  <span className="text-xs">$</span>
-                  <span className="text-base font-bold leading-none">{formData.rate_calculated}</span>
-                  <span className="text-[9px] uppercase text-emerald-400/70 font-sans font-bold">USD</span>
+
+                <div>
+                  <h4 className="text-sm sm:text-base font-extrabold text-white leading-tight">
+                    {formData.address || 'Sin dirección asignada'}
+                  </h4>
+                  <p className="text-xs text-slate-400 font-medium mt-0.5">
+                    {formData.city || 'Skokie'}, IN {formData.zip_code || ''}
+                  </p>
+                </div>
+
+                {/* Acciones de Navegación y Contacto */}
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/5">
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${formData.address}, ${formData.city || 'Skokie'}, IN`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 rounded-xl font-bold text-xs flex items-center gap-1.5 transition active:scale-95 shadow-xs"
+                    title="Abrir ruta en Google Maps"
+                  >
+                    <Navigation className="w-3.5 h-3.5" />
+                    <span>GPS Google Maps</span>
+                    <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                  </a>
+
+                  {formData.phone && (
+                    <>
+                      <a
+                        href={`tel:${cleanPhoneNumber(formData.phone)}`}
+                        className="px-3 py-1.5 bg-[#1f2b3a] hover:bg-[#28374a] text-slate-200 border border-white/10 rounded-xl font-bold text-xs flex items-center gap-1.5 transition active:scale-95"
+                        title="Llamar al cliente"
+                      >
+                        <Phone className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>{formatPhoneDisplay(formData.phone)}</span>
+                      </a>
+
+                      <a
+                        href={getCustomerSmsUrl(formData.phone, formData.address)}
+                        className="px-3 py-1.5 bg-[#1f2b3a] hover:bg-[#28374a] text-slate-200 border border-white/10 rounded-xl font-bold text-xs flex items-center gap-1.5 transition active:scale-95"
+                        title="Enviar mensaje SMS"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>SMS</span>
+                      </a>
+                    </>
+                  )}
+
+                  {formData.call_first && (
+                    <span className="text-[10px] bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-1 rounded-xl font-bold">
+                      CALL FIRST
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {/* Ubicación & Contacto del Cliente */}
-              <div className="bg-[#16202c] border border-white/5 rounded-2xl p-3 space-y-2.5 shadow-xs">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                  Ubicación & Contacto
-                </span>
-                <div className="flex items-start gap-2.5 text-white">
-                  <MapPin className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <p className="font-bold text-xs leading-tight text-white">{formData.address || 'Sin dirección asignada'}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{formData.city || 'Skokie'}, IN {formData.zip_code || ''}</p>
-                  </div>
+              {/* 2. Desglose Financiero & Saldo Total */}
+              <div className="bg-[#131c27] border border-white/8 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <DollarSign className="w-3.5 h-3.5" />
+                    <span>Desglose de Tarifa & Saldo</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">Moneda USD</span>
                 </div>
 
-                {formData.phone ? (
-                  <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                      <span className="font-mono text-cyan-300 font-bold text-xs">{formatPhoneDisplay(formData.phone)}</span>
-                      {formData.call_first && (
-                        <span className="text-[9px] bg-amber-500/15 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold">
-                          CALL FIRST
-                        </span>
-                      )}
+                <div className="space-y-1.5 bg-[#0b1118] p-3 rounded-xl border border-white/5">
+                  <div className="flex justify-between items-center text-slate-300 text-xs">
+                    <span>Tarifa Base Estándar</span>
+                    <span className="font-mono font-semibold text-white">$100.00</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-slate-300 text-xs">
+                    <span>
+                      Perforación (Bore):
+                      <span className="text-slate-400 ml-1 text-[11px]">
+                        {(formData.bore_type || '').includes('DW') ? 'Driveway Bore' : 'Sin Bore / Estándar'}
+                      </span>
+                    </span>
+                    <span className={`font-mono font-semibold ${(formData.bore_type || '').includes('DW') ? 'text-cyan-300' : 'text-slate-500'}`}>
+                      {(formData.bore_type || '').includes('DW') ? '+$30.00' : '$0.00'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-slate-300 text-xs">
+                    <span>
+                      Excedente Drop:
+                      <span className="text-slate-400 ml-1 text-[11px]">
+                        {formData.drop_footage > 300 ? `${formData.drop_footage} ft (>300 ft)` : `${formData.drop_footage || 0} ft (<=300 ft)`}
+                      </span>
+                    </span>
+                    <span className={`font-mono font-semibold ${formData.drop_footage > 300 ? 'text-amber-300' : 'text-slate-500'}`}>
+                      {formData.drop_footage > 300 ? `+$${Math.floor((formData.drop_footage - 300) / 100) * 25}.00` : '$0.00'}
+                    </span>
+                  </div>
+
+                  {formData.manual_adjustment !== 0 && (
+                    <div className="flex justify-between items-center text-slate-300 text-xs pt-1 border-t border-white/5">
+                      <span>
+                        Ajuste Supervisor:
+                        {formData.adjustment_reason && (
+                          <span className="text-slate-400 ml-1 text-[11px]">({formData.adjustment_reason})</span>
+                        )}
+                      </span>
+                      <span className={`font-mono font-bold ${formData.manual_adjustment > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {formData.manual_adjustment > 0 ? `+$${formData.manual_adjustment}.00` : `-$${Math.abs(formData.manual_adjustment)}.00`}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <a
-                        href={`tel:${formData.phone}`}
-                        className="w-7 h-7 bg-slate-800 hover:bg-slate-700 text-cyan-400 rounded-full border border-white/10 flex items-center justify-center transition active:scale-95 shadow-xs"
-                        title="Llamar al cliente"
-                      >
-                        <Phone className="w-3.5 h-3.5" />
-                      </a>
-                      <a
-                        href={getCustomerSmsUrl(formData.phone, formData.address)}
-                        className="w-7 h-7 bg-slate-800 hover:bg-slate-700 text-cyan-400 rounded-full border border-white/10 flex items-center justify-center transition active:scale-95 shadow-xs"
-                        title="Enviar SMS"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                      </a>
+                  )}
+
+                  {/* Total Final Destacado */}
+                  <div className="flex justify-between items-center pt-2 mt-1 border-t border-white/10">
+                    <span className="font-bold text-white text-xs uppercase tracking-wider">Total a Cobrar</span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-base sm:text-lg font-black font-mono text-emerald-400">
+                        ${formData.rate_calculated}
+                      </span>
+                      <span className="text-[10px] text-emerald-400/80 font-sans font-bold">USD</span>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* 3. Galería de Fotos de Evidencia */}
+              <div className="bg-[#131c27] border border-white/8 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Fotos de Evidencia ({photos.length})</span>
+                  </span>
+                  {photos.length > 0 && (
+                    <span className="text-[10px] text-slate-400">Toca para ampliar</span>
+                  )}
+                </div>
+
+                {loadingPhotos ? (
+                  <div className="p-4 text-center bg-[#0b1118] rounded-xl border border-white/5 text-slate-400 text-xs">
+                    Cargando fotos de evidencia...
+                  </div>
+                ) : photos.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {photos.map((photo, idx) => {
+                      const photoSrc = photo.photo_data || `/uploads/${photo.filename}`;
+                      return (
+                        <div
+                          key={photo.id || idx}
+                          onClick={() => setPreviewPhoto(photoSrc)}
+                          className="group relative aspect-square bg-[#0b1118] rounded-xl overflow-hidden border border-white/10 hover:border-cyan-400/60 transition cursor-pointer shadow-sm"
+                        >
+                          <img
+                            src={photoSrc}
+                            alt={photo.category || `Foto ${idx + 1}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                          />
+                          {/* Overlay con categoría e icono de zoom */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-between p-1.5">
+                            <span className="self-start text-[9px] font-bold bg-black/70 text-cyan-300 px-1.5 py-0.5 rounded backdrop-blur-xs border border-white/10">
+                              {photo.category || `#${idx + 1}`}
+                            </span>
+                            <div className="flex justify-end opacity-80 group-hover:opacity-100 transition">
+                              <span className="p-1 bg-black/60 rounded-full text-white">
+                                <ZoomIn className="w-3 h-3" />
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <p className="text-[11px] text-slate-500 italic pt-1 border-t border-white/5">Sin teléfono de cliente registrado</p>
+                  <div className="p-4 text-center bg-[#0b1118] rounded-xl border border-white/5 space-y-1">
+                    <ImageIcon className="w-6 h-6 text-slate-600 mx-auto" />
+                    <p className="text-xs text-slate-400 font-medium">Sin fotos de evidencia adjuntas</p>
+                    <p className="text-[10px] text-slate-500">Puedes tomar o adjuntar fotos desde la pantalla principal</p>
+                  </div>
                 )}
               </div>
 
-              {/* Ficha Técnica y Especificaciones */}
-              <div className="bg-[#16202c] border border-white/5 rounded-2xl p-3 space-y-2.5 shadow-xs">
+              {/* 4. Ficha Técnica y Especificaciones */}
+              <div className="bg-[#131c27] border border-white/8 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
                   Especificaciones Técnicas
                 </span>
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="bg-[#0d141e] p-2.5 rounded-xl border border-white/5">
+                  <div className="bg-[#0b1118] p-2.5 rounded-xl border border-white/5">
                     <span className="text-slate-400 text-[10px] block">Longitud Drop</span>
                     <span className="font-mono font-bold text-white text-xs">{formData.drop_footage || 0} ft</span>
                   </div>
-                  <div className="bg-[#0d141e] p-2.5 rounded-xl border border-white/5">
+                  <div className="bg-[#0b1118] p-2.5 rounded-xl border border-white/5">
                     <span className="text-slate-400 text-[10px] block">Tipo de Cable</span>
                     <span className="font-mono font-bold text-cyan-300 text-xs">{formData.cable_type || 'RG-6'}</span>
                   </div>
-                  <div className="bg-[#0d141e] p-2.5 rounded-xl border border-white/5">
+                  <div className="bg-[#0b1118] p-2.5 rounded-xl border border-white/5">
                     <span className="text-slate-400 text-[10px] block">Perforación (Bore)</span>
                     <span className="font-semibold text-slate-200">
                       {(formData.bore_type || '').includes('DW') ? 'Driveway (+$30)' : formData.bore_type === 'SW:1' ? 'Sidewalk' : 'Sin Bore'}
                     </span>
                   </div>
-                  <div className="bg-[#0d141e] p-2.5 rounded-xl border border-white/5">
+                  <div className="bg-[#0b1118] p-2.5 rounded-xl border border-white/5">
                     <span className="text-slate-400 text-[10px] block">Fecha de Asignación</span>
                     <span className="font-mono font-semibold text-slate-200">{formData.work_date || 'No asignada'}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Observaciones & Obstáculos */}
-              <div className="bg-[#16202c] border border-white/5 rounded-2xl p-3 space-y-1 shadow-xs">
+              {/* 5. Observaciones & Obstáculos */}
+              <div className="bg-[#131c27] border border-white/8 rounded-2xl p-3.5 space-y-1 shadow-sm">
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
                   Observaciones & Obstáculos
                 </span>
@@ -360,24 +518,9 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
                 </p>
               </div>
 
-              {/* Ajuste de Supervisor (si existe) */}
-              {formData.manual_adjustment !== 0 && (
-                <div className="bg-[#16202c] border border-white/5 rounded-2xl p-3 space-y-1 shadow-xs">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                    Ajuste de Supervisor
-                  </span>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-200 font-medium">{formData.adjustment_reason || 'Ajuste manual'}</span>
-                    <span className={`font-mono font-bold text-xs ${formData.manual_adjustment > 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                      {formData.manual_adjustment > 0 ? `+$${formData.manual_adjustment}` : `-$${Math.abs(formData.manual_adjustment)}`}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Motivo de No Realizado (si cancelado) */}
+              {/* 6. Motivo de No Realizado (si cancelado) */}
               {formData.status === 'No Realizado' && (
-                <div className="bg-rose-950/20 border border-rose-500/25 rounded-2xl p-3 space-y-1 shadow-xs">
+                <div className="bg-rose-950/25 border border-rose-500/30 rounded-2xl p-3.5 space-y-1 shadow-sm">
                   <span className="text-[10px] text-rose-400 font-bold uppercase tracking-wider block">
                     Motivo No Realizado
                   </span>
@@ -784,6 +927,42 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, ini
           </form>
         )}
       </div>
+
+      {/* Lightbox / Visor de Fotos en Pantalla Completa */}
+      {previewPhoto && (
+        <div
+          onClick={() => setPreviewPhoto(null)}
+          className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-3 animate-fade-in"
+        >
+          <div 
+            className="relative max-w-lg w-full flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewPhoto(null)}
+              className="absolute -top-12 right-0 p-2 text-white hover:text-cyan-400 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full transition shadow-lg cursor-pointer"
+              title="Cerrar visor de foto"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <img
+              src={previewPhoto}
+              alt="Evidencia Ampliada"
+              className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain border border-white/10 shadow-2xl"
+            />
+
+            <button
+              type="button"
+              onClick={() => setPreviewPhoto(null)}
+              className="mt-3 px-5 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/10 rounded-xl text-xs font-bold transition shadow cursor-pointer active:scale-95"
+            >
+              Cerrar Foto
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

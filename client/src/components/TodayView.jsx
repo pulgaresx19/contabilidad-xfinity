@@ -677,8 +677,8 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           onMarkCompleted={handleMarkCompleted}
           onOpenCancelModal={(ord) => onOpenPhotos ? onOpenPhotos(ord, { initialCancel: true }) : openCancelModal(ord)}
           onOpenCancelDetail={(ord) => onOpenPhotos ? onOpenPhotos(ord) : openCancelDetail(ord)}
-          onOpenEditModal={(ord) => {
-            setEditModalInitialMode('edit');
+          onOpenEditModal={(ord, mode = 'view') => {
+            setEditModalInitialMode(mode);
             setEditingOrder(ord);
           }}
           onOpenAdjustModal={openAdjustModal}
