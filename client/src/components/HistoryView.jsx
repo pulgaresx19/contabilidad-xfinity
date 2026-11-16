@@ -326,7 +326,29 @@ ${jobLines}
             </div>
           </div>
 
-          {/* 2. Selector de Filtro: Todos, Pendiente, Cobrado */}
+          {/* 2. Buscador de Semanas por Fecha / Término */}
+          <div className="relative">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Buscar semana por fecha (ej. 2026, 11, Nov), # semana..."
+              value={weekSearch}
+              onChange={(e) => setWeekSearch(e.target.value)}
+              className="w-full bg-[#131b26] border border-white/10 rounded-2xl pl-9 pr-8 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition shadow-md"
+            />
+            {weekSearch && (
+              <button
+                type="button"
+                onClick={() => setWeekSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-0.5 cursor-pointer"
+                title="Limpiar búsqueda"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* 3. Selector de Filtro: Todos, Pendiente, Cobrado */}
           <div className="grid grid-cols-3 gap-1 bg-[#0f1722]/90 p-1 rounded-2xl border border-white/10 text-[11px] font-bold text-center shadow-md">
             <button
               type="button"
@@ -361,28 +383,6 @@ ${jobLines}
             >
               Cobrado ({paidWeeksCount})
             </button>
-          </div>
-
-          {/* 3. Buscador de Semanas por Fecha / Término */}
-          <div className="relative">
-            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Buscar semana por fecha (ej. 2026, 11, Nov), # semana..."
-              value={weekSearch}
-              onChange={(e) => setWeekSearch(e.target.value)}
-              className="w-full bg-[#131b26] border border-white/10 rounded-2xl pl-9 pr-8 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition shadow-md"
-            />
-            {weekSearch && (
-              <button
-                type="button"
-                onClick={() => setWeekSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-0.5 cursor-pointer"
-                title="Limpiar búsqueda"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
           </div>
 
           {/* 4. Lista de Semanas / Historial */}
