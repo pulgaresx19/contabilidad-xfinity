@@ -976,25 +976,13 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   const photosCount = (order.work_photos_count !== undefined ? order.work_photos_count : order.photos_count) || (order.photos ? order.photos.filter(p => p.category !== 'Constancia No Realizado').length : 0) || 0;
                   return (
                     <div className="flex items-center gap-1.5 text-[10px] overflow-x-auto scrollbar-none py-0.5 whitespace-nowrap">
-                      {/* 1. Fotos de Evidencia */}
-                      {photosCount > 0 && (
-                        <span 
-                          onClick={() => onOpenPhotos(order)}
-                          className="shrink-0 bg-slate-800/90 hover:bg-slate-700/90 text-cyan-300 px-2 py-0.5 rounded-md border border-cyan-500/30 text-[10px] font-medium flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-2xs"
-                          title={`${photosCount} foto(s) de evidencia archivada(s). Toca para ver.`}
-                        >
-                          <Camera className="h-3 w-3 text-cyan-400 shrink-0" />
-                          <span className="font-semibold">{photosCount} {photosCount === 1 ? 'foto' : 'fotos'}</span>
-                        </span>
-                      )}
-
-                      {/* 2. Metraje del Drop */}
+                      {/* 1. Metraje del Drop */}
                       <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 text-[10px] font-mono flex items-center gap-1">
                         <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Drop</span>
                         <span className="font-bold text-slate-100">{order.drop_footage || 0} ft</span>
                       </span>
 
-                      {/* 3. Tipo de Cable */}
+                      {/* 2. Tipo de Cable */}
                       <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 text-[10px] font-mono flex items-center gap-1">
                         <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Cable</span>
                         <span className="font-semibold text-slate-200">{order.cable_type || 'RG-6'}</span>

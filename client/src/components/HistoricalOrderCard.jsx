@@ -118,41 +118,21 @@ export default function HistoricalOrderCard({
         </div>
       </div>
 
-      {/* FILA 3: ESPECIFICACIONES TÉCNICAS (Contador de Fotos Adelante + Metraje + Cable + Bore + Nota) */}
+      {/* FILA 3: ESPECIFICACIONES TÉCNICAS (Metraje + Cable + Bore + Bonos + Nota) */}
       <div className="flex items-center gap-1.5 text-[10px] overflow-x-auto scrollbar-none py-0.5 whitespace-nowrap">
-        {/* 1. Contador de Fotos siempre al principio */}
-        {photosCount > 0 && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenPhotos && onOpenPhotos(order);
-            }}
-            className={`shrink-0 px-2 py-0.5 rounded-md border text-[10px] font-medium flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-2xs ${
-              isCancelled
-                ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-rose-500/35'
-                : 'bg-slate-800/90 hover:bg-slate-700/90 text-cyan-300 border-cyan-500/30'
-            }`}
-            title={isCancelled ? `${photosCount} foto(s) de la constancia. Toca para ver reporte.` : `${photosCount} foto(s) de evidencia archivada(s). Toca para ver o gestionar.`}
-          >
-            <Camera className={`h-3 w-3 shrink-0 ${isCancelled ? 'text-rose-400' : 'text-cyan-400'}`} />
-            <span className="font-semibold">{photosCount} foto</span>
-          </button>
-        )}
-
-        {/* 2. Drop Footage */}
+        {/* 1. Drop Footage */}
         <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 font-mono flex items-center gap-1">
           <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Drop</span>
           <span className="font-bold text-slate-100">{order.drop_footage || 0} ft</span>
         </span>
 
-        {/* 3. Cable */}
+        {/* 2. Cable */}
         <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 font-mono flex items-center gap-1">
           <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Cable</span>
           <span className="font-semibold text-slate-200">{order.cable_type || 'RG-6'}</span>
         </span>
 
-        {/* 4. Bore DW */}
+        {/* 3. Bore DW */}
         {hasDrivewayBore ? (
           <span className="shrink-0 bg-cyan-950/30 text-cyan-300 px-2 py-0.5 rounded-md border border-cyan-500/25 font-medium flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
@@ -166,7 +146,7 @@ export default function HistoricalOrderCard({
           </span>
         ) : null}
 
-        {/* 5. Extra Footage Bonus (>300 ft) */}
+        {/* 4. Extra Footage Bonus (>300 ft) */}
         {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
           <span className="shrink-0 bg-emerald-950/30 text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-500/25 font-mono font-medium flex items-center gap-1">
             <span className="text-emerald-400/80 font-sans text-[9px] font-bold">+Drop</span>
@@ -174,7 +154,7 @@ export default function HistoricalOrderCard({
           </span>
         )}
 
-        {/* 6. Manual Adjustment */}
+        {/* 5. Manual Adjustment */}
         {order.manual_adjustment !== undefined && Number(order.manual_adjustment) !== 0 && (
           <span className={`shrink-0 px-2 py-0.5 rounded-md font-mono text-[10px] font-medium border flex items-center gap-1 ${
             order.manual_adjustment > 0 ? 'bg-cyan-950/30 text-cyan-300 border-cyan-500/25' : 'bg-amber-950/30 text-amber-300 border-amber-500/25'
@@ -184,7 +164,7 @@ export default function HistoricalOrderCard({
           </span>
         )}
 
-        {/* 7. Nota / Condición de Acceso */}
+        {/* 6. Nota / Condición de Acceso */}
         {orderRemark && (
           <span 
             className="shrink-0 bg-slate-800/80 text-slate-300 px-2.5 py-0.5 rounded-md border border-slate-700/60 font-medium flex items-center gap-1.5 max-w-sm sm:max-w-md"
@@ -198,27 +178,39 @@ export default function HistoricalOrderCard({
 
       {/* FILA 4: ESPACIO VISUAL UNIFICADO (Mismo alto exacto h-12 sm:h-14 en todos los estados) */}
       {isCancelled ? (
-        /* Trabajo No Realizado: Caja del Motivo ocupando exactamente el mismo espacio que la tira de fotos */
+        /* Trabajo No Realizado: Caja del Motivo con el icono y contador de fotos estampado a la derecha */
         <div 
           onClick={(e) => {
             e.stopPropagation();
             onOpenPhotos && onOpenPhotos(order);
           }}
-          className="h-12 sm:h-14 w-full bg-rose-950/20 border border-rose-500/25 hover:border-rose-500/40 px-3 rounded-xl text-xs text-rose-200 flex items-center gap-2.5 transition cursor-pointer active:scale-[0.99] select-none shrink-0"
+          className="h-12 sm:h-14 w-full bg-rose-950/20 border border-rose-500/25 hover:border-rose-500/40 px-3 rounded-xl text-xs text-rose-200 flex items-center justify-between gap-2.5 transition cursor-pointer active:scale-[0.99] select-none shrink-0"
           title="Toca para ver la constancia y fotos del obstáculo"
         >
-          <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <span className="text-[9.5px] uppercase font-black text-rose-400 block tracking-wider leading-none">
-              Motivo No Realizado
-            </span>
-            <p className="font-semibold text-xs text-rose-100 truncate mt-0.5">
-              {order.cancel_reason || 'Inconveniente en la propiedad'}
-            </p>
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <span className="text-[9.5px] uppercase font-black text-rose-400 block tracking-wider leading-none">
+                Motivo No Realizado
+              </span>
+              <p className="font-semibold text-xs text-rose-100 truncate mt-0.5">
+                {order.cancel_reason || 'Inconveniente en la propiedad'}
+              </p>
+            </div>
           </div>
+
+          {photosCount > 0 && (
+            <div 
+              className="shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-rose-500/20 border border-rose-500/35 text-rose-300 shadow-xs"
+              title={`${photosCount} foto(s) de la constancia`}
+            >
+              <Camera className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+              <span className="font-mono font-bold text-[11px] leading-none">{photosCount}</span>
+            </div>
+          )}
         </div>
       ) : photos.length > 0 ? (
-        /* Trabajo Realizado: Tira horizontal de fotos con el mismo alto exacto */
+        /* Trabajo Realizado: Tira horizontal de fotos con ícono circular estampado con el número de ítem */
         <div className="h-12 sm:h-14 w-full flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none shrink-0">
           {photos.map((p, pIdx) => {
             const src = p.photo_data || (p.filename ? `/uploads/${p.filename}` : '');
@@ -230,13 +222,17 @@ export default function HistoricalOrderCard({
                   onSelectPhoto ? onSelectPhoto(src) : null;
                 }}
                 className="h-full aspect-[4/3] rounded-xl overflow-hidden bg-black/40 border border-white/10 shrink-0 cursor-pointer relative group hover:border-cyan-400 transition"
-                title="Toca para ampliar foto de evidencia"
+                title={`Foto ${pIdx + 1} - Toca para ampliar`}
               >
                 <img 
                   src={src} 
                   alt={p.category || `Foto ${pIdx + 1}`} 
                   className="w-full h-full object-cover group-hover:scale-105 transition" 
                 />
+                {/* Ícono circular estampado con el número de ítem de la foto */}
+                <div className="absolute top-1 left-1 h-4 w-4 rounded-full bg-black/80 backdrop-blur-xs text-white border border-white/20 text-[9px] font-black font-mono flex items-center justify-center shadow-md select-none pointer-events-none">
+                  {pIdx + 1}
+                </div>
                 <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                   <Maximize2 className="h-3.5 w-3.5 text-white" />
                 </div>
