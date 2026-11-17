@@ -964,7 +964,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                             <Phone className="h-3.5 w-3.5" />
                           </a>
                           <a
-                            href={getCustomerSmsUrl(order.phone, order.address, order.tech_id || techName)}
+                            href={getCustomerSmsUrl(order.phone, order.address, techName || order.tech_id)}
                             onClick={(e) => e.stopPropagation()}
                             className="w-7 h-7 rounded-full bg-slate-800/80 hover:bg-slate-700/80 text-cyan-400 hover:text-cyan-300 border border-white/10 flex items-center justify-center transition active:scale-95 shadow-xs"
                             title="Enviar SMS con aviso al cliente"

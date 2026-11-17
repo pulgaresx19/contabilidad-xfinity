@@ -2556,7 +2556,7 @@ export default function UberDriverView({
               <div className="flex items-center gap-1.5 justify-end">
                 {selectedOrder.phone && (
                   <a
-                    href={getCustomerSmsUrl(selectedOrder.phone, selectedOrder.address, selectedOrder.tech_id || techName)}
+                    href={getCustomerSmsUrl(selectedOrder.phone, selectedOrder.address, techName || selectedOrder.tech_id)}
                     className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
                     title={`Enviar SMS con aviso al cliente (${selectedOrder.phone})`}
                   >

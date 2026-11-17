@@ -45,17 +45,21 @@ export function getStoredTechName() {
 
 /**
  * Normaliza y formatea el nombre del técnico para presentación al cliente.
- * Remueve códigos técnicos entre paréntesis como "Carlos (P0G1)" -> "Carlos",
- * dejando un nombre humano y profesional para el cliente en el SMS.
+ * Prioridad:
+ * 1. El nombre configurado actualmente en Ajustes / Perfil (el técnico que está operando el teléfono).
+ * 2. El nombre asignado en la orden/reporte de trabajo.
+ * 3. Fallback general.
+ * 
+ * Además, remueve sufijos de sistema entre paréntesis como "Carlos (P0G1)" -> "Carlos",
+ * dejando un nombre humano, limpio y profesional para el cliente en el SMS.
  */
 export function formatTechDisplayName(rawName) {
-  let name = rawName;
-  if (!name || name === 'Javier') {
-    const stored = getStoredTechName();
-    if (stored) name = stored;
-  }
+  // Prioridad 1: Ajustes / Perfil activo del teléfono
+  const stored = getStoredTechName();
+  let name = stored || rawName;
   if (!name) return 'Javier';
-  // Remover sufijos de técnico como (P0G1) o (1234)
+
+  // Remover sufijos de sistema entre paréntesis como (P0G1) o (1234)
   const cleaned = name.replace(/\s*\([^)]*\)/g, '').trim();
   return cleaned || name.trim() || 'Javier';
 }
