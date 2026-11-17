@@ -4,6 +4,7 @@
  * Elimina la duplicación de datos técnicos ya mostrados en tarjetas dedicadas
  * (teléfono, metraje/pies, tipo de cable, bore) y resalta advertencias humanas reales
  * con etiquetas breves, directas y en español (Jardinería, Cable Temporal, Aspersores, etc.).
+ * Incluye indicador positivo de '🟢 Acceso libre' cuando no hay restricciones en el predio.
  */
 
 export function cleanRawNotes(rawText) {
@@ -56,8 +57,9 @@ export function cleanRawNotes(rawText) {
 /**
  * Devuelve un resumen limpio, compacto y directo de las notas y alertas de campo.
  * Traduce términos técnicos a español conciso para no saturar el espacio visual.
+ * Muestra '🟢 Acceso libre' para confirmar que se puede entrar al predio sin restricciones.
  * @param {Object} order - Objeto con datos de la orden de trabajo
- * @returns {string|null} - Cadena formateada o null si no hay notas
+ * @returns {string} - Cadena formateada
  */
 export function getOrderRemark(order) {
   if (!order) return null;
@@ -104,17 +106,28 @@ export function getOrderRemark(order) {
     parts.push('⚡ Cable Temporal');
   }
 
-  // 4. Acceso y condiciones de premisa (conciso y directo)
-  if (order.premise_access && order.premise_access !== 'N') {
-    const pa = String(order.premise_access).trim().toUpperCase();
-    if (pa === 'RQHM') {
-      if (!parts.some(p => /casa/i.test(p))) parts.push('🏠 Cliente en casa');
-    } else if (pa === 'DOG') {
-      if (!parts.some(p => /perro/i.test(p))) parts.push('🐕 Perro');
-    } else if (pa && !parts.some(p => p.toUpperCase().includes(pa))) {
-      parts.push(pa);
+  // 4. Acceso y condiciones de premisa (conciso y directo con '🟢 Acceso libre')
+  const pa = String(order.premise_access || 'N').trim().toUpperCase();
+  const hasAccessRestrictionInNotes = parts.some(p =>
+    /perro|dog|candado|port[oó]n|gate|lock|llamar|casa|puerta|timbre/i.test(p)
+  );
+
+  if (pa === 'RQHM') {
+    if (!parts.some(p => /casa/i.test(p))) parts.push('🏠 Cliente en casa');
+  } else if (pa === 'DOG') {
+    if (!parts.some(p => /perro/i.test(p))) parts.push('🐕 Perro');
+  } else if (pa.includes('GATE') || pa.includes('LOCK')) {
+    if (!parts.some(p => /port[oó]n|candado/i.test(p))) parts.push('🔒 Portón');
+  } else if (pa === 'CALL') {
+    if (!parts.some(p => /llamar/i.test(p))) parts.push('📞 Llamar antes');
+  } else if (pa !== 'N' && pa !== 'NONE' && pa !== '') {
+    if (!parts.some(p => p.toUpperCase().includes(pa))) parts.push(pa);
+  } else {
+    // Es N / sin restricciones: mostrar confirmación positiva de Acceso libre si no hay restricción en notas
+    if (!hasAccessRestrictionInNotes && !parts.some(p => /acceso\s+libre/i.test(p))) {
+      parts.push('🟢 Acceso libre');
     }
   }
 
-  return parts.length > 0 ? parts.join(' • ') : null;
+  return parts.length > 0 ? parts.join(' • ') : '🟢 Acceso libre';
 }

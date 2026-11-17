@@ -2609,7 +2609,7 @@ export default function UberDriverView({
                   className={`text-[10.5px] text-slate-300 mt-0.5 font-medium leading-snug cursor-pointer transition-all ${showFullRemark ? 'break-words' : 'line-clamp-2'}`}
                   title={selectedRemark ? "Toca para ver / contraer texto completo" : undefined}
                 >
-                  {selectedRemark || 'Sin observaciones'}
+                  {selectedRemark || '🟢 Acceso libre'}
                 </p>
               </div>
 
@@ -2931,14 +2931,12 @@ export default function UberDriverView({
                     </div>
                   )}
 
-                  {selectedRemark && (
-                    <div className="flex justify-between items-start text-xs border-t border-white/5 pt-2">
-                      <span className="text-slate-400 font-medium">Observaciones</span>
-                      <span className="text-right text-amber-300 font-medium text-[11px] max-w-[240px] leading-tight">
-                        {selectedRemark}
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex justify-between items-start text-xs border-t border-white/5 pt-2">
+                    <span className="text-slate-400 font-medium">Condición / Acceso</span>
+                    <span className="text-right text-amber-300 font-medium text-[11px] max-w-[240px] leading-tight">
+                      {selectedRemark || '🟢 Acceso libre'}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-2 pt-1">
