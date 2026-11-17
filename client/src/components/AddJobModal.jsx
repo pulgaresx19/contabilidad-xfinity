@@ -17,6 +17,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
     zip_code: '',
     phone: '',
     call_first: false,
+    is_priority: false,
     drop_footage: '',
     cable_type: 'RG-6',
     bore_type: 'N',
@@ -48,6 +49,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
         zip_code: '',
         phone: '',
         call_first: false,
+        is_priority: false,
         drop_footage: '',
         cable_type: 'RG-6',
         bore_type: 'N',
@@ -145,6 +147,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
         ...formData,
         job_id: cleanJobId,
         address: cleanAddress,
+        is_priority: formData.is_priority ? 1 : 0,
         city: (formData.city || '').trim().toUpperCase(),
         phone: cleanPhoneNumber(formData.phone),
         drop_footage: numFootage,
@@ -494,17 +497,30 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
               <label className="text-[9.5px] font-bold text-slate-300 uppercase tracking-wider">
                 Remarks / Notas del Trabajo
               </label>
-              <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={formData.call_first}
-                  onChange={(e) => setFormData({ ...formData, call_first: e.target.checked })}
-                  className="h-3 w-3 rounded border-white/20 bg-[#16202c] text-cyan-500 focus:ring-0"
-                />
-                <span className="text-cyan-300 font-bold text-[11px]">
-                  Call First
-                </span>
-              </label>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 cursor-pointer select-none" title="Marcar dirección en rojo como trabajo prioritario">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formData.is_priority)}
+                    onChange={(e) => setFormData({ ...formData, is_priority: e.target.checked })}
+                    className="h-3 w-3 rounded border-white/20 bg-[#16202c] text-rose-500 focus:ring-0"
+                  />
+                  <span className="text-rose-300 font-bold text-[11px]">
+                    🔴 Prioritario
+                  </span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={formData.call_first}
+                    onChange={(e) => setFormData({ ...formData, call_first: e.target.checked })}
+                    className="h-3 w-3 rounded border-white/20 bg-[#16202c] text-cyan-500 focus:ring-0"
+                  />
+                  <span className="text-cyan-300 font-bold text-[11px]">
+                    Call First
+                  </span>
+                </label>
+              </div>
             </div>
             <input
               type="text"

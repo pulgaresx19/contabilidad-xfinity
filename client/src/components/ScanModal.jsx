@@ -6,7 +6,7 @@ import {
 import { getLocalDateStr, normalizeDateStr } from '../utils/dateUtils';
 import { interactWithAuraCore } from '../services/auraService';
 import { cleanRawNotes } from '../utils/remarkUtils';
-import { compressImage } from '../services/imageUtils';
+import { compressImage, detectPriorityRowIndices } from '../services/imageUtils';
 import ZoomableImageViewer from './ZoomableImageViewer';
 
 export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech }) {
@@ -140,15 +140,20 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
     let aiErrorMsg = '';
     let aiNote = '';
     let aiNeedsConfirmation = false;
+    let priorityRowIndices = [];
 
-    // Lectura directa por IA multimodal
+    // Lectura directa por IA multimodal + detección determinística de filas resaltadas en rojo
     try {
-      const auraRes = await interactWithAuraCore({
-        imageFile: file,
-        text: 'Lee esta foto de hoja de despacho o lista de trabajos Xfinity y extrae TODAS las filas en el arreglo orders.',
-        defaultTech: techId,
-        defaultDate: sheetDate
-      });
+      const [auraRes, detectedRedRows] = await Promise.all([
+        interactWithAuraCore({
+          imageFile: file,
+          text: 'Lee esta foto de hoja de despacho o lista de trabajos Xfinity y extrae TODAS las filas en el arreglo orders.',
+          defaultTech: techId,
+          defaultDate: sheetDate
+        }),
+        detectPriorityRowIndices(file).catch(() => [])
+      ]);
+      priorityRowIndices = Array.isArray(detectedRedRows) ? detectedRedRows : [];
       ordersFound = auraRes?.data?.orders || [];
       if (ordersFound.length === 0 && auraRes?.data?.record?.direccion) {
         const rec = auraRes.data.record;
@@ -224,7 +229,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
       }
       setRawAiText(extractedText);
       setExtractedOrders(
-        ordersFound.map((o) => {
+        ordersFound.map((o, idx) => {
           const rawNotesStr = String(o.raw_notes || '');
           const detectedNeighbor = (() => {
             if (o.neighbor_notice && o.neighbor_notice !== 'N') return String(o.neighbor_notice).toUpperCase();
@@ -243,12 +248,15 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
             return o.premise_access || 'N';
           })();
 
+          const isPriorityRow = Boolean(o.is_priority || priorityRowIndices.includes(idx));
+
           return {
             ...o,
             work_date: normalizeDateStr(o.work_date || detectedDate) || detectedDate,
             tech_id: String(o.tech_id || techId || 'Javier (P0G1)').trim(),
             job_id: String(o.job_id || '').trim(),
             address: String(o.address || '').trim(),
+            is_priority: isPriorityRow ? 1 : 0,
             city: String(o.city || '').trim(),
             zip_code: String(o.zip_code || '').trim(),
             phone: String(o.phone || '').trim(),
@@ -257,13 +265,12 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
             bore_type: o.bore_type || 'N',
             obstacles: (() => {
               const rawObs = String(o.obstacles || '').toUpperCase();
-              if (rawObs.includes('LANDSC') || rawObs.includes('LANS') || /LANS/i.test(rawNotesStr)) {
-                return 'LANDSC';
-              }
-              if (rawObs.includes('SPRKLR') || rawObs.includes('SPRKL') || /SPRKLR|SPRKL/i.test(rawNotesStr)) {
-                return 'SPRKL';
-              }
-              return o.obstacles || 'N';
+              const obsList = [];
+              if (/LANDSC|LANS|LANDS|^LA$|^L$/i.test(rawObs) || /LANS/i.test(rawNotesStr)) obsList.push('LANDSC');
+              if (/SPRKLR|SPRKL|SPRKR/i.test(rawObs) || /SPRKLR|SPRKL/i.test(rawNotesStr)) obsList.push('SPRKL');
+              if (/DGFEN|\bDG\b|^DG$/i.test(rawObs) || /DGFEN/i.test(rawNotesStr)) obsList.push('DGFEN');
+              if (/PRIVLITE|PRIV/i.test(rawObs) || /PRIVLITE/i.test(rawNotesStr)) obsList.push('PRIVLITE');
+              return obsList.length > 0 ? obsList.join(',') : (o.obstacles || 'N');
             })(),
             is_temp: o.is_temp ? 1 : (/TEMP[:\s.\-_]*Y/i.test(rawNotesStr) ? 1 : 0),
             premise_access: detectedPremise,
@@ -758,12 +765,20 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
           {extractedOrders.map((o, idx) => (
             <div
               key={idx}
-              className="bg-[#141d28] border border-white/10 hover:border-cyan-500/40 rounded-xl p-2.5 space-y-1.5 transition shadow-xs"
+              className={`border rounded-xl p-2.5 space-y-1.5 transition shadow-xs ${
+                o.is_priority
+                  ? 'bg-rose-950/25 border-rose-500/60 hover:border-rose-400'
+                  : 'bg-[#141d28] border-white/10 hover:border-cyan-500/40'
+              }`}
             >
-              {/* Fila 1: Número, Job ID y Tarifa */}
+              {/* Fila 1: Número, Job ID, Prioridad y Tarifa */}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-md bg-cyan-500/20 text-cyan-300 text-[10px] font-mono font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">
+                  <span className={`w-5 h-5 rounded-md text-[10px] font-mono font-bold flex items-center justify-center shrink-0 border ${
+                    o.is_priority
+                      ? 'bg-rose-500/30 text-rose-200 border-rose-500/50'
+                      : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                  }`}>
                     {idx + 1}
                   </span>
                   <div className="flex items-center gap-1 bg-[#0b1017] px-2 py-0.5 rounded-lg border border-white/10">
@@ -773,9 +788,21 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                       placeholder="Job ID"
                       value={o.job_id}
                       onChange={(e) => updateOrderField(idx, 'job_id', e.target.value)}
-                      className="bg-transparent text-xs font-mono text-cyan-300 font-black w-24 focus:outline-none"
+                      className="bg-transparent text-xs font-mono text-cyan-300 font-black w-20 focus:outline-none"
                     />
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => updateOrderField(idx, 'is_priority', o.is_priority ? 0 : 1)}
+                    className={`px-1.5 py-0.5 rounded-md text-[9.5px] font-bold flex items-center gap-1 border transition cursor-pointer ${
+                      o.is_priority
+                        ? 'bg-rose-500/25 text-rose-200 border-rose-500/60 shadow-xs'
+                        : 'bg-[#0b1017] text-slate-400 hover:text-rose-300 border-white/10'
+                    }`}
+                    title="Marcar/desmarcar como Trabajo Prioritario (Resaltado en rojo en la hoja)"
+                  >
+                    <span>{o.is_priority ? '🔴 Prioritario' : '⚪ Normal'}</span>
+                  </button>
                 </div>
 
                 <div className="flex items-center gap-1.5">
@@ -796,13 +823,17 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
               {/* Fila 2: Dirección */}
               <div className="relative">
-                <MapPin className="w-3 h-3 text-slate-500 absolute left-2 top-2 pointer-events-none" />
+                <MapPin className={`w-3 h-3 absolute left-2 top-2 pointer-events-none ${o.is_priority ? 'text-rose-400' : 'text-slate-500'}`} />
                 <input
                   type="text"
                   placeholder="Dirección completa"
                   value={o.address}
                   onChange={(e) => updateOrderField(idx, 'address', e.target.value)}
-                  className="w-full bg-[#0b1017] border border-white/10 rounded-lg pl-6 pr-2 py-1 text-xs text-white placeholder-slate-500 font-semibold focus:outline-none focus:border-cyan-500 transition"
+                  className={`w-full rounded-lg pl-6 pr-2 py-1 text-xs placeholder-slate-500 font-semibold focus:outline-none transition border ${
+                    o.is_priority
+                      ? 'bg-rose-950/40 border-rose-500/50 text-rose-100 focus:border-rose-400'
+                      : 'bg-[#0b1017] border-white/10 text-white focus:border-cyan-500'
+                  }`}
                 />
               </div>
 
@@ -863,7 +894,10 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                 >
                   <option value="N">Sin Bore ($0)</option>
                   <option value="DW:1">Driveway (+${rateConfig.bore_dw_bonus})</option>
+                  <option value="SW:1,DW:1">SW + DW (+${rateConfig.bore_dw_bonus})</option>
                   <option value="SW:1">Sidewalk ($0)</option>
+                  <option value="RD:2">Road Bore ($0)</option>
+                  <option value="RD:1">Road Bore 1 ($0)</option>
                 </select>
 
                 {/* Teléfono del Cliente */}

@@ -445,6 +445,7 @@ export async function createOrder(data) {
     tech_id: data.tech_id || settings.tech_default || 'Javier (P0G1)',
     job_id: String(data.job_id || '').trim(),
     address: data.address || '',
+    is_priority: data.is_priority ? 1 : 0,
     city: data.city || '',
     zip_code: data.zip_code || '',
     phone: data.phone || '',
@@ -1249,6 +1250,7 @@ export async function batchImportOrders(ordersList = []) {
         const mergedInput = isLockedState
           ? {
               ...o,
+              is_priority: o.is_priority !== undefined ? (o.is_priority ? 1 : 0) : (existing.is_priority ? 1 : 0),
               status: existing.status,
               payment_status: existing.payment_status,
               manual_adjustment: existing.manual_adjustment,
@@ -1258,6 +1260,7 @@ export async function batchImportOrders(ordersList = []) {
             }
           : {
               ...o,
+              is_priority: o.is_priority !== undefined ? (o.is_priority ? 1 : 0) : (existing.is_priority ? 1 : 0),
               manual_adjustment: existing.manual_adjustment || o.manual_adjustment || 0,
               adjustment_reason: existing.adjustment_reason || o.adjustment_reason || '',
               route_order: existing.route_order || o.route_order || 0

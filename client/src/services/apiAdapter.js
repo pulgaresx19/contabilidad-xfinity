@@ -595,6 +595,7 @@ export function initApiAdapter() {
           const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
           const ordersList = body.orders || [];
           const results = await localDb.batchImportOrders(ordersList);
+          try { originalFetch(input, init).catch(() => {}); } catch (e) {}
           return jsonResponse({
             success: true,
             ...results
@@ -608,6 +609,7 @@ export function initApiAdapter() {
           } else if (method === 'POST') {
             const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
             const result = await localDb.createDispatchSheet(body);
+            try { originalFetch(input, init).catch(() => {}); } catch (e) {}
             return jsonResponse({ success: true, ...result });
           }
         }

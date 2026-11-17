@@ -93,6 +93,9 @@ function initDb() {
 
   // Ensure extra columns exist
   try {
+    db.exec("ALTER TABLE work_orders ADD COLUMN is_priority INTEGER DEFAULT 0");
+  } catch (e) {}
+  try {
     db.exec("ALTER TABLE work_orders ADD COLUMN cancel_reason TEXT");
   } catch (e) {}
   try {
@@ -189,8 +192,9 @@ function cleanRawNotes(rawText) {
     .replace(/(?:DR[O0]{1,2}P|DROP)[:\s->.]*[0-9]+(?:[.,]\d+)?(?:\s*FT)?/gi, ' ')
     .replace(/(?:Type|Cable)[:\s]*(?:RG[- ]?(?:6|11|M|II))/gi, ' ')
     .replace(/\bRG[- ]?(?:6|11)\b/gi, ' ')
-    .replace(/BORE[:\s]*(?:DW[:\s]*1?|SW[:\s]*1?|DV[:\s]*1?|SV[:\s]*1?|N\b)/gi, ' ')
-    .replace(/\b(?:DW|SW)[:\s]*1\b/gi, ' ')
+    .replace(/BORE[:\s]*(?:[A-Z]{2}[:\s]*\d+(?:,\s*[A-Z]{2,3}[:\s]*[A-Z0-9]+)*|N(?:,\s*CND[:\s]*[A-Z0-9]+)?\b)/gi, ' ')
+    .replace(/\b(?:DW|SW|DV|SV|RD)[:\s]*[12](?:,\s*(?:DW|SW|DV|SV|RD)[:\s]*[12])*\b/gi, ' ')
+    .replace(/\bCND[:\s]*[A-Z0-9]+\b/gi, ' ')
     .replace(/\bTEMP[:\s]*[YN]\b/gi, ' ')
     .replace(/Obstacl(?:es|ias)?[:\s]*[A-Za-z0-9, ]*(?=\/|$|\b(?:Premise|NBR|NB|REMARKS?)\b)/gi, ' ')
     .replace(/Premise\s*(?:ACS)?[:\s]*[A-Za-z0-9, ]*(?=\/|$|\b(?:NBR|NB|REMARKS?)\b)/gi, ' ')
@@ -264,12 +268,23 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
           cable_type = typeStr.includes('11') ? 'RG-11' : 'RG-6';
         } else if (up.startsWith('BORE:')) {
           const bStr = t.substring(5).trim().toUpperCase();
-          bore_type = bStr.includes('DW') ? 'DW:1' : bStr.includes('SW') ? 'SW:1' : 'N';
+          if (bStr.includes('DW') && bStr.includes('SW')) bore_type = 'SW:1,DW:1';
+          else if (bStr.includes('DW')) bore_type = 'DW:1';
+          else if (bStr.includes('RD')) {
+            const rm = bStr.match(/RD[:\s]*(\d+)/);
+            bore_type = rm ? `RD:${rm[1]}` : 'RD:1';
+          } else if (bStr.includes('SW')) bore_type = 'SW:1';
+          else bore_type = 'N';
         } else if (up.startsWith('TEMP:')) {
           is_temp = t.substring(5).trim().toUpperCase() === 'Y';
         } else if (up.startsWith('OBSTACLES:')) {
-          const obsRaw = t.substring(10).trim();
-          obstacles = (obsRaw.toUpperCase().includes('LANDSC') || obsRaw.toUpperCase().includes('LANS')) ? 'LANDSC' : obsRaw;
+          const obsRaw = t.substring(10).trim().toUpperCase();
+          const obsList = [];
+          if (/LANDSC|LANS|LANDS|^LA$|^L$/i.test(obsRaw)) obsList.push('LANDSC');
+          if (/SPRKLR|SPRKL|SPRKR/i.test(obsRaw)) obsList.push('SPRKL');
+          if (/DGFEN|\bDG\b|^DG$/i.test(obsRaw)) obsList.push('DGFEN');
+          if (/PRIVLITE|PRIV/i.test(obsRaw)) obsList.push('PRIVLITE');
+          obstacles = obsList.length > 0 ? obsList.join(',') : (obsRaw || 'N');
         } else if (up.startsWith('PREMISE ACS:') || up.startsWith('PREMISE:')) {
           premise_access = t.replace(/^(?:PREMISE\s*ACS|PREMISE)[:\s]*/i, '').trim() || 'N';
         } else if (up.startsWith('NBR:') || up.startsWith('NB:')) {
@@ -292,6 +307,7 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
       tech_id,
       job_id,
       address,
+      is_priority: /\[PRIORIDAD\]|PRIORITY|URGENTE|ROJO/i.test(rawLine) ? 1 : 0,
       city,
       zip_code,
       phone,
@@ -321,8 +337,19 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
     .replace(/\bWW\s+WOLF\b/gi, 'W WOLF')
     .replace(/MISHAV\/AKA/gi, 'MISHAWAKA')
     .replace(/MISHAVAKA/gi, 'MISHAWAKA')
-    .replace(/\b(?:0ROP|OROP|DR0P|DR0|JR0)\b/gi, 'DROP')
-    .replace(/0ROP[:\s]/gi, 'DROP ');
+    .replace(/POR\s+IER/gi, 'PORTER')
+    .replace(/VAI\s+PARAISO/gi, 'VALPARAISO')
+    .replace(/MERRN\s*IVIIIF|MERRE\s*VAL/gi, 'MERRILLVILLE')
+    .replace(/WES\s+VILLD/gi, 'WESTVILLE')
+    .replace(/\beORTAGE\b/gi, 'PORTAGE')
+    .replace(/\bObslacles\b/gi, 'Obstacles')
+    .replace(/(\d)¢/g, '$10')
+    .replace(/\bDR[0O]\s+2\s+(?=[0-9¢])/gi, 'DROP: ')
+    .replace(/\b(?:0ROP|OROP|DR0P|DROF|DR0|JR0)\b/gi, 'DROP')
+    .replace(/0ROP[:\s]/gi, 'DROP ')
+    .replace(/\b(?:RNRF|RORF|EORE)\b/gi, 'BORE')
+    .replace(/\bDOW[:\s]*[1A]\b/gi, 'DW:1')
+    .replace(/\bRG[- ]?(?:I1|TV)\b/gi, 'RG-11');
 
   // Clean pipes and noise from OCR table cells
   cleanLine = cleanLine.replace(/[|~_\[\]]+/g, ' ');
@@ -346,6 +373,7 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
   cleanLine = cleanLine.replace(/\b([A-Za-z]{3,})(TRL|BLVD|CIR|PKWY)\b/gi, '$1 $2');
   // Fix WOLF & MISHAWAKA & HUNTERS
   cleanLine = cleanLine.replace(/\bW\s*OLF\b/gi, 'W WOLF');
+  cleanLine = cleanLine.replace(/\bW\s+W\s+WOLF\b/gi, 'W WOLF');
   cleanLine = cleanLine.replace(/\bWW\s*WOLF\b/gi, 'W WOLF');
   cleanLine = cleanLine.replace(/\bWW\s*/gi, 'W ');
   cleanLine = cleanLine.replace(/\bHUN\s+TERS\b/gi, 'HUNTERS');
@@ -384,8 +412,8 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
 
   // Street Address: search immediately after Job ID
   let address = 'Dirección por verificar';
-  const streetTypes = 'AVE|DR|ST|RD|CIR|BLVD|WAY|LN|CT|LANE|COURT|CIRCLE|BOULEVARD|ROAD|STREET|DRIVE|EDGE|TER|TERRACE|LOOP|TRL|TRAIL|PL|PLACE|RUN|PATH|COUNTY\\s+ROAD(?:\\s+\\d+)?|CR\\s*\\d+';
-  const addrRegex = new RegExp(`(\\d{1,5}\\s+.*?\\b(?:${streetTypes})\\b[.,]?)`, 'i');
+  const streetTypes = 'AVE|DR|ST|RD|CIR|BLVD|WAY|LN|CT|CV|COVE|LANE|COURT|CIRCLE|BOULEVARD|ROAD|STREET|DRIVE|EDGE|TER|TERRACE|LOOP|TRL|TRAIL|PL|PLACE|RUN|PATH|PKWY|PARKWAY|HWY|HIGHWAY|COUNTY\\s+ROAD(?:\\s+\\d+)?|CR\\s*\\d+';
+  const addrRegex = new RegExp(`(\\d{1,5}\\s+[NSEW]\\s+\\d{1,4}\\s+[NSEW]\\b[.,]?|\\d{1,5}\\s+.*?\\b(?:${streetTypes})\\b[.,]?)`, 'i');
   const addrMatch = postJobText.match(addrRegex);
   let textAfterAddr = postJobText;
   if (addrMatch) {
@@ -414,7 +442,7 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
 
   // 2. Known city lookup in remaining text
   if (!city) {
-    const cityRegex = /\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW|SKOKIE|CHICAGO|EVANSTON|NILES|LINCOLNWOOD)\b/i;
+    const cityRegex = /\b(ELKHART|GOSHEN|MISHAWAKA|SOUTH\s+BEND|GRANGER|OSCEOLA|NAPPANEE|BRISTOL|MIDDLEBURY|WAKARUSA|PLYMOUTH|WARSAW|MERRILLVILLE|VALPARAISO|CHESTERTON|HOBART|PORTER|WESTVILLE|PORTAGE|CROWN\s+POINT|SCHERERVILLE|DYER|ST\s+JOHN|HIGHLAND|MUNSTER|GRIFFITH|HAMMOND|GARY|EAST\s+CHICAGO|LAKE\s+STATION|LOWELL|CEDAR\s+LAKE|WINFIELD|HEBRON|KOUTS|BURNS\s+HARBOR|LAPORTE|MICHIGAN\s+CITY|SKOKIE|CHICAGO|EVANSTON|NILES|LINCOLNWOOD)\b/i;
     const cityMatch = textAfterAddr.match(cityRegex) || postJobText.match(cityRegex);
     if (cityMatch) city = cityMatch[1].toUpperCase();
   }
@@ -453,9 +481,16 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
 
   // Bore Type
   let boreType = 'N';
-  if (/(?:BORE[:\s]*)?(?:DW|DV)[-:\s/.]*1/i.test(postJobText) || /\b(?:DW|DV)[-:\s/.]*1\b/i.test(postJobText)) {
+  const hasDW = /(?:BORE[:\s]*)?(?:DW|DV)[-:\s/.]*1/i.test(postJobText) || /\b(?:DW|DV)[-:\s/.]*1\b/i.test(postJobText) || /\b(?:DW|DV)[-:\s/.]*V\b/i.test(postJobText);
+  const hasSW = /(?:BORE[:\s]*)?(?:SW|SV)[-:\s/.]*1/i.test(postJobText) || /\b(?:SW|SV)[-:\s/.]*1\b/i.test(postJobText) || /BORE[:\s]*(?:SW|SV)\b/i.test(postJobText);
+  const rdMatch = postJobText.match(/\bRD[:\s.]*([12])\b/i);
+  if (hasDW && hasSW) {
+    boreType = 'SW:1,DW:1';
+  } else if (hasDW) {
     boreType = 'DW:1';
-  } else if (/(?:BORE[:\s]*)?(?:SW|SV)[-:\s/.]*1/i.test(postJobText) || /\b(?:SW|SV)[-:\s/.]*1\b/i.test(postJobText) || /BORE[:\s]*(?:SW|SV)\b/i.test(postJobText)) {
+  } else if (rdMatch) {
+    boreType = `RD:${rdMatch[1]}`;
+  } else if (hasSW) {
     boreType = 'SW:1';
   }
 
@@ -477,11 +512,16 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
 
   // Obstacles
   let obstacles = 'N';
-  const obsMatch = postJobText.match(/Obstacl(?:es|ias)?[:\s]*([A-Za-z, ]+?)(?:\/|Premise|NBR|$)/i);
+  const obsMatch = postJobText.match(/Obstacl(?:es|ias)?[:\s-]*([A-Za-z, ]+?)(?:\/|Premise|NBR|$)/i);
   if (obsMatch) {
     const obsVal = obsMatch[1].trim().toUpperCase();
-    if (obsVal !== 'N' && obsVal.length > 0) {
-      obstacles = (obsVal.includes('LANDSC') || obsVal.includes('LANS')) ? 'LANDSC' : (obsVal.includes('SPRKR') || obsVal.includes('SPRKLR') ? 'SPRKL' : obsVal);
+    if (obsVal !== 'N' && obsVal.length > 0 && !/^N\s*PREMIS/i.test(obsVal)) {
+      const obsList = [];
+      if (/LANDSC|LANS|LANDS|LANDY|^LA$|^L$/i.test(obsVal)) obsList.push('LANDSC');
+      if (/SPRKLR|SPRKL|SPRKR/i.test(obsVal)) obsList.push('SPRKL');
+      if (/DGFEN|\bDG\b|^DG$/i.test(obsVal)) obsList.push('DGFEN');
+      if (/PRIVLITE|PRIV/i.test(obsVal)) obsList.push('PRIVLITE');
+      obstacles = obsList.length > 0 ? obsList.join(',') : obsVal;
     }
   }
 
@@ -490,6 +530,7 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
     tech_id: techId,
     job_id: jobId,
     address,
+    is_priority: /\[PRIORIDAD\]|PRIORITY|URGENTE|ROJO/i.test(rawLine) ? 1 : 0,
     city,
     zip_code: zipCode,
     phone,

@@ -38,13 +38,13 @@ async function geocodeAddress(address, city = '', zipCode = '') {
   const cleanCity = (city || '').trim();
   const cleanZip = (zipCode || '').trim();
 
-  // Detect state from address or city (Skokie -> IL, Elkhart/Goshen -> IN)
+  // Detect state from address or city (Skokie -> IL, Elkhart/Goshen/Merrillville/Valparaiso -> IN)
   let state = 'IN';
-  if (/\b(IL|ILLINOIS|SKOKIE|CHICAGO|EVANSTON|NILES)\b/i.test(`${cleanAddr} ${cleanCity}`)) {
+  if (/^6[012]\d{3}/.test(cleanZip) || /\b(IL|ILLINOIS|SKOKIE|CHICAGO|EVANSTON|NILES|LINCOLNWOOD)\b/i.test(`${cleanAddr} ${cleanCity}`)) {
     state = 'IL';
-  } else if (/\b(MI|MICHIGAN)\b/i.test(`${cleanAddr} ${cleanCity}`)) {
+  } else if (/^4[89]\d{3}/.test(cleanZip) || /\b(MI|MICHIGAN)\b/i.test(`${cleanAddr} ${cleanCity}`)) {
     state = 'MI';
-  } else if (/\b(IN|INDIANA|ELKHART|GOSHEN|MISHAWAKA|SOUTH BEND)\b/i.test(`${cleanAddr} ${cleanCity}`)) {
+  } else if (/^4[67]\d{3}/.test(cleanZip) || /\b(IN|INDIANA|ELKHART|GOSHEN|MISHAWAKA|SOUTH BEND|MERRILLVILLE|VALPARAISO|CHESTERTON|HOBART|PORTER|WESTVILLE|PORTAGE|CROWN POINT|SCHERERVILLE|DYER|HIGHLAND|MUNSTER|GRIFFITH|HAMMOND|GARY|LAPORTE|MICHIGAN CITY)\b/i.test(`${cleanAddr} ${cleanCity}`)) {
     state = 'IN';
   }
 
@@ -377,31 +377,54 @@ async function smartScanDispatchSheet(imagePath, defaultDate, defaultTech) {
 
   // Pass 1: Dynamic Row Detection for table strips / screenshots (< 800px)
   if (h < 800) {
+    const { data: rgbBuf, info: rgbInfo } = await rotated.clone().raw().toBuffer({ resolveWithObject: true });
+    const channels = rgbInfo.channels || 3;
     const rawBuf = await rotated.clone().grayscale().raw().toBuffer();
     const rowDarkness = new Float32Array(h);
+    const rowGridRatio = new Float32Array(h);
     for (let y = 0; y < h; y++) {
       let sum = 0;
-      for (let x = 0; x < w; x++) sum += rawBuf[y * w + x];
+      let darkPixels = 0;
+      for (let x = 0; x < w; x++) {
+        const val = rawBuf[y * w + x];
+        sum += val;
+        if (val < 212) darkPixels++;
+      }
       rowDarkness[y] = sum / w;
+      rowGridRatio[y] = darkPixels / w;
     }
 
-    const lineCandidates = [];
-    for (let y = 1; y < h - 1; y++) {
-      if (rowDarkness[y] < rowDarkness[y - 1] && rowDarkness[y] <= rowDarkness[y + 1] && rowDarkness[y] < 225) {
-        lineCandidates.push(y);
+    // Prefer true horizontal table gridlines (>78% dark/gray across the entire width)
+    const gridCandidates = [];
+    for (let y = 0; y < h; y++) {
+      if (rowGridRatio[y] > 0.78) {
+        if (gridCandidates.length === 0 || y - gridCandidates[gridCandidates.length - 1] > 10) {
+          gridCandidates.push(y);
+        }
       }
     }
 
-    const filtered = [];
-    for (const y of lineCandidates) {
-      if (filtered.length === 0 || y - filtered[filtered.length - 1] > 10) filtered.push(y);
+    let borders = [];
+    if (gridCandidates.length >= 3) {
+      borders = [...gridCandidates];
+      if (borders[0] > 10) borders.unshift(0);
+      if (h - borders[borders.length - 1] > 10) borders.push(h);
+    } else {
+      const lineCandidates = [];
+      for (let y = 1; y < h - 1; y++) {
+        if (rowDarkness[y] < rowDarkness[y - 1] && rowDarkness[y] <= rowDarkness[y + 1] && rowDarkness[y] < 225) {
+          lineCandidates.push(y);
+        }
+      }
+      const filtered = [];
+      for (const y of lineCandidates) {
+        if (filtered.length === 0 || y - filtered[filtered.length - 1] > 12) filtered.push(y);
+      }
+      borders = [0, ...filtered];
+      if (h - borders[borders.length - 1] > 10) borders.push(h);
+      if (borders.length > 2 && borders[1] - borders[0] < 10) borders.shift();
+      if (borders.length > 2 && borders[borders.length - 1] - borders[borders.length - 2] < 10) borders.pop();
     }
-
-    let borders = [0, ...filtered];
-    if (h - borders[borders.length - 1] > 10) borders.push(h);
-
-    if (borders.length > 2 && borders[1] - borders[0] < 10) borders.shift();
-    if (borders.length > 2 && borders[borders.length - 1] - borders[borders.length - 2] < 10) borders.pop();
 
     await worker.setParameters({ tessedit_pageseg_mode: 7 }); // Single text line mode
 
@@ -409,6 +432,25 @@ async function smartScanDispatchSheet(imagePath, defaultDate, defaultTech) {
       const top = Math.max(0, borders[i]);
       const sliceH = Math.min(h - top, borders[i + 1] - top);
       if (sliceH < 10) continue;
+
+      // Detect red/pink priority highlight in the address cell region [0.22*w .. 0.50*w]
+      let redPixels = 0;
+      let sampledPixels = 0;
+      if (channels >= 3) {
+        const xStart = Math.floor(w * 0.22);
+        const xEnd = Math.floor(w * 0.50);
+        for (let sy = top; sy < top + sliceH; sy++) {
+          for (let sx = xStart; sx < xEnd; sx++) {
+            const idx = (sy * w + sx) * channels;
+            const r = rgbBuf[idx];
+            const g = rgbBuf[idx + 1];
+            const b = rgbBuf[idx + 2];
+            sampledPixels++;
+            if (r > 140 && (r - g) >= 22 && r >= b) redPixels++;
+          }
+        }
+      }
+      const isRowPriority = sampledPixels > 0 && (redPixels / sampledPixels) > 0.08;
 
       const sliceBuf = await rotated.clone()
         .extract({ left: 0, top, width: w, height: sliceH })
@@ -424,7 +466,10 @@ async function smartScanDispatchSheet(imagePath, defaultDate, defaultTech) {
       if (line) {
         allLines.push(line);
         const parsed = parseDispatchLine(line, defaultDate, defaultTech);
-        if (parsed) ordersList.push(parsed);
+        if (parsed) {
+          if (isRowPriority) parsed.is_priority = 1;
+          ordersList.push(parsed);
+        }
       }
     }
   }
@@ -685,6 +730,7 @@ app.post('/api/orders', async (req, res) => {
       tech_id: data.tech_id || 'Javier (P0G1)',
       job_id: cleanJobId,
       address: data.address.trim(),
+      is_priority: data.is_priority ? 1 : 0,
       city: data.city ? data.city.trim().toUpperCase() : '',
       zip_code: data.zip_code || '',
       phone: data.phone || '',
@@ -715,6 +761,7 @@ app.post('/api/orders', async (req, res) => {
           work_date = @work_date,
           tech_id = @tech_id,
           address = @address,
+          is_priority = @is_priority,
           city = @city,
           zip_code = @zip_code,
           phone = @phone,
@@ -745,13 +792,13 @@ app.post('/api/orders', async (req, res) => {
 
     const stmt = db.prepare(`
       INSERT INTO work_orders (
-        work_date, tech_id, job_id, address, city, zip_code, phone,
+        work_date, tech_id, job_id, address, is_priority, city, zip_code, phone,
         call_first, drop_footage, cable_type, bore_type, is_temp,
         obstacles, premise_access, neighbor_notice, raw_notes, rate_calculated,
         manual_adjustment, adjustment_reason,
         status, payment_status, latitude, longitude, route_order
       ) VALUES (
-        @work_date, @tech_id, @job_id, @address, @city, @zip_code, @phone,
+        @work_date, @tech_id, @job_id, @address, @is_priority, @city, @zip_code, @phone,
         @call_first, @drop_footage, @cable_type, @bore_type, @is_temp,
         @obstacles, @premise_access, @neighbor_notice, @raw_notes, @rate_calculated,
         @manual_adjustment, @adjustment_reason,
@@ -788,6 +835,7 @@ app.put('/api/orders/:id', async (req, res) => {
         tech_id = @tech_id,
         job_id = @job_id,
         address = @address,
+        is_priority = COALESCE(@is_priority, is_priority, 0),
         city = @city,
         zip_code = @zip_code,
         phone = @phone,
@@ -819,6 +867,7 @@ app.put('/api/orders/:id', async (req, res) => {
       tech_id: data.tech_id,
       job_id: data.job_id,
       address: data.address,
+      is_priority: data.is_priority !== undefined ? (data.is_priority ? 1 : 0) : null,
       city: data.city,
       zip_code: data.zip_code || '',
       phone: data.phone || '',
@@ -1137,13 +1186,13 @@ app.post('/api/batch-import', (req, res) => {
 
     const stmt = db.prepare(`
       INSERT INTO work_orders (
-        work_date, tech_id, job_id, address, city, zip_code, phone,
+        work_date, tech_id, job_id, address, is_priority, city, zip_code, phone,
         call_first, drop_footage, cable_type, bore_type, is_temp,
         obstacles, premise_access, neighbor_notice, raw_notes, rate_calculated,
         manual_adjustment, adjustment_reason,
         status, payment_status
       ) VALUES (
-        @work_date, @tech_id, @job_id, @address, @city, @zip_code, @phone,
+        @work_date, @tech_id, @job_id, @address, @is_priority, @city, @zip_code, @phone,
         @call_first, @drop_footage, @cable_type, @bore_type, @is_temp,
         @obstacles, @premise_access, @neighbor_notice, @raw_notes, @rate_calculated,
         @manual_adjustment, @adjustment_reason,
@@ -1152,7 +1201,9 @@ app.post('/api/batch-import', (req, res) => {
       ON CONFLICT(job_id) DO UPDATE SET
         work_date = excluded.work_date,
         address = excluded.address,
+        is_priority = excluded.is_priority,
         city = excluded.city,
+        zip_code = excluded.zip_code,
         phone = excluded.phone,
         call_first = excluded.call_first,
         drop_footage = excluded.drop_footage,
@@ -1160,17 +1211,41 @@ app.post('/api/batch-import', (req, res) => {
         bore_type = excluded.bore_type,
         is_temp = excluded.is_temp,
         obstacles = excluded.obstacles,
+        premise_access = excluded.premise_access,
+        neighbor_notice = excluded.neighbor_notice,
         rate_calculated = excluded.rate_calculated,
-        manual_adjustment = excluded.manual_adjustment,
-        adjustment_reason = excluded.adjustment_reason,
         raw_notes = excluded.raw_notes,
-        status = excluded.status,
+        status = CASE WHEN work_orders.status IN ('Completado', 'No Realizado') THEN work_orders.status ELSE excluded.status END,
         updated_at = CURRENT_TIMESTAMP
     `);
 
     const transaction = db.transaction((items) => {
       let count = 0;
-      for (const item of items) {
+      for (const rawItem of items) {
+        const item = {
+          work_date: rawItem.work_date || new Date().toISOString().split('T')[0],
+          tech_id: rawItem.tech_id || 'Javier (P0G1)',
+          job_id: String(rawItem.job_id || '').trim(),
+          address: String(rawItem.address || '').trim(),
+          is_priority: rawItem.is_priority ? 1 : 0,
+          city: String(rawItem.city || '').trim().toUpperCase(),
+          zip_code: String(rawItem.zip_code || '').trim(),
+          phone: String(rawItem.phone || '').trim(),
+          call_first: rawItem.call_first ? 1 : 0,
+          drop_footage: parseFloat(rawItem.drop_footage) || 0,
+          cable_type: rawItem.cable_type || 'RG-6',
+          bore_type: rawItem.bore_type || 'N',
+          is_temp: rawItem.is_temp ? 1 : 0,
+          obstacles: rawItem.obstacles || 'N',
+          premise_access: rawItem.premise_access || 'N',
+          neighbor_notice: rawItem.neighbor_notice || 'N',
+          raw_notes: rawItem.raw_notes || '',
+          rate_calculated: parseFloat(rawItem.rate_calculated) || 100,
+          manual_adjustment: parseFloat(rawItem.manual_adjustment) || 0,
+          adjustment_reason: rawItem.adjustment_reason || '',
+          status: rawItem.status || 'Pendiente',
+          payment_status: rawItem.payment_status || 'Pendiente'
+        };
         stmt.run(item);
         count++;
       }
@@ -1284,13 +1359,55 @@ app.get('/api/weekly-summary', (req, res) => {
       }
     } catch (e) {}
 
+    // Incluir semanas que tienen comprobantes/liquidaciones registradas en week_receipts
+    for (const weekKey of Object.keys(receiptsMap)) {
+      if (!weeksMap[weekKey]) {
+        const parts = weekKey.split('_al_');
+        const startDate = parts[0] || weekKey;
+        const endDate = parts[1] || weekKey;
+        const sD = parseDateParts(startDate);
+        const eD = parseDateParts(endDate);
+        const startShort = `${sD.getMonth() + 1}/${sD.getDate()}`;
+        const endShort = `${eD.getMonth() + 1}/${eD.getDate()}`;
+        const displayLabel = `${startShort} al ${endShort}`;
+
+        let auditData = null;
+        try {
+          auditData = receiptsMap[weekKey].audit ? (typeof receiptsMap[weekKey].audit === 'string' ? JSON.parse(receiptsMap[weekKey].audit) : receiptsMap[weekKey].audit) : null;
+        } catch (e) {}
+
+        const settlementEarnings = Number(auditData?.totalPay ?? auditData?.subtotal ?? 0);
+        const settlementJobs = auditData?.items ? auditData.items.reduce((acc, it) => acc + (it.qty || 0), 0) : 0;
+
+        weeksMap[weekKey] = {
+          key: weekKey,
+          displayLabel,
+          year: eD.getFullYear(),
+          startDate,
+          endDate,
+          totalJobs: settlementJobs,
+          completedCount: settlementJobs,
+          pendingJobsCount: 0,
+          cancelledCount: 0,
+          totalFootage: 0,
+          totalEarnings: settlementEarnings,
+          pendingEarnings: 0,
+          paidEarnings: settlementEarnings,
+          rg6Count: 0,
+          rg11Count: 0,
+          boresCount: 0,
+          orders: []
+        };
+      }
+    }
+
     // Determine week payment status and sort chronologically descending
     const weeks = Object.values(weeksMap).map(w => {
+      const rec = receiptsMap[w.key] || {};
       const completedOrders = w.orders.filter(o => o.status === 'Completado');
       const activeOrders = w.orders.filter(o => o.status !== 'No Realizado' && o.status !== 'Cancelado');
       const payableOrders = completedOrders.length > 0 ? completedOrders : activeOrders;
-      const isPaid = payableOrders.length > 0 && payableOrders.every(o => o.payment_status === 'Cobrado');
-      const rec = receiptsMap[w.key] || {};
+      const isPaid = (w.orders.length === 0 && rec.photo) ? true : (payableOrders.length > 0 && payableOrders.every(o => o.payment_status === 'Cobrado'));
       return {
         ...w,
         isPaid,

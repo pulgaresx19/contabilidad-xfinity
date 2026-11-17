@@ -60,6 +60,12 @@ export default function HistoricalOrderCard({
             #{order.job_id}
           </span>
 
+          {Boolean(order.is_priority) && (
+            <span className="px-1.5 py-0.5 rounded-md bg-rose-500/25 border border-rose-500/50 text-rose-200 text-[9.5px] font-black uppercase shrink-0">
+              🔴 Prioritario
+            </span>
+          )}
+
           {order.work_date && (
             <span className="text-[10px] text-slate-400 font-mono truncate">
               • {order.work_date}

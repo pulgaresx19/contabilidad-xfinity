@@ -42,9 +42,10 @@ export function cleanRawNotes(rawText) {
     // Eliminar tipo de cable (Type: RG-6, Type: RG-11, RG-6, RG11)
     .replace(/(?:Type|Cable)[:\s]*(?:RG[- ]?(?:6|11|M|II))/gi, ' ')
     .replace(/\bRG[- ]?(?:6|11)\b/gi, ' ')
-    // Eliminar tipo de perforación (BORE:DW:1, BORE:SW:1, BORE:N)
-    .replace(/BORE[:\s]*(?:DW[:\s]*1?|SW[:\s]*1?|DV[:\s]*1?|SV[:\s]*1?|N\b)/gi, ' ')
-    .replace(/\b(?:DW|SW)[:\s]*1\b/gi, ' ')
+    // Eliminar tipo de perforación (BORE:DW:1, BORE:SW:1, BORE:RD:2, BORE:SW:1,DW:1, BORE:N,CND:NU)
+    .replace(/BORE[:\s]*(?:[A-Z]{2}[:\s]*\d+(?:,\s*[A-Z]{2,3}[:\s]*[A-Z0-9]+)*|N(?:,\s*CND[:\s]*[A-Z0-9]+)?\b)/gi, ' ')
+    .replace(/\b(?:DW|SW|DV|SV|RD)[:\s]*[12](?:,\s*(?:DW|SW|DV|SV|RD)[:\s]*[12])*\b/gi, ' ')
+    .replace(/\bCND[:\s]*[A-Z0-9]+\b/gi, ' ')
     // Eliminar indicador de cable temporal (TEMP:Y, TEMP:N)
     .replace(/\bTEMP[:\s]*[YN]\b/gi, ' ')
     // Eliminar etiquetas de obstáculos y premisa estándar
@@ -93,6 +94,18 @@ export function getOrderFieldBadges(order) {
   if (!order) return [];
   const badges = [];
   const rawNotesStr = String(order.raw_notes || '').toUpperCase();
+
+  // 0. TRABAJO PRIORITARIO (Resaltado en rojo en hoja de despacho)
+  if (order.is_priority === 1 || order.is_priority === true) {
+    badges.push({
+      key: 'priority-red',
+      type: 'priority',
+      icon: '🔴',
+      text: 'Prioritario',
+      tooltip: 'Trabajo marcado en rojo en la hoja de despacho: necesario realizar',
+      className: 'bg-rose-500/20 text-rose-300 border-rose-500/50 font-bold'
+    });
+  }
 
   // 1. CONDICIÓN DE ACCESO A LA PROPIEDAD
   const pa = String(order.premise_access || 'N').trim().toUpperCase();
@@ -175,7 +188,7 @@ export function getOrderFieldBadges(order) {
     if (rawObs && rawObs !== 'N' && rawObs !== 'NONE') {
       const tokens = rawObs.split(/[,/]/).map(t => t.trim()).filter(Boolean);
       for (const tok of tokens) {
-        if (tok.includes('LANDSC') || tok.includes('LANS')) {
+        if (tok.includes('LANDSC') || tok.includes('LANS') || tok === 'LA' || tok === 'L') {
           if (!badges.some(b => b.key === 'obs-landsc')) {
             badges.push({
               key: 'obs-landsc',
@@ -194,6 +207,28 @@ export function getOrderFieldBadges(order) {
               icon: '💦',
               text: 'Aspersores',
               tooltip: 'Sistema de aspersores de riego enterrados en el césped',
+              className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
+            });
+          }
+        } else if (tok.includes('DGFEN') || tok === 'DG') {
+          if (!badges.some(b => b.key === 'obs-dgfen')) {
+            badges.push({
+              key: 'obs-dgfen',
+              type: 'obstacle',
+              icon: '🐕',
+              text: 'Cerca Perro',
+              tooltip: 'Cerca para perros (invisible o física) en el terreno (DGFEN)',
+              className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
+            });
+          }
+        } else if (tok.includes('PRIVLITE') || tok.includes('PRIV')) {
+          if (!badges.some(b => b.key === 'obs-privlite')) {
+            badges.push({
+              key: 'obs-privlite',
+              type: 'obstacle',
+              icon: '💡',
+              text: 'Luz Privada',
+              tooltip: 'Línea o iluminación privada enterrada en el jardín (PRIVLITE)',
               className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
             });
           }
@@ -254,6 +289,11 @@ export function getOrderRemark(order) {
   const rawNotesStr = String(order.raw_notes || '').toUpperCase();
   const pa = String(order.premise_access || 'N').trim().toUpperCase();
 
+  // 0. TRABAJO PRIORITARIO (Resaltado en rojo en hoja de despacho)
+  if (order.is_priority === 1 || order.is_priority === true) {
+    parts.push('🔴 Prioritario');
+  }
+
   // 1. CONDICIÓN DE ACCESO A LA PROPIEDAD (SIEMPRE DE PRIMERO)
   if (pa === 'RQHM' || rawNotesStr.includes('RQHM')) {
     parts.push('🏠 Req. Cliente');
@@ -293,10 +333,14 @@ export function getOrderRemark(order) {
     if (rawObs && rawObs !== 'N' && rawObs !== 'NONE') {
       const tokens = rawObs.split(/[,/]/).map(t => t.trim()).filter(Boolean);
       for (const tok of tokens) {
-        if (tok.includes('LANDSC') || tok.includes('LANS')) {
+        if (tok.includes('LANDSC') || tok.includes('LANS') || tok === 'LA' || tok === 'L') {
           if (!parts.some(p => /jardiner[ií]a/i.test(p))) parts.push('🌿 Jardinería');
         } else if (tok.includes('SPRKLR') || tok.includes('SPRKL')) {
           if (!parts.some(p => /aspersor/i.test(p))) parts.push('💦 Aspersores');
+        } else if (tok.includes('DGFEN') || tok === 'DG') {
+          if (!parts.some(p => /cerca perro/i.test(p))) parts.push('🐕 Cerca Perro');
+        } else if (tok.includes('PRIVLITE') || tok.includes('PRIV')) {
+          if (!parts.some(p => /luz privada/i.test(p))) parts.push('💡 Luz Privada');
         } else {
           const cleanObs = tok.replace(/^remark[:\s-]*/i, '').trim();
           if (cleanObs && cleanObs !== 'N' && !parts.some(p => p.toUpperCase().includes(cleanObs))) {
