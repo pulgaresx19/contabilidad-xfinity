@@ -20,14 +20,6 @@ const CUTOFF_LABELS = {
 
 export default function ProfileView({ techName, summaryData, onRefresh, onOpenSettings }) {
   const { actualTheme, toggleTheme } = useTheme();
-  const summary = summaryData?.summary || {
-    totalAllEarnings: 0,
-    totalPending: 0,
-    totalPaid: 0,
-    totalFeetAll: 0,
-    totalOrdersCount: 0,
-    totalCompletedCount: 0
-  };
 
   const [settings, setSettings] = useState({
     tech_default: techName || 'Javier (P0G1)',
@@ -317,41 +309,7 @@ export default function ProfileView({ techName, summaryData, onRefresh, onOpenSe
         </div>
       </div>
 
-      {/* 2. RESUMEN HISTÓRICO GLOBAL DEL TÉCNICO */}
-      <div className="bg-[#0f1722]/95 border border-white/10 rounded-3xl p-4 sm:p-5 space-y-3 shadow-xl backdrop-blur-xl">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
-            <Briefcase className="h-4 w-4 text-cyan-400" />
-            <span>Acumulado Histórico</span>
-          </span>
-          <span className="text-[10.5px] font-mono text-slate-400">
-            {summary.totalCompletedCount || 0} de {summary.totalOrdersCount || 0} completados
-          </span>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="bg-[#131b26] border border-emerald-500/25 rounded-2xl p-2.5">
-            <span className="text-[9.5px] uppercase font-bold text-emerald-400 block">Cobrado</span>
-            <span className="text-sm font-black font-mono text-emerald-400 mt-0.5 block">
-              ${Number(summary.totalPaid || 0).toFixed(0)}
-            </span>
-          </div>
-          <div className="bg-[#131b26] border border-amber-500/25 rounded-2xl p-2.5">
-            <span className="text-[9.5px] uppercase font-bold text-amber-400 block">Pendiente</span>
-            <span className="text-sm font-black font-mono text-amber-300 mt-0.5 block">
-              ${Number(summary.totalPending || 0).toFixed(0)}
-            </span>
-          </div>
-          <div className="bg-[#131b26] border border-cyan-500/25 rounded-2xl p-2.5">
-            <span className="text-[9.5px] uppercase font-bold text-cyan-400 block">Metraje</span>
-            <span className="text-sm font-black font-mono text-cyan-300 mt-0.5 block">
-              {Number(summary.totalFeetAll || 0).toLocaleString()} ft
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. ALMACENAMIENTO LOCAL Y RESPALDOS (COCKPIT DARK STYLE) */}
+      {/* 2. ALMACENAMIENTO LOCAL Y RESPALDOS (COCKPIT DARK STYLE) */}
       <div className="bg-[#0f1722]/95 border border-white/10 rounded-3xl p-4 sm:p-5 space-y-4 shadow-xl backdrop-blur-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-white">
