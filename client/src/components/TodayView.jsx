@@ -1050,11 +1050,11 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                       {/* 7. Nota / Detalle Especial */}
                       {orderRemark && (
                         <span 
-                          className="shrink-0 bg-slate-800/80 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-medium flex items-center gap-1 max-w-[190px]"
+                          className="shrink-0 bg-slate-800/80 text-slate-300 px-2.5 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-medium flex items-center gap-1.5 max-w-sm sm:max-w-md"
                           title={`Nota del trabajo: ${orderRemark}`}
                         >
-                          <span className="text-slate-400 text-[9px] uppercase tracking-wider font-semibold">Nota</span>
-                          <span className="text-slate-200 truncate">{orderRemark}</span>
+                          <span className="text-amber-400 text-[9px] uppercase tracking-wider font-semibold">Nota</span>
+                          <span className="text-slate-200">{orderRemark}</span>
                         </span>
                       )}
                     </div>

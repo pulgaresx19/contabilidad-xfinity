@@ -149,6 +149,7 @@ export default function UberDriverView({
   const [drawerState, setDrawerState] = useState('peek');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [is3DMode, setIs3DMode] = useState(true);
+  const [showFullRemark, setShowFullRemark] = useState(false);
 
   // Free Exploration Mode: User can pan/zoom anywhere freely without being snapped back
   const [isUserPanned, setIsUserPanned] = useState(false);
@@ -174,6 +175,7 @@ export default function UberDriverView({
 
   // Load photos for selected order whenever selectedOrder changes or orders list updates
   useEffect(() => {
+    setShowFullRemark(false);
     if (!selectedOrder?.id) {
       setSelectedOrderPhotos([]);
       return;
@@ -2599,7 +2601,14 @@ export default function UberDriverView({
                     </>
                   )}
                 </div>
-                <p className="text-[10.5px] text-slate-400 truncate mt-0.5 font-medium">
+                <p 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowFullRemark(prev => !prev);
+                  }}
+                  className={`text-[10.5px] text-slate-300 mt-0.5 font-medium leading-snug cursor-pointer transition-all ${showFullRemark ? 'break-words' : 'line-clamp-2'}`}
+                  title={selectedRemark ? "Toca para ver / contraer texto completo" : undefined}
+                >
                   {selectedRemark || 'Sin observaciones'}
                 </p>
               </div>
@@ -2918,6 +2927,15 @@ export default function UberDriverView({
                       <span className="text-slate-400 font-medium">Teléfono Cliente</span>
                       <span className="text-cyan-400 font-mono font-bold text-[11px]">
                         {formatPhoneDisplay(selectedOrder.phone)}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedRemark && (
+                    <div className="flex justify-between items-start text-xs border-t border-white/5 pt-2">
+                      <span className="text-slate-400 font-medium">Observaciones</span>
+                      <span className="text-right text-amber-300 font-medium text-[11px] max-w-[240px] leading-tight">
+                        {selectedRemark}
                       </span>
                     </div>
                   )}

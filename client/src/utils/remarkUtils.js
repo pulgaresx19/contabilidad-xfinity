@@ -2,8 +2,8 @@
  * remarkUtils.js
  * Utilidades para limpiar y formatear las observaciones (remarks) y notas de trabajo.
  * Elimina la duplicación de datos técnicos ya mostrados en tarjetas dedicadas
- * (teléfono, metraje/pies, tipo de cable, bore) y resalta advertencias humanas reales,
- * jardinería/obstáculos (LANS/LANDSC, SPRKLR) y cable temporal (TEMP: Y).
+ * (teléfono, metraje/pies, tipo de cable, bore) y resalta advertencias humanas reales
+ * con etiquetas breves, directas y en español (Jardinería, Cable Temporal, Aspersores, etc.).
  */
 
 export function cleanRawNotes(rawText) {
@@ -54,7 +54,8 @@ export function cleanRawNotes(rawText) {
 }
 
 /**
- * Devuelve un resumen limpio y amigable de las notas y alertas de campo de la orden.
+ * Devuelve un resumen limpio, compacto y directo de las notas y alertas de campo.
+ * Traduce términos técnicos a español conciso para no saturar el espacio visual.
  * @param {Object} order - Objeto con datos de la orden de trabajo
  * @returns {string|null} - Cadena formateada o null si no hay notas
  */
@@ -74,39 +75,42 @@ export function getOrderRemark(order) {
     }
   }
 
-  // 2. Alertas de jardinería y obstáculos especiales (LANDSC / LANS, SPRKLR)
+  // 2. Alertas de jardinería y obstáculos especiales (conciso y directo)
   if (order.obstacles && order.obstacles !== 'N') {
     const rawObs = String(order.obstacles).trim().toUpperCase();
     if (rawObs && rawObs !== 'N' && rawObs !== 'NONE') {
-      if (rawObs.includes('LANDSC') || rawObs.includes('LANS')) {
-        parts.push('🌿 Jardinería (LANDSC)');
-      } else if (rawObs.includes('SPRKLR') || rawObs.includes('SPRKL')) {
-        parts.push('💦 Aspersores (SPRKLR)');
-      } else {
-        const cleanObs = rawObs.replace(/^remark[:\s-]*/i, '').trim();
-        if (cleanObs && !parts.some(p => p.toUpperCase().includes(cleanObs))) {
-          parts.push(cleanObs);
+      const tokens = rawObs.split(/[,/]/).map(t => t.trim()).filter(Boolean);
+      for (const tok of tokens) {
+        if (tok.includes('LANDSC') || tok.includes('LANS')) {
+          if (!parts.some(p => /jardiner[ií]a/i.test(p))) parts.push('🌿 Jardinería');
+        } else if (tok.includes('SPRKLR') || tok.includes('SPRKL')) {
+          if (!parts.some(p => /aspersor/i.test(p))) parts.push('💦 Aspersores');
+        } else {
+          const cleanObs = tok.replace(/^remark[:\s-]*/i, '').trim();
+          if (cleanObs && cleanObs !== 'N' && !parts.some(p => p.toUpperCase().includes(cleanObs))) {
+            parts.push(cleanObs);
+          }
         }
       }
     }
   }
 
-  // 3. Indicador de Cable Temporal (TEMP: Y)
+  // 3. Indicador de Cable Temporal (conciso y directo)
   const hasTemp =
     order.is_temp === 1 ||
     order.is_temp === true ||
     /\bTEMP[:\s]*Y\b/i.test(String(order.raw_notes || ''));
   if (hasTemp && !parts.some(p => /temporal/i.test(p))) {
-    parts.push('⚡ Cable Temporal (TEMP: Y)');
+    parts.push('⚡ Cable Temporal');
   }
 
-  // 4. Acceso y condiciones de premisa (RQHM, DOG)
+  // 4. Acceso y condiciones de premisa (conciso y directo)
   if (order.premise_access && order.premise_access !== 'N') {
     const pa = String(order.premise_access).trim().toUpperCase();
-    if (pa === 'RQHM' && !parts.some(p => /casa/i.test(p))) {
-      parts.push('🏠 Cliente debe estar en casa (RQHM)');
-    } else if (pa === 'DOG' && !parts.some(p => /perro/i.test(p))) {
-      parts.push('🐕 Perro en propiedad (DOG)');
+    if (pa === 'RQHM') {
+      if (!parts.some(p => /casa/i.test(p))) parts.push('🏠 Cliente en casa');
+    } else if (pa === 'DOG') {
+      if (!parts.some(p => /perro/i.test(p))) parts.push('🐕 Perro');
     } else if (pa && !parts.some(p => p.toUpperCase().includes(pa))) {
       parts.push(pa);
     }
