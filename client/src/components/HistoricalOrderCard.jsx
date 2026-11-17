@@ -116,7 +116,7 @@ export default function HistoricalOrderCard({
       {/* FILA 3: ESPECIFICACIONES TÉCNICAS (Contador de Fotos Adelante + Metraje + Cable + Bore + Nota) */}
       <div className="flex items-center gap-1.5 text-[10px] overflow-x-auto scrollbar-none py-0.5 whitespace-nowrap">
         {/* 1. Contador de Fotos siempre al principio (tonito rojizo si no realizado, cian si completado) */}
-        {photosCount > 0 && (
+        {(photosCount > 0 || isCancelled) && (
           <button
             type="button"
             onClick={(e) => {
@@ -191,28 +191,30 @@ export default function HistoricalOrderCard({
         )}
       </div>
 
-      {/* FILA 4 / 5: CONTENIDO VISUAL UNIFICADO (Sin fotos ni botones dentro del motivo cuando no es realizado) */}
+      {/* FILA 4: ESPACIO VISUAL UNIFICADO (Mismo alto exacto h-12 sm:h-14 en todos los estados) */}
       {isCancelled ? (
-        /* Trabajo No Realizado: Ocupa el mismo espacio mostrando únicamente el motivo limpio */
+        /* Trabajo No Realizado: Caja del Motivo ocupando exactamente el mismo espacio que la tira de fotos */
         <div 
           onClick={(e) => {
             e.stopPropagation();
             onOpenPhotos && onOpenPhotos(order);
           }}
-          className="bg-rose-950/20 border border-rose-500/25 hover:border-rose-500/40 px-3 py-2 rounded-xl text-xs text-rose-200 flex items-center gap-2 transition cursor-pointer active:scale-[0.99]"
+          className="h-12 sm:h-14 w-full bg-rose-950/20 border border-rose-500/25 hover:border-rose-500/40 px-3 rounded-xl text-xs text-rose-200 flex items-center gap-2.5 transition cursor-pointer active:scale-[0.99] select-none shrink-0"
           title="Toca para ver la constancia y fotos del obstáculo"
         >
-          <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-          <span className="text-[10px] uppercase font-bold text-rose-400 shrink-0 tracking-wider">
-            Motivo:
-          </span>
-          <span className="font-semibold text-xs text-rose-100 truncate flex-1 min-w-0">
-            {order.cancel_reason || 'Inconveniente en la propiedad'}
-          </span>
+          <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <span className="text-[9.5px] uppercase font-black text-rose-400 block tracking-wider leading-none">
+              Motivo No Realizado
+            </span>
+            <p className="font-semibold text-xs text-rose-100 truncate mt-0.5">
+              {order.cancel_reason || 'Inconveniente en la propiedad'}
+            </p>
+          </div>
         </div>
       ) : photos.length > 0 ? (
-        /* Trabajo Realizado: Tira horizontal de fotos de evidencia */
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none pt-0.5 w-full">
+        /* Trabajo Realizado: Tira horizontal de fotos con el mismo alto exacto */
+        <div className="h-12 sm:h-14 w-full flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none shrink-0">
           {photos.map((p, pIdx) => {
             const src = p.photo_data || (p.filename ? `/uploads/${p.filename}` : '');
             return (
@@ -222,7 +224,7 @@ export default function HistoricalOrderCard({
                   e.stopPropagation();
                   onSelectPhoto ? onSelectPhoto(src) : null;
                 }}
-                className="h-12 w-16 sm:h-14 sm:w-20 rounded-xl overflow-hidden bg-black/40 border border-white/10 shrink-0 cursor-pointer relative group hover:border-cyan-400 transition"
+                className="h-full aspect-[4/3] rounded-xl overflow-hidden bg-black/40 border border-white/10 shrink-0 cursor-pointer relative group hover:border-cyan-400 transition"
                 title="Toca para ampliar foto de evidencia"
               >
                 <img 
@@ -237,7 +239,20 @@ export default function HistoricalOrderCard({
             );
           })}
         </div>
-      ) : null}
+      ) : (
+        /* Trabajo Realizado sin fotos archivadas: Mismo alto exacto con placeholder sutil */
+        <div 
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenPhotos && onOpenPhotos(order);
+          }}
+          className="h-12 sm:h-14 w-full bg-[#16202c]/40 border border-dashed border-white/10 hover:border-cyan-500/30 rounded-xl px-3 flex items-center gap-2 text-slate-400 cursor-pointer transition active:scale-[0.99] shrink-0"
+          title="Sin fotos de evidencia archivadas. Toca para gestionar o agregar."
+        >
+          <Camera className="h-4 w-4 text-slate-500 shrink-0" />
+          <span className="text-xs text-slate-400 font-medium truncate">Sin fotos de evidencia archivadas</span>
+        </div>
+      )}
 
       {/* FILA 6: ACCIONES RÁPIDAS (Copiar Comprobante | Editar | Recompartir Reporte) */}
       <div className="pt-2 border-t border-white/8 grid grid-cols-3 gap-1.5 sm:gap-2" onClick={(e) => e.stopPropagation()}>
