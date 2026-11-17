@@ -13,7 +13,7 @@ import {
 import { formatDateFriendly, normalizeDateStr, formatRouteDuration } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
 import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
-import { getOrderRemark } from '../utils/remarkUtils';
+import { getOrderRemark, getOrderFieldBadges } from '../utils/remarkUtils';
 import { useTheme } from '../context/ThemeContext';
 
 const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
@@ -3040,6 +3040,10 @@ export default function UberDriverView({
                                   )}
                                 </div>
 
+                                <div className="text-[10px] text-slate-300 font-sans truncate mt-0.5">
+                                  {getOrderRemark(ord)}
+                                </div>
+
                                 {legInfo && !legInfo.isFirst && (
                                   <div className="mt-1 inline-flex items-center gap-1 text-[9.5px] font-bold text-sky-300 bg-sky-500/15 border border-sky-400/30 px-1.5 py-0.2 rounded-md">
                                     <Car className="h-2.5 w-2.5 text-sky-400 shrink-0" />
@@ -3432,6 +3436,9 @@ export default function UberDriverView({
                                   </span>
                                 </>
                               )}
+                            </div>
+                            <div className="text-[10px] text-slate-300 font-sans truncate mt-0.5">
+                              {getOrderRemark(ord)}
                             </div>
                           </div>
                         </div>

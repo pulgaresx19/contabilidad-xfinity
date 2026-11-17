@@ -1057,13 +1057,26 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   const photosCount = (order.work_photos_count !== undefined ? order.work_photos_count : order.photos_count) || (order.photos ? order.photos.filter(p => p.category !== 'Constancia No Realizado').length : 0) || 0;
                   return (
                     <div className="flex items-center gap-1.5 text-[10px] overflow-x-auto scrollbar-none py-0.5 whitespace-nowrap">
-                      {/* 1. Metraje del Drop */}
+                      {/* 1. Badges de Campo Especializados (ACCESO SIEMPRE DE PRIMERO: 🟢 Acceso libre, Cruce, etc.) */}
+                      {getOrderFieldBadges(order).map((b) => (
+                        <span 
+                          key={b.key}
+                          className={`shrink-0 px-2 py-0.5 rounded-md border text-[10px] font-medium flex items-center gap-1 shadow-2xs ${b.className}`}
+                          title={b.tooltip}
+                        >
+                          {b.icon && <span className="shrink-0">{b.icon}</span>}
+                          {b.tag && <span className={b.tagClassName}>{b.tag}</span>}
+                          <span>{b.text}</span>
+                        </span>
+                      ))}
+
+                      {/* 2. Metraje del Drop */}
                       <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 text-[10px] font-mono flex items-center gap-1">
                         <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Drop</span>
                         <span className="font-bold text-slate-100">{order.drop_footage || 0} ft</span>
                       </span>
 
-                      {/* 2. Tipo de Cable */}
+                      {/* 3. Tipo de Cable */}
                       <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 text-[10px] font-mono flex items-center gap-1">
                         <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Cable</span>
                         <span className="font-semibold text-slate-200">{order.cable_type || 'RG-6'}</span>
@@ -1115,19 +1128,6 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                           )}
                         </span>
                       )}
-
-                      {/* 7. Badges de Campo Especializados (Acceso, Cruce de Vecinos, Obstáculos, Notas) */}
-                      {getOrderFieldBadges(order).map((b) => (
-                        <span 
-                          key={b.key}
-                          className={`shrink-0 px-2 py-0.5 rounded-md border text-[10px] font-medium flex items-center gap-1 shadow-2xs ${b.className}`}
-                          title={b.tooltip}
-                        >
-                          {b.icon && <span className="shrink-0">{b.icon}</span>}
-                          {b.tag && <span className={b.tagClassName}>{b.tag}</span>}
-                          <span>{b.text}</span>
-                        </span>
-                      ))}
                     </div>
                   );
                 })()}

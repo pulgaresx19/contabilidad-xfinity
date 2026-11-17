@@ -244,27 +244,50 @@ export function getOrderFieldBadges(order) {
 /**
  * Devuelve un resumen limpio, compacto y directo de las notas y alertas de campo.
  * Traduce términos técnicos a español conciso para no saturar el espacio visual.
- * Muestra '🟢 Acceso libre' cuando el predio no tiene restricciones.
+ * Muestra la condición de acceso (🟢 Acceso libre, 🐕 Perro, etc.) SIEMPRE DE PRIMERO.
  * @param {Object} order - Objeto con datos de la orden de trabajo
  * @returns {string} - Cadena formateada
  */
 export function getOrderRemark(order) {
   if (!order) return '🟢 Acceso libre';
   const parts = [];
+  const rawNotesStr = String(order.raw_notes || '').toUpperCase();
+  const pa = String(order.premise_access || 'N').trim().toUpperCase();
 
-  // 1. Observación humana limpia (sin repetir teléfono, pies, cable, bore, ni NBR)
-  if (order.raw_notes && typeof order.raw_notes === 'string') {
-    const cleanedNotes = cleanRawNotes(order.raw_notes);
-    if (
-      cleanedNotes &&
-      cleanedNotes.toUpperCase() !== String(order.address || '').toUpperCase() &&
-      !/^(?:N|NO|NONE|NULL)$/i.test(cleanedNotes)
-    ) {
-      parts.push(cleanedNotes);
+  // 1. CONDICIÓN DE ACCESO A LA PROPIEDAD (SIEMPRE DE PRIMERO)
+  if (pa === 'RQHM' || rawNotesStr.includes('RQHM')) {
+    parts.push('🏠 Req. Cliente');
+  } else if (pa === 'DOG' || /\bDOGS?\b/i.test(rawNotesStr)) {
+    parts.push('🐕 Perro');
+  } else if (pa.includes('GATE') || pa.includes('LOCK') || /(?:PORT[OÓ]N|CANDADO|LOCKED\s*GATE)/i.test(rawNotesStr)) {
+    parts.push('🔒 Portón');
+  } else if (pa === 'CALL' || /\bCALLFIRST\b/i.test(rawNotesStr) || order.call_first === 1 || order.call_first === true) {
+    parts.push('📞 Llamar 1ro');
+  } else if (pa !== 'N' && pa !== 'NONE' && pa !== '') {
+    parts.push(pa);
+  } else {
+    // Si no tiene restricciones de acceso, ES ACCESO LIBRE Y VA DE PRIMERO
+    parts.push('🟢 Acceso libre');
+  }
+
+  // 2. AVISO DE VECINOS (NBR / NB) - Interpretación automática en español (SOLO si hay cruce real)
+  let neighborVal = String(order.neighbor_notice || '').trim().toUpperCase();
+  if (!neighborVal || neighborVal === 'UNDEFINED' || neighborVal === 'NULL') {
+    const m = rawNotesStr.match(/\b(?:NBR|NB)[:\s]*([A-Za-z0-9]+)\b/i);
+    if (m) {
+      neighborVal = m[1].toUpperCase();
+    } else if (/\bNB\b/i.test(rawNotesStr)) {
+      neighborVal = 'N';
     }
   }
 
-  // 2. Alertas de jardinería y obstáculos especiales (conciso y directo)
+  const requiresNeighborCrossing = neighborVal && neighborVal !== 'N' && neighborVal !== 'NO' && neighborVal !== 'NONE' && neighborVal !== '0';
+  if (requiresNeighborCrossing) {
+    const countText = neighborVal === '1' ? '1 vecino' : neighborVal === '2' ? '2 vecinos' : /^\d+$/.test(neighborVal) ? `${neighborVal} vecinos` : 'vecinos';
+    parts.push(`👥 Cruce: ${countText}`);
+  }
+
+  // 3. OBSTÁCULOS DE TERRENO (Jardinería, Aspersores)
   if (order.obstacles && order.obstacles !== 'N') {
     const rawObs = String(order.obstacles).trim().toUpperCase();
     if (rawObs && rawObs !== 'N' && rawObs !== 'NONE') {
@@ -284,61 +307,25 @@ export function getOrderRemark(order) {
     }
   }
 
-  // 3. Indicador de Cable Temporal (conciso y directo)
+  // 4. INDICADOR DE CABLE TEMPORAL
   const hasTemp =
     order.is_temp === 1 ||
     order.is_temp === true ||
-    /\bTEMP[:\s]*Y\b/i.test(String(order.raw_notes || ''));
+    /\bTEMP[:\s]*Y\b/i.test(rawNotesStr);
   if (hasTemp && !parts.some(p => /temporal/i.test(p))) {
     parts.push('⚡ Cable Temporal');
   }
 
-  // 4. Acceso y condiciones de premisa (RQHM, DOG, GATE, LOCK, CALL)
-  const pa = String(order.premise_access || 'N').trim().toUpperCase();
-  const rawNotesStr = String(order.raw_notes || '').toUpperCase();
-
-  if (pa === 'RQHM' || rawNotesStr.includes('RQHM')) {
-    if (!parts.some(p => /casa/i.test(p))) parts.push('🏠 Cliente en casa');
-  } else if (pa === 'DOG' || /\bDOGS?\b/i.test(rawNotesStr)) {
-    if (!parts.some(p => /perro/i.test(p))) parts.push('🐕 Perro');
-  } else if (pa.includes('GATE') || pa.includes('LOCK') || /(?:PORT[OÓ]N|CANDADO|LOCKED\s*GATE)/i.test(rawNotesStr)) {
-    if (!parts.some(p => /port[oó]n|candado/i.test(p))) parts.push('🔒 Portón');
-  } else if (pa === 'CALL' || /\bCALLFIRST\b/i.test(rawNotesStr)) {
-    if (!parts.some(p => /llamar/i.test(p))) parts.push('📞 Llamar antes');
-  } else if (pa !== 'N' && pa !== 'NONE' && pa !== '') {
-    if (!parts.some(p => p.toUpperCase().includes(pa))) parts.push(pa);
-  }
-
-  // 5. Aviso de Vecinos (NBR / NB) - Interpretación automática en español (SOLO si hay cruce real)
-  let neighborVal = String(order.neighbor_notice || '').trim().toUpperCase();
-  if (!neighborVal || neighborVal === 'UNDEFINED' || neighborVal === 'NULL') {
-    const m = rawNotesStr.match(/\b(?:NBR|NB)[:\s]*([A-Za-z0-9]+)\b/i);
-    if (m) {
-      neighborVal = m[1].toUpperCase();
-    } else if (/\bNB\b/i.test(rawNotesStr)) {
-      neighborVal = 'N';
+  // 5. OBSERVACIÓN HUMANA LIMPIA (Al final de las especificaciones)
+  if (order.raw_notes && typeof order.raw_notes === 'string') {
+    const cleanedNotes = cleanRawNotes(order.raw_notes);
+    if (
+      cleanedNotes &&
+      cleanedNotes.toUpperCase() !== String(order.address || '').toUpperCase() &&
+      !/^(?:N|NO|NONE|NULL)$/i.test(cleanedNotes)
+    ) {
+      parts.push(`Nota: ${cleanedNotes}`);
     }
-  }
-
-  const requiresNeighborCrossing = neighborVal && neighborVal !== 'N' && neighborVal !== 'NO' && neighborVal !== 'NONE' && neighborVal !== '0';
-
-  if (requiresNeighborCrossing) {
-    if (neighborVal === '1') {
-      parts.push('👥 Cruce de 1 vecino');
-    } else if (neighborVal === '2') {
-      parts.push('👥 Cruce de 2 vecinos');
-    } else if (neighborVal === 'Y' || neighborVal === 'YES') {
-      parts.push('👥 Cruce de vecinos');
-    } else if (/^\d+$/.test(neighborVal)) {
-      parts.push(`👥 Cruce de ${neighborVal} vecinos`);
-    } else {
-      parts.push(`👥 Vecino: ${neighborVal}`);
-    }
-  }
-
-  // 6. Si no hay ninguna restricción de premisa ni obstáculos ni cruce de vecinos:
-  if (parts.length === 0) {
-    return '🟢 Acceso libre';
   }
 
   return parts.join(' • ');
