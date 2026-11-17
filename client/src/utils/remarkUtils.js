@@ -374,3 +374,260 @@ export function getOrderRemark(order) {
 
   return parts.join(' • ');
 }
+
+/**
+ * Diccionario maestro con las definiciones, códigos de despacho de Comcast/Xfinity,
+ * patrones de deducción de la IA y recomendaciones operativas de campo para cada badge.
+ */
+export const BADGE_DEFINITIONS = {
+  'priority-red': {
+    key: 'priority-red',
+    icon: '🔴',
+    title: 'Trabajo Prioritario',
+    dispatchCode: 'Fila / Celda en Color Rojo',
+    category: 'Prioridad y Despacho',
+    colorClasses: {
+      badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+      glow: 'shadow-rose-500/20',
+      accent: 'text-rose-400'
+    },
+    aiPattern: 'Fila o celda con fondo rojo/rosado o parámetro is_priority = true',
+    description: 'Trabajo crítico o prioritario asignado por el supervisor o la mesa de despacho de Comcast. Es de realización obligatoria en la jornada.',
+    fieldTips: 'Atiende esta orden con máxima prioridad en tu ruta diaria. Si existe algún impedimento de fuerza mayor, notifícalo de inmediato al supervisor.'
+  },
+  'access-free': {
+    key: 'access-free',
+    icon: '🟢',
+    title: 'Acceso Libre al Predio',
+    dispatchCode: 'Premise ACS: N / Sin Restricciones',
+    category: 'Condición de Acceso',
+    colorClasses: {
+      badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+      glow: 'shadow-emerald-500/20',
+      accent: 'text-emerald-400'
+    },
+    aiPattern: 'Premise ACS = N o ausencia de restricciones de premisa (RQHM, DOG, GATE, CALL)',
+    description: 'El predio o patio no tiene portones cerrados, candados, perros ni requisitos de presencia del cliente reportados.',
+    fieldTips: 'Puedes ingresar de manera directa al patio para tender y enterrar la línea sin necesidad de esperar al cliente.'
+  },
+  'access-call': {
+    key: 'access-call',
+    icon: '📞',
+    title: 'Llamar Antes de Entrar',
+    dispatchCode: 'CALLFIRST / Premise ACS: CALL',
+    category: 'Condición de Acceso',
+    colorClasses: {
+      badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+      glow: 'shadow-cyan-500/20',
+      accent: 'text-cyan-400'
+    },
+    aiPattern: 'Token CALLFIRST, CALL: o campo call_first = true con número telefónico',
+    description: 'El cliente o despacho exige una llamada telefónica previa antes de que el técnico ingrese a la propiedad.',
+    fieldTips: 'Llama al cliente unos 10-15 minutos antes de llegar para avisarle que vas a acceder al patio a realizar el drop bury.'
+  },
+  'access-rqhm': {
+    key: 'access-rqhm',
+    icon: '🏠',
+    title: 'Cliente en Casa Requerido',
+    dispatchCode: 'Premise ACS: RQHM (Require Homeowner)',
+    category: 'Condición de Acceso',
+    colorClasses: {
+      badge: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+      glow: 'shadow-blue-500/20',
+      accent: 'text-blue-400'
+    },
+    aiPattern: 'Sigla RQHM en columna Premise ACS o en las notas de despacho',
+    description: 'El cliente debe estar físicamente en la casa para autorizar el paso, abrir accesos interiores o firmar la orden.',
+    fieldTips: 'Toca el timbre o llama al cliente apenas llegues. Si nadie responde, no ingreses al patio trasero sin autorización expresa.'
+  },
+  'access-dog': {
+    key: 'access-dog',
+    icon: '🐕',
+    title: 'Perro en la Propiedad',
+    dispatchCode: 'Premise ACS: DOG / DOGS',
+    category: 'Condición de Acceso',
+    colorClasses: {
+      badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+      glow: 'shadow-rose-500/20',
+      accent: 'text-rose-400'
+    },
+    aiPattern: 'Palabra DOG o DOGS en Premise ACS o en notas de terreno',
+    description: 'Se reportó la presencia de perro(s) en el patio o terreno donde debe enterrarse la línea.',
+    fieldTips: 'Verifica visualmente desde afuera de la cerca antes de abrir el portón. Si el perro está suelto, solicita al cliente que lo guarde.'
+  },
+  'access-gate': {
+    key: 'access-gate',
+    icon: '🔒',
+    title: 'Portón Cerrado / Candado',
+    dispatchCode: 'Premise ACS: GATE / LOCK',
+    category: 'Condición de Acceso',
+    colorClasses: {
+      badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+      glow: 'shadow-amber-500/20',
+      accent: 'text-amber-400'
+    },
+    aiPattern: 'Términos GATE, LOCK, PORTÓN o CANDADO en Premise ACS o notas',
+    description: 'El patio trasero cuenta con portón con candado, pestillo cerrado o reja de seguridad.',
+    fieldTips: 'Revisa las notas del trabajo por si el cliente dejó un código de candado numérico (ej. 4421). Si está cerrado, contacta al cliente.'
+  },
+  'neighbor-crossing': {
+    key: 'neighbor-crossing',
+    icon: '👥',
+    title: 'Cruce de Servidumbre Vecinal',
+    dispatchCode: 'NBR: 1 / NBR: 2 / NBR: Y / NB: 1',
+    category: 'Servidumbre y Vecinos',
+    colorClasses: {
+      badge: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+      glow: 'shadow-purple-500/20',
+      accent: 'text-purple-400'
+    },
+    aiPattern: 'Token NBR o NB con número de vecinos (ej. NBR:1 = 1 vecino)',
+    description: 'La trayectoria de la acometida/cable pasa obligatoriamente por la propiedad de uno o más vecinos contiguos.',
+    fieldTips: 'Respeta la servidumbre de servicios públicos (easement). Cuida el césped del vecino y deja el terreno limpio e intacto.'
+  },
+  'obs-landsc': {
+    key: 'obs-landsc',
+    icon: '🌿',
+    title: 'Jardinería Delicada',
+    dispatchCode: 'Obstacles: LANDSC / LANS / LA',
+    category: 'Obstáculos de Terreno',
+    colorClasses: {
+      badge: 'bg-emerald-600/20 text-emerald-300 border-emerald-600/40',
+      glow: 'shadow-emerald-600/20',
+      accent: 'text-emerald-400'
+    },
+    aiPattern: 'Token LANDSC o LANS en la columna Obstacles o notas',
+    description: 'El terreno tiene canteros de flores, arbustos decorativos, mulch o plantas delicadas en la trayectoria del cable.',
+    fieldTips: 'Evita meter la máquina sobre canteros ornamentales; abre la zanja a mano con pala plana y recoloca el mulch o la tierra.'
+  },
+  'obs-sprklr': {
+    key: 'obs-sprklr',
+    icon: '💦',
+    title: 'Aspersores de Riego',
+    dispatchCode: 'Obstacles: SPRKLR / SPRKL',
+    category: 'Obstáculos de Terreno',
+    colorClasses: {
+      badge: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+      glow: 'shadow-sky-500/20',
+      accent: 'text-sky-400'
+    },
+    aiPattern: 'Token SPRKLR o SPRKL en la columna de Obstacles',
+    description: 'Sistema de tuberías plásticas y cabezales de riego subterráneo enterrados en el césped a baja profundidad.',
+    fieldTips: 'Extrema precaución al enterrar el drop. Si ves cabezales de aspersor, traza una ruta que mantenga distancia para no romper tuberías.'
+  },
+  'temp-cable': {
+    key: 'temp-cable',
+    icon: '⚡',
+    title: 'Cable Temporal Superficial',
+    dispatchCode: 'TEMP: Y',
+    category: 'Estado de la Línea',
+    colorClasses: {
+      badge: 'bg-amber-600/20 text-amber-300 border-amber-600/40',
+      glow: 'shadow-amber-600/20',
+      accent: 'text-amber-400'
+    },
+    aiPattern: 'Token TEMP:Y en especificaciones técnicas de la orden',
+    description: 'El técnico instalador previo ya dejó un cable temporal RG-6 o RG-11 tendido sobre la hierba para dar servicio provisional.',
+    fieldTips: 'Verifica la ruta del cable temporal antes de empezar. El trabajo consiste en enterrar permanentemente esa línea o reemplazarla si está dañada.'
+  },
+  'obs-privlite': {
+    key: 'obs-privlite',
+    icon: '💡',
+    title: 'Luces Privadas Subterráneas',
+    dispatchCode: 'Obstacles: PRIVLITE / PRIV',
+    category: 'Obstáculos de Terreno',
+    colorClasses: {
+      badge: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+      glow: 'shadow-indigo-500/20',
+      accent: 'text-indigo-400'
+    },
+    aiPattern: 'Token PRIVLITE en Obstacles (Private Lighting)',
+    description: 'El cliente instaló cables de iluminación privada, faroles de entrada o reflectores enterrados por su cuenta.',
+    fieldTips: 'Recuerda que el 811 NO marca cables privados. Cava con cuidado en zonas cercanas a faroles, senderos o entradas de vehículos.'
+  },
+  'human-note': {
+    key: 'human-note',
+    icon: '📝',
+    title: 'Observaciones de Despacho',
+    dispatchCode: 'REMARK: / REMARKS: / Notas Libres',
+    category: 'Indicaciones Especiales',
+    colorClasses: {
+      badge: 'bg-slate-700/30 text-slate-200 border-slate-600/50',
+      glow: 'shadow-slate-500/10',
+      accent: 'text-slate-300'
+    },
+    aiPattern: 'Texto redactado por despachadores o clientes filtrado por IA',
+    description: 'Instrucciones específicas escritas por despacho (código de candado, ubicación del pedestal, advertencias especiales).',
+    fieldTips: 'Lee atentamente el texto completo para seguir las indicaciones precisas del cliente o de la empresa.'
+  }
+};
+
+/**
+ * Obtiene la información detallada, técnica y operacional de un badge,
+ * contextualizada opcionalmente con los datos de una orden específica.
+ */
+export function getBadgeDetailedInfo(badgeKeyOrType, order = null) {
+  let key = badgeKeyOrType;
+  if (typeof badgeKeyOrType === 'object' && badgeKeyOrType !== null) {
+    key = badgeKeyOrType.key || badgeKeyOrType.type;
+  }
+  const def = BADGE_DEFINITIONS[key] || {
+    key: key || 'unknown',
+    icon: 'ℹ️',
+    title: 'Detalle de Alerta',
+    dispatchCode: 'Código Xfinity',
+    category: 'Información de Campo',
+    colorClasses: {
+      badge: 'bg-slate-800 text-slate-300 border-slate-700',
+      glow: 'shadow-slate-500/20',
+      accent: 'text-slate-300'
+    },
+    aiPattern: 'Detección automática por AuraCore-AI',
+    description: 'Indicador de terreno o condición técnica detectada en la hoja de despacho.',
+    fieldTips: 'Consulta con tu supervisor si tienes dudas sobre esta especificación.'
+  };
+
+  let orderContext = null;
+  if (order) {
+    const rawNotesStr = String(order.raw_notes || '');
+    let matchedRaw = '';
+    if (key === 'priority-red') {
+      matchedRaw = order.is_priority ? 'is_priority: 1 (Fila/celda en color rojo)' : 'Sin prioridad marcada';
+    } else if (key === 'access-free') {
+      matchedRaw = `premise_access: ${order.premise_access || 'N'} (Sin restricciones reportadas)`;
+    } else if (key === 'access-call') {
+      matchedRaw = `call_first: ${Boolean(order.call_first)} • Tel: ${order.phone || 'No reportado'}`;
+    } else if (key === 'access-rqhm') {
+      matchedRaw = `premise_access: RQHM (Cliente en casa requerido)`;
+    } else if (key === 'access-dog') {
+      matchedRaw = `premise_access: DOG (Perro reportado en predio)`;
+    } else if (key === 'access-gate') {
+      matchedRaw = `premise_access: GATE (Portón/candado reportado)`;
+    } else if (key === 'neighbor-crossing') {
+      matchedRaw = `neighbor_notice: ${order.neighbor_notice || 'N'} (${order.neighbor_notice === '1' ? '1 vecino' : order.neighbor_notice === '2' ? '2 vecinos' : 'Cruce requerido'})`;
+    } else if (key.startsWith('obs-')) {
+      matchedRaw = `obstacles: ${order.obstacles || 'N'}`;
+    } else if (key === 'temp-cable') {
+      matchedRaw = `is_temp: ${Boolean(order.is_temp)} (Cable temporal superficial)`;
+    } else if (key === 'human-note') {
+      matchedRaw = rawNotesStr || 'Sin notas adicionales';
+    }
+
+    orderContext = {
+      jobId: order.job_id || 'Sin Job ID',
+      address: order.address || 'Sin dirección',
+      city: order.city || '',
+      phone: order.phone || '',
+      cableType: order.cable_type || 'RG-6',
+      footage: order.drop_footage || 0,
+      isPriority: Boolean(order.is_priority),
+      matchedRaw,
+      rawNotes: rawNotesStr
+    };
+  }
+
+  return {
+    ...def,
+    orderContext
+  };
+}

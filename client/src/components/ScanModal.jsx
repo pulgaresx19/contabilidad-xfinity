@@ -8,6 +8,7 @@ import { interactWithAuraCore } from '../services/auraService';
 import { cleanRawNotes, getOrderFieldBadges } from '../utils/remarkUtils';
 import { compressImage, detectPriorityRowIndices } from '../services/imageUtils';
 import ZoomableImageViewer from './ZoomableImageViewer';
+import BadgeDetailModal from './BadgeDetailModal';
 
 export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech }) {
   const [sheetDate, setSheetDate] = useState(() => getLocalDateStr());
@@ -29,6 +30,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
   const [rawAiText, setRawAiText] = useState('');
   const [showRawText, setShowRawText] = useState(false);
   const [showFullPhoto, setShowFullPhoto] = useState(false);
+  const [badgeModalData, setBadgeModalData] = useState(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -714,6 +716,25 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
           onClose={() => setShowFullPhoto(false)}
         />
       )}
+
+      {/* Modal Sobrepuesto: Explicación y Deducción de la IA de cada Badge */}
+      {badgeModalData && (
+        <BadgeDetailModal
+          isOpen={Boolean(badgeModalData)}
+          badgeKey={badgeModalData.badgeKey}
+          order={badgeModalData.order}
+          onClose={() => setBadgeModalData(null)}
+          onTogglePriority={(ord) => {
+            if (badgeModalData.orderIndex !== undefined && badgeModalData.orderIndex !== null) {
+              updateOrderField(
+                badgeModalData.orderIndex,
+                'is_priority',
+                ord.is_priority ? 0 : 1
+              );
+            }
+          }}
+        />
+      )}
     </div>
   );
 
@@ -771,54 +792,114 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
               <span>🔍</span>
               <span>Detección IA:</span>
             </span>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 shrink-0 font-bold" title="Marcado en rojo en la hoja de despacho: trabajo obligatorio">
+            <button
+              type="button"
+              onClick={() => setBadgeModalData({ badgeKey: 'priority-red' })}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 shrink-0 font-bold cursor-pointer transition active:scale-95"
+              title="Toca para ver qué deduce la IA de Prioritario"
+            >
               <span>🔴</span>
               <span>Prioritario</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 shrink-0 font-medium" title="Predio sin restricciones reportadas">
+            </button>
+            <button
+              type="button"
+              onClick={() => setBadgeModalData({ badgeKey: 'access-free' })}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 shrink-0 font-medium cursor-pointer transition active:scale-95"
+              title="Toca para ver qué deduce la IA de Acceso libre"
+            >
               <span>🟢</span>
               <span>Acceso libre</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 shrink-0 font-semibold" title="Llamar al cliente antes de entrar a la propiedad (CALLFIRST)">
+            </button>
+            <button
+              type="button"
+              onClick={() => setBadgeModalData({ badgeKey: 'access-call' })}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
+              title="Toca para ver qué deduce la IA de Llamar 1ro"
+            >
               <span>📞</span>
               <span>Llamar 1ro</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-300 shrink-0 font-semibold" title="Cliente en casa requerido para trabajar (RQHM)">
+            </button>
+            <button
+              type="button"
+              onClick={() => setBadgeModalData({ badgeKey: 'access-rqhm' })}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
+              title="Toca para ver qué deduce la IA de Req. Cliente"
+            >
               <span>🏠</span>
               <span>Req. Cliente</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 shrink-0 font-semibold" title="Perro en propiedad: precaución (DOG)">
+            </button>
+            <button
+              type="button"
+              onClick={() => setBadgeModalData({ badgeKey: 'access-dog' })}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
+              title="Toca para ver qué deduce la IA de Perro"
+            >
               <span>🐕</span>
               <span>Perro</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 shrink-0 font-semibold" title="Portón cerrado o con candado (GATE / LOCK)">
+            </button>
+            <button
+              type="button"
+              onClick={() => setBadgeModalData({ badgeKey: 'access-gate' })}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
+              title="Toca para ver qué deduce la IA de Portón"
+            >
               <span>🔒</span>
               <span>Portón</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-300 shrink-0 font-semibold" title="Cruce de servidumbre por propiedad de vecinos (NBR / NB)">
+            </button>
+            <button
+              type="button"
+              onClick={() => setBadgeModalData({ badgeKey: 'neighbor-crossing' })}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
+              title="Toca para ver qué deduce la IA de Cruce Vecinos"
+            >
               <span>👥</span>
               <span>Cruce Vecinos</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-600/15 border border-emerald-600/30 text-emerald-300 shrink-0 font-semibold" title="Jardinería delicada / plantas (LANDSC)">
+            </button>
+            <button
+              type="button"
+              onClick={() => setBadgeModalData({ badgeKey: 'obs-landsc' })}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-600/30 text-emerald-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
+              title="Toca para ver qué deduce la IA de Jardinería"
+            >
               <span>🌿</span>
               <span>Jardinería</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-500/15 border border-sky-500/30 text-sky-300 shrink-0 font-semibold" title="Aspersores de riego enterrados en césped (SPRKLR)">
+            </button>
+            <button
+              type="button"
+              onClick={() => setBadgeModalData({ badgeKey: 'obs-sprklr' })}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
+              title="Toca para ver qué deduce la IA de Aspersores"
+            >
               <span>💦</span>
               <span>Aspersores</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-600/15 border border-amber-600/30 text-amber-300 shrink-0 font-semibold" title="Cable o línea temporal tendida en superficie (TEMP:Y)">
+            </button>
+            <button
+              type="button"
+              onClick={() => setBadgeModalData({ badgeKey: 'temp-cable' })}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-600/15 hover:bg-amber-600/25 border border-amber-600/30 text-amber-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
+              title="Toca para ver qué deduce la IA de Línea Temp"
+            >
               <span>⚡</span>
               <span>Línea Temp</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 shrink-0 font-semibold" title="Iluminación o cableado privado subterráneo (PRIVLITE)">
+            </button>
+            <button
+              type="button"
+              onClick={() => setBadgeModalData({ badgeKey: 'obs-privlite' })}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
+              title="Toca para ver qué deduce la IA de Luz Privada"
+            >
               <span>💡</span>
               <span>Luz Privada</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-700/40 border border-slate-600/40 text-slate-300 shrink-0 font-semibold" title="Notas u observaciones de despacho (código de portón, etc.)">
+            </button>
+            <button
+              type="button"
+              onClick={() => setBadgeModalData({ badgeKey: 'human-note' })}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-700/40 hover:bg-slate-700/60 border border-slate-600/40 text-slate-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
+              title="Toca para ver qué deduce la IA de Notas / Códigos"
+            >
               <span>📝</span>
               <span>Notas / Código</span>
-            </div>
+            </button>
           </div>
         </div>
 
@@ -950,7 +1031,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                   />
                 </div>
 
-                {/* Badges de Campo: Solo Iconos de lo detectado con Tooltip descriptivo */}
+                {/* Badges de Campo: Solo Iconos de lo detectado con Modal Informativo al pulsar */}
                 <div className="flex items-center gap-1 flex-wrap">
                   {getOrderFieldBadges(o).map((badge) => {
                     if (badge.type === 'priority') {
@@ -958,9 +1039,9 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                         <button
                           key={badge.key}
                           type="button"
-                          onClick={() => updateOrderField(idx, 'is_priority', o.is_priority ? 0 : 1)}
+                          onClick={() => setBadgeModalData({ badgeKey: badge.key, badge, order: o, orderIndex: idx })}
                           className="h-6 w-6 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/50 flex items-center justify-center text-[12px] cursor-pointer transition active:scale-90 shadow-xs shrink-0"
-                          title="🔴 Trabajo Prioritario (Toca para alternar)"
+                          title="🔴 Trabajo Prioritario (Toca para ver deducción o alternar)"
                         >
                           <span>🔴</span>
                         </button>
@@ -968,46 +1049,50 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                     }
                     if (badge.type === 'note') {
                       return (
-                        <div
+                        <button
                           key={badge.key}
-                          className="h-6 px-1.5 rounded-lg bg-[#0b1017] border border-white/10 text-slate-300 text-[10px] flex items-center gap-1 max-w-[130px] sm:max-w-[160px] truncate shadow-xs shrink-0"
-                          title={`📝 Observaciones de Despacho: ${badge.text}`}
+                          type="button"
+                          onClick={() => setBadgeModalData({ badgeKey: badge.key, badge, order: o, orderIndex: idx })}
+                          className="h-6 px-1.5 rounded-lg bg-[#0b1017] hover:bg-white/10 border border-white/10 text-slate-300 text-[10px] flex items-center gap-1 max-w-[130px] sm:max-w-[160px] truncate shadow-xs shrink-0 cursor-pointer transition active:scale-95"
+                          title={`📝 Observaciones de Despacho: ${badge.text} (Toca para ver detalle)`}
                         >
                           <span className="shrink-0 text-[11px]">📝</span>
                           <span className="truncate font-mono text-[9px] text-slate-300">{badge.text}</span>
-                        </div>
+                        </button>
                       );
                     }
                     return (
-                      <div
+                      <button
                         key={badge.key}
-                        className={`h-6 w-6 rounded-lg border flex items-center justify-center text-[12px] select-none shadow-xs shrink-0 ${
+                        type="button"
+                        onClick={() => setBadgeModalData({ badgeKey: badge.key, badge, order: o, orderIndex: idx })}
+                        className={`h-6 w-6 rounded-lg border flex items-center justify-center text-[12px] select-none shadow-xs shrink-0 cursor-pointer hover:scale-110 active:scale-90 transition ${
                           badge.key === 'access-free'
-                            ? 'bg-emerald-500/15 border-emerald-500/30'
+                            ? 'bg-emerald-500/15 border-emerald-500/30 hover:bg-emerald-500/25'
                             : badge.key === 'access-call'
-                            ? 'bg-cyan-500/15 border-cyan-500/30'
+                            ? 'bg-cyan-500/15 border-cyan-500/30 hover:bg-cyan-500/25'
                             : badge.key === 'access-dog'
-                            ? 'bg-rose-500/15 border-rose-500/30'
+                            ? 'bg-rose-500/15 border-rose-500/30 hover:bg-rose-500/25'
                             : badge.key === 'access-gate'
-                            ? 'bg-amber-500/15 border-amber-500/30'
+                            ? 'bg-amber-500/15 border-amber-500/30 hover:bg-amber-500/25'
                             : badge.key === 'access-rqhm'
-                            ? 'bg-blue-500/15 border-blue-500/30'
+                            ? 'bg-blue-500/15 border-blue-500/30 hover:bg-blue-500/25'
                             : badge.key === 'neighbor-crossing'
-                            ? 'bg-purple-500/15 border-purple-500/30'
+                            ? 'bg-purple-500/15 border-purple-500/30 hover:bg-purple-500/25'
                             : badge.key === 'obs-landsc'
-                            ? 'bg-emerald-600/15 border-emerald-600/30'
+                            ? 'bg-emerald-600/15 border-emerald-600/30 hover:bg-emerald-600/25'
                             : badge.key === 'obs-sprklr'
-                            ? 'bg-sky-500/15 border-sky-500/30'
+                            ? 'bg-sky-500/15 border-sky-500/30 hover:bg-sky-500/25'
                             : badge.key === 'temp-cable'
-                            ? 'bg-amber-600/15 border-amber-600/30'
+                            ? 'bg-amber-600/15 border-amber-600/30 hover:bg-amber-600/25'
                             : badge.key === 'obs-privlite'
-                            ? 'bg-indigo-500/15 border-indigo-500/30'
-                            : 'bg-white/5 border-white/10'
+                            ? 'bg-indigo-500/15 border-indigo-500/30 hover:bg-indigo-500/25'
+                            : 'bg-white/5 border-white/10 hover:bg-white/10'
                         }`}
-                        title={`${badge.icon} ${badge.text}${badge.tooltip ? ` • ${badge.tooltip}` : ''}`}
+                        title={`${badge.icon} ${badge.text} (Toca para ver detalles y deducción de IA)`}
                       >
                         <span>{badge.icon}</span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
