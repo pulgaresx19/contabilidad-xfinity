@@ -75,6 +75,25 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
 
   const currentOption = WEEK_DAYS.find(o => o.id === String(settings.cutoff_day)) || WEEK_DAYS[6]; // default Domingo (id: '0')
 
+  const updateSmsTemplate = (newVal) => {
+    setSettings((prev) => {
+      const next = { ...prev, sms_template: newVal };
+      try {
+        const cached = JSON.parse(localStorage.getItem('xfinity_cached_settings') || '{}');
+        localStorage.setItem(
+          'xfinity_cached_settings',
+          JSON.stringify({ ...cached, ...next, sms_template: newVal || DEFAULT_SMS_TEMPLATE })
+        );
+      } catch (_) {}
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sms_template: newVal && String(newVal).trim() ? String(newVal).trim() : DEFAULT_SMS_TEMPLATE })
+      }).catch(() => {});
+      return next;
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -382,12 +401,12 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             </div>
           </div>
 
-          {/* 5. MENSAJE AUTOMÁTICO SMS AL CLIENTE */}
+          {/* 5. MENSAJE AUTOMÁTICO (SMS) */}
           <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                <MessageSquare className="h-4 w-4" />
-                <span>Mensaje Automático SMS (Cliente)</span>
+                <MessageSquare className="h-4 w-4 shrink-0" />
+                <span>Mensaje automático (SMS)</span>
               </span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 whitespace-nowrap">
                 Auto-Envío
@@ -402,12 +421,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             <div className="grid grid-cols-3 gap-1.5">
               <button
                 type="button"
-                onClick={() =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    sms_template: `${prev.sms_template || ''} (Dirección)`.trim()
-                  }))
-                }
+                onClick={() => updateSmsTemplate(`${settings.sms_template || ''} (Dirección)`.trim())}
                 className="py-1.5 px-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 text-[9.5px] sm:text-[10px] font-mono font-bold flex items-center justify-center whitespace-nowrap transition cursor-pointer active:scale-95"
                 title="Insertar marcador de dirección del cliente"
               >
@@ -416,12 +430,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
 
               <button
                 type="button"
-                onClick={() =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    sms_template: `${prev.sms_template || ''} (Operador)`.trim()
-                  }))
-                }
+                onClick={() => updateSmsTemplate(`${settings.sms_template || ''} (Operador)`.trim())}
                 className="py-1.5 px-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[9.5px] sm:text-[10px] font-mono font-bold flex items-center justify-center whitespace-nowrap transition cursor-pointer active:scale-95"
                 title="Insertar marcador de nombre del operador"
               >
@@ -430,7 +439,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
 
               <button
                 type="button"
-                onClick={() => setSettings((prev) => ({ ...prev, sms_template: DEFAULT_SMS_TEMPLATE }))}
+                onClick={() => updateSmsTemplate(DEFAULT_SMS_TEMPLATE)}
                 className="py-1.5 px-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-[9.5px] sm:text-[10px] font-semibold flex items-center justify-center gap-1 whitespace-nowrap transition cursor-pointer active:scale-95"
                 title="Restaurar mensaje predeterminado"
               >
@@ -442,7 +451,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             <textarea
               rows={5}
               value={settings.sms_template || ''}
-              onChange={(e) => setSettings({ ...settings, sms_template: e.target.value })}
+              onChange={(e) => updateSmsTemplate(e.target.value)}
               placeholder={DEFAULT_SMS_TEMPLATE}
               className="w-full bg-[#0f1722] border border-white/10 rounded-xl p-3 text-xs text-white font-sans leading-relaxed focus:outline-none focus:border-cyan-500 transition shadow-inner resize-y"
             />
