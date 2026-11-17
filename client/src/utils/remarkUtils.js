@@ -103,7 +103,7 @@ export function getOrderFieldBadges(order) {
       icon: '🏠',
       text: 'Req. Cliente',
       tooltip: 'Cliente en casa requerido para realizar el trabajo (RQHM)',
-      className: 'bg-blue-950/40 text-blue-300 border-blue-500/30'
+      className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
     });
   } else if (pa === 'DOG' || /\bDOGS?\b/i.test(rawNotesStr)) {
     badges.push({
@@ -112,7 +112,7 @@ export function getOrderFieldBadges(order) {
       icon: '🐕',
       text: 'Perro',
       tooltip: 'Perro en la propiedad: Precaución al ingresar',
-      className: 'bg-rose-950/40 text-rose-300 border-rose-500/30'
+      className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
     });
   } else if (pa.includes('GATE') || pa.includes('LOCK') || /(?:PORT[OÓ]N|CANDADO|LOCKED\s*GATE)/i.test(rawNotesStr)) {
     badges.push({
@@ -121,7 +121,7 @@ export function getOrderFieldBadges(order) {
       icon: '🔒',
       text: 'Portón',
       tooltip: 'Portón cerrado o con candado / reja trasera',
-      className: 'bg-amber-950/40 text-amber-300 border-amber-500/30'
+      className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
     });
   } else if (pa === 'CALL' || /\bCALLFIRST\b/i.test(rawNotesStr) || order.call_first === 1 || order.call_first === true) {
     badges.push({
@@ -130,7 +130,7 @@ export function getOrderFieldBadges(order) {
       icon: '📞',
       text: 'Llamar 1ro',
       tooltip: 'Llamar al cliente antes de entrar a la propiedad',
-      className: 'bg-cyan-950/40 text-cyan-300 border-cyan-500/30'
+      className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
     });
   } else {
     // Acceso completamente libre (predeterminado)
@@ -140,7 +140,7 @@ export function getOrderFieldBadges(order) {
       icon: '🟢',
       text: 'Acceso libre',
       tooltip: 'Acceso libre a la propiedad sin restricciones reportadas',
-      className: 'bg-emerald-950/30 text-emerald-300 border-emerald-500/25'
+      className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
     });
   }
 
@@ -165,7 +165,7 @@ export function getOrderFieldBadges(order) {
       icon: '👥',
       text: `Cruce: ${countText}`,
       tooltip: `Cruce de servidumbre requerido: pasa por la propiedad de ${countText}`,
-      className: 'bg-purple-950/40 text-purple-300 border-purple-500/35 font-semibold shadow-2xs'
+      className: 'bg-slate-800/70 text-slate-300 border-slate-700/60 font-semibold shadow-2xs'
     });
   }
 
@@ -183,7 +183,7 @@ export function getOrderFieldBadges(order) {
               icon: '🌿',
               text: 'Jardinería',
               tooltip: 'Jardinería delicada: Cuidar plantas y canteros',
-              className: 'bg-teal-950/30 text-teal-300 border-teal-500/25'
+              className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
             });
           }
         } else if (tok.includes('SPRKLR') || tok.includes('SPRKL')) {
@@ -194,7 +194,7 @@ export function getOrderFieldBadges(order) {
               icon: '💦',
               text: 'Aspersores',
               tooltip: 'Sistema de aspersores de riego enterrados en el césped',
-              className: 'bg-sky-950/30 text-sky-300 border-sky-500/25'
+              className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
             });
           }
         }
@@ -214,7 +214,7 @@ export function getOrderFieldBadges(order) {
       icon: '⚡',
       text: 'Línea Temp',
       tooltip: 'Cable temporal superficial ya tendido en el terreno',
-      className: 'bg-amber-950/30 text-amber-300 border-amber-500/25'
+      className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
     });
   }
 
@@ -233,7 +233,7 @@ export function getOrderFieldBadges(order) {
         tagClassName: 'text-amber-400 text-[9px] uppercase tracking-wider font-semibold',
         text: cleanedNotes,
         tooltip: `Nota del despacho: ${cleanedNotes}`,
-        className: 'bg-slate-800/80 text-slate-300 border-slate-700/60 max-w-xs sm:max-w-sm truncate'
+        className: 'bg-slate-800/70 text-slate-300 border-slate-700/60 max-w-xs sm:max-w-sm truncate'
       });
     }
   }

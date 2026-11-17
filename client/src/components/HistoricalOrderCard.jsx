@@ -118,64 +118,62 @@ export default function HistoricalOrderCard({
         </div>
       </div>
 
-      {/* FILA 3: ESPECIFICACIONES TÉCNICAS (Acceso SIEMPRE DE PRIMERO, Metraje + Cable + Bore + Bonos) */}
+      {/* FILA 3: ESPECIFICACIONES TÉCNICAS (Drop, Cable, Bore, Bonos, luego Reman / Alertas por Prioridad) */}
       <div className="flex items-center gap-1.5 text-[10px] overflow-x-auto scrollbar-none py-0.5 whitespace-nowrap">
-        {/* 1. Badges de Campo Especializados (Acceso SIEMPRE DE PRIMERO: 🟢 Acceso libre, Cruce, etc.) */}
-        {getOrderFieldBadges(order).map((b) => (
-          <span 
-            key={b.key}
-            className={`shrink-0 px-2 py-0.5 rounded-md border text-[10px] font-medium flex items-center gap-1 shadow-2xs ${b.className}`}
-            title={b.tooltip}
-          >
-            {b.icon && <span className="shrink-0">{b.icon}</span>}
-            {b.tag && <span className={b.tagClassName}>{b.tag}</span>}
-            <span>{b.text}</span>
-          </span>
-        ))}
-
-        {/* 2. Drop Footage */}
+        {/* 1. Metraje del Drop (Siempre Primero) */}
         <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 font-mono flex items-center gap-1">
           <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Drop</span>
           <span className="font-bold text-slate-100">{order.drop_footage || 0} ft</span>
         </span>
 
-        {/* 3. Cable */}
+        {/* 2. Tipo de Cable (Segundo) */}
         <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 font-mono flex items-center gap-1">
           <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Cable</span>
           <span className="font-semibold text-slate-200">{order.cable_type || 'RG-6'}</span>
         </span>
 
-        {/* 4. Bore DW */}
+        {/* 3. Perforación / Driveway Bore */}
         {hasDrivewayBore ? (
-          <span className="shrink-0 bg-cyan-950/30 text-cyan-300 px-2 py-0.5 rounded-md border border-cyan-500/25 font-medium flex items-center gap-1">
+          <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-medium flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
             <span>DW Bore</span>
-            <span className="text-cyan-400/80 font-mono text-[9px]">(+$30)</span>
+            <span className="text-slate-400 font-mono text-[9px]">(+$30)</span>
           </span>
         ) : order.bore_type && order.bore_type !== 'N' ? (
-          <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 font-mono flex items-center gap-1">
+          <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-mono flex items-center gap-1">
             <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Bore</span>
             <span className="font-semibold text-slate-200">{order.bore_type}</span>
           </span>
         ) : null}
 
-        {/* 5. Extra Footage Bonus (>300 ft) */}
+        {/* 4. Extra Footage Bonus (>300 ft) */}
         {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
-          <span className="shrink-0 bg-emerald-950/30 text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-500/25 font-mono font-medium flex items-center gap-1">
-            <span className="text-emerald-400/80 font-sans text-[9px] font-bold">+Drop</span>
-            <span className="font-bold">${Math.floor((order.drop_footage - 300) / 100) * 25}</span>
+          <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-mono font-medium flex items-center gap-1">
+            <span className="text-emerald-400 font-sans text-[9px] font-bold">+Drop</span>
+            <span className="font-bold text-slate-200">${Math.floor((order.drop_footage - 300) / 100) * 25}</span>
           </span>
         )}
 
-        {/* 6. Manual Adjustment */}
+        {/* 5. Ajuste Manual de Tarifa */}
         {order.manual_adjustment !== undefined && Number(order.manual_adjustment) !== 0 && (
-          <span className={`shrink-0 px-2 py-0.5 rounded-md font-mono text-[10px] font-medium border flex items-center gap-1 ${
-            order.manual_adjustment > 0 ? 'bg-cyan-950/30 text-cyan-300 border-cyan-500/25' : 'bg-amber-950/30 text-amber-300 border-amber-500/25'
-          }`}>
-            <Sparkles className="h-2.5 w-2.5 opacity-80" />
-            <span>{order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}</span>
+          <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 font-mono text-[10px] font-medium flex items-center gap-1">
+            <Sparkles className="h-2.5 w-2.5 text-cyan-400 opacity-90" />
+            <span className="text-slate-200">{order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}</span>
           </span>
         )}
+
+        {/* 6. Badges de Campo / Reman por Prioridad (Acceso, Cruce de Vecinos, Obstáculos, Notas) */}
+        {getOrderFieldBadges(order).map((b) => (
+          <span 
+            key={b.key}
+            className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 text-[10px] font-medium flex items-center gap-1 shadow-2xs"
+            title={b.tooltip}
+          >
+            {b.icon && <span className="shrink-0">{b.icon}</span>}
+            {b.tag && <span className="text-amber-400/90 text-[9px] uppercase tracking-wider font-semibold">{b.tag}</span>}
+            <span>{b.text}</span>
+          </span>
+        ))}
       </div>
 
       {/* FILA 4: ESPACIO VISUAL UNIFICADO (Mismo alto exacto h-12 sm:h-14 en todos los estados) */}
