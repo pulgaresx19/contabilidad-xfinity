@@ -316,7 +316,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, onJ
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-5 animate-fade-in modal-overlay-safe"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-5 animate-fade-in modal-overlay-safe"
       style={{
         paddingTop: 'max(env(safe-area-inset-top, 0px) + 24px, 1.75rem)',
         paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 24px, 1.75rem)'

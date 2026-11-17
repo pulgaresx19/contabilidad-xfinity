@@ -959,6 +959,7 @@ ${weeksLines || '  (No hay semanas registradas)'}
                     onOpenPhotos={onOpenPhotos}
                     onEditOrder={setEditingOrder}
                     onCopyClaim={copySingleJobClaim}
+                    onShareReport={setReportOrder}
                     onSelectPhoto={setSelectedPhoto}
                     isCopied={copiedJobId === order.id}
                   />

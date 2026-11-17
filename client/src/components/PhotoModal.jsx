@@ -336,7 +336,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-3.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
       style={{
         paddingTop: 'max(env(safe-area-inset-top, 0px) + 16px, 1.25rem)',
         paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'

@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  MapPin, Sparkles, AlertTriangle, Camera, Copy, Pencil, Maximize2, Check
+  MapPin, Sparkles, AlertTriangle, Camera, Copy, Pencil, Maximize2, Check, Share2, CheckCheck
 } from 'lucide-react';
 import { getOrderRemark } from '../utils/remarkUtils';
 
@@ -10,6 +10,7 @@ export default function HistoricalOrderCard({
   onOpenPhotos,
   onEditOrder,
   onCopyClaim,
+  onShareReport,
   onSelectPhoto,
   isCopied = false
 }) {
@@ -33,7 +34,7 @@ export default function HistoricalOrderCard({
   const orderRemark = getOrderRemark(order);
 
   return (
-    <div className="bg-[#131b26] border border-white/10 hover:border-cyan-500/35 rounded-2xl p-3.5 space-y-2 text-xs shadow-md transition group select-none">
+    <div className="bg-[#131b26] border border-white/10 hover:border-cyan-500/35 rounded-2xl p-3.5 space-y-2.5 text-xs shadow-md transition group select-none">
       {/* FILA 1: ENCABEZADO (Número de Parada/Check + Job ID + Fecha | Medallón de Tarifa) */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -58,7 +59,7 @@ export default function HistoricalOrderCard({
           )}
         </div>
 
-        {/* Medallón de Dinero Profesional / Tarifa (Idéntico a Cierre Diario) */}
+        {/* Medallón de Tarifa Profesional */}
         <div 
           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border shadow-sm select-none shrink-0 ${
             isCancelled
@@ -112,21 +113,37 @@ export default function HistoricalOrderCard({
         </div>
       </div>
 
-      {/* FILA 3: ESPECIFICACIONES TÉCNICAS Y NOTA DE ACCESO (Idéntico a Cierre Diario) */}
+      {/* FILA 3: ESPECIFICACIONES TÉCNICAS (Contador de Fotos Adelante + Metraje + Cable + Bore + Nota) */}
       <div className="flex items-center gap-1.5 text-[10px] overflow-x-auto scrollbar-none py-0.5 whitespace-nowrap">
-        {/* Drop */}
+        {/* 1. Contador de Fotos adelante de los pies */}
+        {photosCount > 0 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenPhotos && onOpenPhotos(order);
+            }}
+            className="shrink-0 bg-slate-800/90 hover:bg-slate-700/90 text-cyan-300 px-2 py-0.5 rounded-md border border-cyan-500/30 text-[10px] font-medium flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-2xs"
+            title={`${photosCount} foto(s) de evidencia archivada(s). Toca para ver o gestionar.`}
+          >
+            <Camera className="h-3 w-3 text-cyan-400 shrink-0" />
+            <span className="font-semibold">{photosCount} {photosCount === 1 ? 'foto' : 'fotos'}</span>
+          </button>
+        )}
+
+        {/* 2. Drop Footage */}
         <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 font-mono flex items-center gap-1">
           <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Drop</span>
           <span className="font-bold text-slate-100">{order.drop_footage || 0} ft</span>
         </span>
 
-        {/* Cable */}
+        {/* 3. Cable */}
         <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 font-mono flex items-center gap-1">
           <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Cable</span>
           <span className="font-semibold text-slate-200">{order.cable_type || 'RG-6'}</span>
         </span>
 
-        {/* Bore DW */}
+        {/* 4. Bore DW */}
         {hasDrivewayBore ? (
           <span className="shrink-0 bg-cyan-950/30 text-cyan-300 px-2 py-0.5 rounded-md border border-cyan-500/25 font-medium flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
@@ -140,7 +157,7 @@ export default function HistoricalOrderCard({
           </span>
         ) : null}
 
-        {/* Extra Footage Bonus */}
+        {/* 5. Extra Footage Bonus (>300 ft) */}
         {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
           <span className="shrink-0 bg-emerald-950/30 text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-500/25 font-mono font-medium flex items-center gap-1">
             <span className="text-emerald-400/80 font-sans text-[9px] font-bold">+Drop</span>
@@ -148,7 +165,7 @@ export default function HistoricalOrderCard({
           </span>
         )}
 
-        {/* Manual Adjustment */}
+        {/* 6. Manual Adjustment */}
         {order.manual_adjustment !== undefined && Number(order.manual_adjustment) !== 0 && (
           <span className={`shrink-0 px-2 py-0.5 rounded-md font-mono text-[10px] font-medium border flex items-center gap-1 ${
             order.manual_adjustment > 0 ? 'bg-cyan-950/30 text-cyan-300 border-cyan-500/25' : 'bg-amber-950/30 text-amber-300 border-amber-500/25'
@@ -158,7 +175,7 @@ export default function HistoricalOrderCard({
           </span>
         )}
 
-        {/* Nota / Condición de Acceso */}
+        {/* 7. Nota / Condición de Acceso */}
         {orderRemark && (
           <span 
             className="shrink-0 bg-slate-800/80 text-slate-300 px-2.5 py-0.5 rounded-md border border-slate-700/60 font-medium flex items-center gap-1.5 max-w-sm sm:max-w-md"
@@ -185,97 +202,91 @@ export default function HistoricalOrderCard({
         </div>
       )}
 
-      {/* FILA 5: TIRA INFERIOR DE FOTOS DE EVIDENCIA + ACCIONES DE HISTORIAL */}
-      <div className="pt-2 border-t border-white/8 flex items-center justify-between gap-2">
-        {/* Tira de fotos */}
-        {photos.length > 0 ? (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none flex-1 min-w-0">
-            {photos.map((p, pIdx) => {
-              const src = p.photo_data || (p.filename ? `/uploads/${p.filename}` : '');
-              return (
-                <div
-                  key={p.id || pIdx}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectPhoto ? onSelectPhoto(src) : null;
-                  }}
-                  className="h-10 w-12 sm:h-11 sm:w-14 rounded-lg overflow-hidden bg-black/40 border border-white/10 flex-shrink-0 cursor-pointer relative group hover:border-cyan-400 transition"
-                  title="Toca para ampliar foto de evidencia"
-                >
-                  <img 
-                    src={src} 
-                    alt={p.category || `Foto ${pIdx + 1}`} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition" 
-                  />
-                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                    <Maximize2 className="h-3 w-3 text-white" />
-                  </div>
+      {/* FILA 5: TIRA DE FOTOS DE EVIDENCIA (100% libre, de borde a borde, sin botones al lado) */}
+      {photos.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none pt-0.5 w-full">
+          {photos.map((p, pIdx) => {
+            const src = p.photo_data || (p.filename ? `/uploads/${p.filename}` : '');
+            return (
+              <div
+                key={p.id || pIdx}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectPhoto ? onSelectPhoto(src) : null;
+                }}
+                className="h-12 w-16 sm:h-14 sm:w-20 rounded-xl overflow-hidden bg-black/40 border border-white/10 shrink-0 cursor-pointer relative group hover:border-cyan-400 transition"
+                title="Toca para ampliar foto de evidencia"
+              >
+                <img 
+                  src={src} 
+                  alt={p.category || `Foto ${pIdx + 1}`} 
+                  className="w-full h-full object-cover group-hover:scale-105 transition" 
+                />
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                  <Maximize2 className="h-3.5 w-3.5 text-white" />
                 </div>
-              );
-            })}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenPhotos && onOpenPhotos(order);
-              }}
-              className="h-10 sm:h-11 px-2 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 text-cyan-300 border border-white/10 flex items-center gap-1 text-[10.5px] font-semibold shrink-0 cursor-pointer transition active:scale-95"
-              title="Ver o gestionar todas las fotos"
-            >
-              <Camera className="w-3.5 h-3.5 text-cyan-400" />
-              <span>{photosCount}</span>
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenPhotos && onOpenPhotos(order);
-            }}
-            className="text-[10px] text-slate-400 hover:text-cyan-300 font-medium flex items-center gap-1 bg-[#182332] px-2.5 py-1.5 rounded-lg border border-white/5 transition active:scale-95 cursor-pointer"
-            title="Sin fotos. Toca para agregar."
-          >
-            <Camera className="h-3 w-3 text-slate-500" />
-            <span>Sin fotos archivadas</span>
-          </button>
-        )}
-
-        {/* Acciones de la derecha: Copiar Comprobante y Editar */}
-        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-          {onCopyClaim && (
-            <button
-              type="button"
-              onClick={() => onCopyClaim(order)}
-              className="p-1.5 sm:px-2.5 sm:py-1 text-[10.5px] text-slate-300 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 rounded-lg flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-xs"
-              title="Copiar comprobante de trabajo para WhatsApp"
-            >
-              {isCopied ? (
-                <>
-                  <Check className="h-3 w-3 text-emerald-400" />
-                  <span className="text-emerald-400 font-bold hidden sm:inline">¡Copiado!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="h-3 w-3 text-cyan-400" />
-                  <span className="hidden sm:inline">Copiar</span>
-                </>
-              )}
-            </button>
-          )}
-
-          {onEditOrder && (
-            <button
-              type="button"
-              onClick={() => onEditOrder(order)}
-              className="p-1.5 sm:px-2.5 sm:py-1 text-[10.5px] text-slate-300 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 rounded-lg flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-xs"
-              title="Editar trabajo"
-            >
-              <Pencil className="h-3 w-3 text-cyan-400" />
-              <span className="hidden sm:inline">Editar</span>
-            </button>
-          )}
+              </div>
+            );
+          })}
         </div>
+      )}
+
+      {/* FILA 6: ACCIONES RÁPIDAS (Copiar Comprobante | Editar | Recompartir Reporte) */}
+      <div className="pt-2 border-t border-white/8 grid grid-cols-3 gap-1.5 sm:gap-2" onClick={(e) => e.stopPropagation()}>
+        {/* 1. Copiar Comprobante */}
+        <button
+          type="button"
+          onClick={() => onCopyClaim && onCopyClaim(order)}
+          className="w-full py-1.5 px-1.5 sm:px-2 text-[10.5px] font-semibold text-slate-300 hover:text-white bg-[#182332] hover:bg-[#223042] border border-white/10 rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+          title="Copiar comprobante de trabajo para WhatsApp"
+        >
+          {isCopied ? (
+            <>
+              <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              <span className="text-emerald-400 font-bold truncate">¡Copiado!</span>
+            </>
+          ) : (
+            <>
+              <Copy className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+              <span className="truncate">Copiar</span>
+            </>
+          )}
+        </button>
+
+        {/* 2. Editar Trabajo */}
+        <button
+          type="button"
+          onClick={() => onEditOrder && onEditOrder(order)}
+          className="w-full py-1.5 px-1.5 sm:px-2 text-[10.5px] font-semibold text-slate-300 hover:text-white bg-[#182332] hover:bg-[#223042] border border-white/10 rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+          title="Editar datos de la orden"
+        >
+          <Pencil className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+          <span className="truncate">Editar</span>
+        </button>
+
+        {/* 3. Recompartir / Reportar Reporte Completo */}
+        <button
+          type="button"
+          onClick={() => onShareReport && onShareReport(order)}
+          className={`w-full py-1.5 px-1.5 sm:px-2 text-[10.5px] font-semibold border rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs ${
+            order.whatsapp_shared
+              ? 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30 hover:bg-emerald-500/25'
+              : 'text-cyan-300 bg-cyan-500/15 border-cyan-500/30 hover:bg-cyan-500/25'
+          }`}
+          title="Recompartir o enviar reporte completo por WhatsApp"
+        >
+          {order.whatsapp_shared ? (
+            <>
+              <CheckCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              <span className="truncate">Recompartir</span>
+            </>
+          ) : (
+            <>
+              <Share2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+              <span className="truncate">Reportar</span>
+            </>
+          )}
+        </button>
       </div>
     </div>
   );
