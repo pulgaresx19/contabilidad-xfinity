@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Camera, Check, AlertCircle, Trash2, Plus, X, Eye,
-  Image as ImageIcon, MapPin, Ruler, Maximize2, Phone, CheckCircle2
+  Image as ImageIcon, MapPin, Ruler, Maximize2, Phone, CheckCircle2, Sparkles
 } from 'lucide-react';
 import { getLocalDateStr, normalizeDateStr } from '../utils/dateUtils';
 import { interactWithAuraCore } from '../services/auraService';
@@ -9,6 +9,7 @@ import { cleanRawNotes, getOrderFieldBadges } from '../utils/remarkUtils';
 import { compressImage, detectPriorityRowIndices } from '../services/imageUtils';
 import ZoomableImageViewer from './ZoomableImageViewer';
 import BadgeDetailModal from './BadgeDetailModal';
+import AiDeductionGuideModal from './AiDeductionGuideModal';
 
 export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech }) {
   const [sheetDate, setSheetDate] = useState(() => getLocalDateStr());
@@ -31,6 +32,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
   const [showRawText, setShowRawText] = useState(false);
   const [showFullPhoto, setShowFullPhoto] = useState(false);
   const [badgeModalData, setBadgeModalData] = useState(null);
+  const [showAiGuideModal, setShowAiGuideModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -735,6 +737,14 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
           }}
         />
       )}
+
+      {/* Modal Sobrepuesto: Guía Completa de Deducción IA y Códigos de Despacho */}
+      {showAiGuideModal && (
+        <AiDeductionGuideModal
+          isOpen={showAiGuideModal}
+          onClose={() => setShowAiGuideModal(false)}
+        />
+      )}
     </div>
   );
 
@@ -775,130 +785,25 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
             </h4>
           </div>
 
-          <button
-            type="button"
-            onClick={addBlankOrder}
-            className="whitespace-nowrap shrink-0 text-[10.5px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 px-2.5 py-1 rounded-lg transition active:scale-95 cursor-pointer shadow-xs"
-          >
-            <Plus className="h-3 w-3" />
-            <span>Agregar Fila</span>
-          </button>
-        </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Botón Icono para ver toda la Guía de Deducción IA y Códigos en una sola ventana */}
+            <button
+              type="button"
+              onClick={() => setShowAiGuideModal(true)}
+              className="text-[10.5px] text-amber-300 hover:text-amber-200 font-bold flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 rounded-lg transition active:scale-95 cursor-pointer shadow-xs"
+              title="Ver Guía Completa de Deducción IA y Códigos de Despacho"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+              <span>Guía IA</span>
+            </button>
 
-        {/* Fila Scrolleable de Leyenda: Guía de Detección de la IA */}
-        <div className="pt-2 pb-1 shrink-0">
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 text-[10px] select-none scroll-smooth">
-            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 shrink-0 font-mono flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded-lg border border-white/5">
-              <span>🔍</span>
-              <span>Detección IA:</span>
-            </span>
             <button
               type="button"
-              onClick={() => setBadgeModalData({ badgeKey: 'priority-red' })}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 shrink-0 font-bold cursor-pointer transition active:scale-95"
-              title="Toca para ver qué deduce la IA de Prioritario"
+              onClick={addBlankOrder}
+              className="whitespace-nowrap shrink-0 text-[10.5px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 px-2.5 py-1 rounded-lg transition active:scale-95 cursor-pointer shadow-xs"
             >
-              <span>🔴</span>
-              <span>Prioritario</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setBadgeModalData({ badgeKey: 'access-free' })}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 shrink-0 font-medium cursor-pointer transition active:scale-95"
-              title="Toca para ver qué deduce la IA de Acceso libre"
-            >
-              <span>🟢</span>
-              <span>Acceso libre</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setBadgeModalData({ badgeKey: 'access-call' })}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
-              title="Toca para ver qué deduce la IA de Llamar 1ro"
-            >
-              <span>📞</span>
-              <span>Llamar 1ro</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setBadgeModalData({ badgeKey: 'access-rqhm' })}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
-              title="Toca para ver qué deduce la IA de Req. Cliente"
-            >
-              <span>🏠</span>
-              <span>Req. Cliente</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setBadgeModalData({ badgeKey: 'access-dog' })}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
-              title="Toca para ver qué deduce la IA de Perro"
-            >
-              <span>🐕</span>
-              <span>Perro</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setBadgeModalData({ badgeKey: 'access-gate' })}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
-              title="Toca para ver qué deduce la IA de Portón"
-            >
-              <span>🔒</span>
-              <span>Portón</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setBadgeModalData({ badgeKey: 'neighbor-crossing' })}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
-              title="Toca para ver qué deduce la IA de Cruce Vecinos"
-            >
-              <span>👥</span>
-              <span>Cruce Vecinos</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setBadgeModalData({ badgeKey: 'obs-landsc' })}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-600/30 text-emerald-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
-              title="Toca para ver qué deduce la IA de Jardinería"
-            >
-              <span>🌿</span>
-              <span>Jardinería</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setBadgeModalData({ badgeKey: 'obs-sprklr' })}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
-              title="Toca para ver qué deduce la IA de Aspersores"
-            >
-              <span>💦</span>
-              <span>Aspersores</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setBadgeModalData({ badgeKey: 'temp-cable' })}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-600/15 hover:bg-amber-600/25 border border-amber-600/30 text-amber-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
-              title="Toca para ver qué deduce la IA de Línea Temp"
-            >
-              <span>⚡</span>
-              <span>Línea Temp</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setBadgeModalData({ badgeKey: 'obs-privlite' })}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
-              title="Toca para ver qué deduce la IA de Luz Privada"
-            >
-              <span>💡</span>
-              <span>Luz Privada</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setBadgeModalData({ badgeKey: 'human-note' })}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-700/40 hover:bg-slate-700/60 border border-slate-600/40 text-slate-300 shrink-0 font-semibold cursor-pointer transition active:scale-95"
-              title="Toca para ver qué deduce la IA de Notas / Códigos"
-            >
-              <span>📝</span>
-              <span>Notas / Código</span>
+              <Plus className="h-3 w-3" />
+              <span>Agregar Fila</span>
             </button>
           </div>
         </div>
