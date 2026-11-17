@@ -212,20 +212,6 @@ export default function App() {
               <span className="text-[10px] text-slate-300 font-mono font-semibold">{techName}</span>
             </div>
 
-            {/* Botón rápido Modo Claro / Modo Oscuro */}
-            <button
-              onClick={toggleTheme}
-              className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition active:scale-95 border border-slate-700/60 cursor-pointer"
-              title={actualTheme === 'dark' ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
-              aria-label="Cambiar tema de la aplicación"
-            >
-              {actualTheme === 'dark' ? (
-                <Sun className="h-4 w-4 text-amber-400 stroke-[2.5]" />
-              ) : (
-                <Moon className="h-4 w-4 text-indigo-600 stroke-[2.5]" />
-              )}
-            </button>
-
             <button
               onClick={() => setIsSettingsModalOpen(true)}
               className="p-1.5 text-slate-400 hover:text-white rounded-lg transition cursor-pointer"

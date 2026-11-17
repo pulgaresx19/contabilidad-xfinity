@@ -106,6 +106,49 @@ html.light .bg-\[\#141d28\] {
   color: #0f172a !important;
 }
 
+/* ==========================================================================
+   COCKPIT NAVIGATION IMMUNITY
+   UberDriverView must always maintain high-contrast dark cockpit styling
+   ========================================================================== */
+[data-cockpit="true"],
+[data-cockpit="true"] * {
+  color-scheme: dark !important;
+}
+html.light [data-cockpit="true"] {
+  background-color: #121a24 !important;
+  border-color: #232f3e !important;
+  color: #f8fafc !important;
+}
+html.light [data-cockpit="true"] .bg-\[\#121a24\] {
+  background-color: #121a24 !important;
+}
+html.light [data-cockpit="true"] .bg-\[\#0f1722\],
+html.light [data-cockpit="true"] .bg-\[\#0f1722\]\/95,
+html.light [data-cockpit="true"] .bg-\[\#0f1722\]\/96 {
+  background-color: rgba(15, 23, 34, 0.96) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+html.light [data-cockpit="true"] .bg-\[\#16202c\],
+html.light [data-cockpit="true"] .bg-\[\#16202c\]\/90,
+html.light [data-cockpit="true"] .bg-\[\#182332\],
+html.light [data-cockpit="true"] .bg-\[\#1b2533\],
+html.light [data-cockpit="true"] .bg-\[\#121922\],
+html.light [data-cockpit="true"] .bg-\[\#101722\] {
+  background-color: #16202c !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+html.light [data-cockpit="true"] .text-white {
+  color: #ffffff !important;
+}
+html.light [data-cockpit="true"] .text-slate-300 {
+  color: #cbd5e1 !important;
+}
+html.light [data-cockpit="true"] .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
 /* 2.1 Secondary Cockpit Containers -> Soft Slate-100 Panels */
 html.light .bg-slate-950,
 html.light .bg-slate-950\/40,

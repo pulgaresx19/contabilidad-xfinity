@@ -1540,11 +1540,7 @@ export default function UberDriverView({
     });
 
     map.on('error', (e) => {
-      if (e && e.error && (e.error.status === 401 || e.error.status === 403 || String(e.error.message || '').includes('access token') || String(e.error.message || '').includes('401'))) {
-        console.warn('Mapbox token error detectado, activando mapa abierto de alta velocidad...');
-        const fallback = OPEN_MAP_STYLES[mapThemeRef.current] || OPEN_MAP_STYLES.dark;
-        map.setStyle(fallback);
-      }
+      console.warn('Mapbox map event notice:', e?.error?.message || e);
     });
 
     mapInstanceRef.current = map;
@@ -2281,7 +2277,7 @@ export default function UberDriverView({
   const originInfo = useMemo(() => getOriginPoint(selectedOrder), [selectedOrder, userLocation, orders]);
 
   return (
-    <div className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden border border-[#232f3e] bg-[#121a24] shadow-2xl flex flex-col select-none">
+    <div data-cockpit="true" className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden border border-[#232f3e] bg-[#121a24] shadow-2xl flex flex-col select-none">
       
       {/* 1. MAPBOX GL 3D VECTOR CANVAS */}
       <div 

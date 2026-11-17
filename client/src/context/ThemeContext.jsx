@@ -5,7 +5,13 @@ const ThemeContext = createContext();
 export function ThemeProvider({ children }) {
   // 'dark' | 'light' | 'system'
   const [themeMode, setThemeMode] = useState(() => {
-    return localStorage.getItem('theme_mode') || 'dark';
+    const saved = localStorage.getItem('theme_mode');
+    // Si estaba guardado en 'light' accidentalmente, restaurar al modo oscuro Cockpit oficial
+    if (saved === 'light') {
+      try { localStorage.setItem('theme_mode', 'dark'); } catch (_) {}
+      return 'dark';
+    }
+    return saved || 'dark';
   });
 
   const [actualTheme, setActualTheme] = useState('dark');
