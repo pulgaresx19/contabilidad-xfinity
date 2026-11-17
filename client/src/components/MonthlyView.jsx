@@ -536,36 +536,15 @@ ${weeksLines || '  (No hay semanas registradas)'}
                       </p>
                     </div>
 
-                    <div className="text-right flex items-center gap-2">
-                      {/* SOLO ICONO DE RECIBO EN LA ESQUINA (SIN TEXTO 'Recibo') */}
-                      {(() => {
-                        const weekReceipt = w.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null);
-                        if (!weekReceipt) return null;
-                        return (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedReceiptModal({ photo: weekReceipt, week: w });
-                            }}
-                            className="p-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center justify-center transition active:scale-90 cursor-pointer shadow-2xs shrink-0"
-                            title="Ver comprobante de liquidación / cheque"
-                          >
-                            <Paperclip className="h-3.5 w-3.5 stroke-[2.2]" />
-                          </button>
-                        );
-                      })()}
-
-                      <div>
-                        <span className={`text-base sm:text-lg font-black font-mono block ${
-                          w.isPaid ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]' : 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]'
-                        }`}>
-                          ${(w.totalEarnings || 0).toFixed(2)}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono font-bold">
-                          {Math.round(w.totalFootage || 0)} ft
-                        </span>
-                      </div>
+                    <div className="text-right">
+                      <span className={`text-base sm:text-lg font-black font-mono block ${
+                        w.isPaid ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]' : 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]'
+                      }`}>
+                        ${(w.totalEarnings || 0).toFixed(2)}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono font-bold">
+                        {Math.round(w.totalFootage || 0)} ft
+                      </span>
                     </div>
                   </div>
 
