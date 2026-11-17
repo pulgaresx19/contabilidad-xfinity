@@ -684,7 +684,7 @@ export async function deletePhoto(photoId) {
 // -------------------------------------------------------------
 // WEEKLY SUMMARY & WEEK CLOSURES
 // -------------------------------------------------------------
-export async function getWeeklySummary() {
+export async function getWeeklySummary(backendReceipts = {}) {
   const allOrders = await getOrders();
   const settings = await getSettings();
   const cutoffSetting = settings.cutoff_day || '0';
@@ -744,8 +744,8 @@ export async function getWeeklySummary() {
     w.orders.push(order);
   }
 
-  // Receipts lookup map
-  let receiptsMap = {};
+  // Receipts lookup map (combina backendReceipts, IndexedDB y localStorage)
+  let receiptsMap = { ...(backendReceipts || {}) };
   try {
     if (db.objectStoreNames.contains('week_receipts')) {
       const rTx = db.transaction('week_receipts', 'readonly');
@@ -756,7 +756,16 @@ export async function getWeeklySummary() {
         req.onerror = () => res([]);
       });
       for (const r of allR) {
-        if (r && r.week_key) receiptsMap[r.week_key] = r.receipt_photo;
+        if (r && r.week_key && r.receipt_photo) receiptsMap[r.week_key] = r.receipt_photo;
+      }
+    }
+  } catch (e) {}
+
+  try {
+    for (const key of Object.keys(weeksMap)) {
+      if (!receiptsMap[key]) {
+        const cached = localStorage.getItem('receipt_' + key);
+        if (cached) receiptsMap[key] = cached;
       }
     }
   } catch (e) {}

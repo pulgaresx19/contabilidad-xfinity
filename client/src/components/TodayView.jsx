@@ -16,6 +16,7 @@ import { stampPhotoWithWatermark } from '../utils/watermark';
 import { getLocalDateStr, normalizeDateStr, formatDateFriendly } from '../utils/dateUtils';
 import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
 import { getOrderRemark, getOrderFieldBadges } from '../utils/remarkUtils';
+import ZoomableImageViewer from './ZoomableImageViewer';
 
 export default function TodayView({ 
   orders, 
@@ -790,20 +791,10 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             {/* Métricas de la Jornada de ese día */}
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">
-                  {isViewingToday ? 'Jornada de Hoy' : 'Producción del Día'}
-                </span>
-                <h2 className="text-3xl font-black text-white font-mono mt-0.5 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">
-                  ${dayEarnings.toFixed(2)}
-                </h2>
-                <span className="text-[11px] font-bold text-amber-300 font-mono block mt-0.5">
-                  {Math.round(dayFeet)} ft instalados
-                </span>
-              </div>
-
-              <div className="text-right">
-                <div className="flex items-center justify-end gap-1.5 mb-0.5">
-                  <span className="text-[10px] text-slate-400 font-semibold leading-none">Progreso del Día</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">
+                    {isViewingToday ? 'Jornada de Hoy' : 'Producción del Día'}
+                  </span>
                   {/* Micro-icono hoja de despacho del día (exactamente del mismo tamaño) */}
                   {daySheetPhoto ? (
                     <button
@@ -831,6 +822,16 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                     </label>
                   )}
                 </div>
+                <h2 className="text-3xl font-black text-white font-mono mt-0.5 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">
+                  ${dayEarnings.toFixed(2)}
+                </h2>
+                <span className="text-[11px] font-bold text-amber-300 font-mono block mt-0.5">
+                  {Math.round(dayFeet)} ft instalados
+                </span>
+              </div>
+
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 block font-semibold">Progreso del Día</span>
                 <span className="text-xs font-bold text-slate-200 block">
                   <strong className="text-emerald-400 text-sm font-black">{dayCompleted.length}</strong> de {dayOrders.length} hechos
                 </span>
@@ -2182,69 +2183,38 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         </div>
       )}
 
-      {/* MODAL FULLSCREEN: HOJA DE DESPACHO DEL DÍA */}
+      {/* MODAL FULLSCREEN: HOJA DE DESPACHO DEL DÍA (CON ZOOM INTERACTIVO Y DESPLAZAMIENTO) */}
       {selectedSheetModal && (
-        <div
-          onClick={() => setSelectedSheetModal(null)}
-          className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-4 animate-fade-in select-none"
-          style={{
-            paddingTop: 'max(env(safe-area-inset-top, 0px) + 12px, 1rem)',
-            paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
-          }}
-        >
-          <div className="w-full flex items-center justify-between px-3 py-1 shrink-0 z-50">
-            <div className="flex items-center gap-2 text-white">
-              <FileText className="h-4 w-4 text-cyan-400" />
-              <span className="text-xs font-black tracking-wide">
-                Hoja de Despacho • {formatDateFriendly(activeDate)}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSelectedSheetModal(null)}
-              className="p-2 rounded-full bg-slate-900/90 text-white hover:text-cyan-400 border border-white/20 shadow-2xl transition active:scale-90 cursor-pointer"
-              title="Cerrar hoja"
-            >
-              <X className="h-4 w-4 stroke-[2.5]" />
-            </button>
-          </div>
-
-          <div
-            className="flex-1 min-h-0 w-full flex items-center justify-center p-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <img
-              src={selectedSheetModal.photo_data || (selectedSheetModal.filename?.startsWith('/') ? selectedSheetModal.filename : `/uploads/${selectedSheetModal.filename}`)}
-              alt="Hoja de Despacho del Día"
-              className="max-h-[75dvh] max-w-[95vw] sm:max-w-xl w-auto h-auto rounded-2xl object-contain border border-white/10 shadow-2xl"
-            />
-          </div>
-
-          <div className="shrink-0 pt-2 pb-1 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-            <label
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5"
-            >
-              <FilePlus className="h-3.5 w-3.5" />
-              <span>Cambiar Hoja</span>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={handleUploadDaySheet}
-                disabled={uploadingSheet}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => setSelectedSheetModal(null)}
-              className="px-6 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5"
-            >
-              <X className="h-3.5 w-3.5" />
-              <span>Cerrar</span>
-            </button>
-          </div>
-        </div>
+        <ZoomableImageViewer
+          src={selectedSheetModal.photo_data || (selectedSheetModal.filename?.startsWith('/') ? selectedSheetModal.filename : `/uploads/${selectedSheetModal.filename}`)}
+          alt="Hoja de Despacho del Día"
+          title={`Hoja de Despacho • ${formatDateFriendly(activeDate)}`}
+          onClose={() => setSelectedSheetModal(null)}
+          extraFooterActions={
+            <>
+              <label className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5">
+                <FilePlus className="h-3.5 w-3.5" />
+                <span>Cambiar Hoja</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handleUploadDaySheet}
+                  disabled={uploadingSheet}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setSelectedSheetModal(null)}
+                className="px-6 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5"
+              >
+                <X className="h-3.5 w-3.5" />
+                <span>Cerrar</span>
+              </button>
+            </>
+          }
+        />
       )}
     </div>
   );

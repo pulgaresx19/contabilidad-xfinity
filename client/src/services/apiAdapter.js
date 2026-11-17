@@ -257,8 +257,25 @@ export function initApiAdapter() {
         }
 
         // --- WEEKLY SUMMARY ---
+        // --- WEEKLY SUMMARY (Sincroniza comprobantes con backend y localStorage) ---
         if (cleanUrl === '/api/weekly-summary') {
-          const summary = await localDb.getWeeklySummary();
+          let backendReceipts = {};
+          try {
+            const netRes = await originalFetch(input, init);
+            if (netRes && netRes.ok) {
+              const netData = await netRes.json();
+              if (netData?.weeks) {
+                netData.weeks.forEach((w) => {
+                  if (w.key && w.receipt_photo) {
+                    backendReceipts[w.key] = w.receipt_photo;
+                    try { localStorage.setItem('receipt_' + w.key, w.receipt_photo); } catch (e) {}
+                  }
+                });
+              }
+            }
+          } catch (e) {}
+
+          const summary = await localDb.getWeeklySummary(backendReceipts);
           return jsonResponse(summary);
         }
 
@@ -267,6 +284,9 @@ export function initApiAdapter() {
         if (weekStatusMatch && method === 'POST') {
           const weekKey = decodeURIComponent(weekStatusMatch[1]);
           const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
+          if (body.receipt_photo) {
+            try { localStorage.setItem('receipt_' + weekKey, body.receipt_photo); } catch (e) {}
+          }
           const result = await localDb.updateWeekStatus(weekKey, body.payment_status, body.receipt_photo);
           try {
             await originalFetch(input, init);
@@ -279,6 +299,10 @@ export function initApiAdapter() {
         if (weekReceiptMatch && method === 'POST') {
           const weekKey = decodeURIComponent(weekReceiptMatch[1]);
           const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
+          const photoToSave = body.receipt_photo || body.photo;
+          if (photoToSave) {
+            try { localStorage.setItem('receipt_' + weekKey, photoToSave); } catch (e) {}
+          }
           const result = await localDb.saveWeekReceipt(weekKey, body);
           try {
             await originalFetch(input, init);
