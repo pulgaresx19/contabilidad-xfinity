@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Settings, Save, Check, Calendar, DollarSign, ShieldCheck, Sun, Moon, Monitor, Sparkles, Wifi } from 'lucide-react';
+import { X, Settings, Save, Check, Calendar, DollarSign, ShieldCheck, Sun, Moon, Monitor, Sparkles, Wifi, MessageSquare, RotateCcw } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { getAuraCoreUrl, setAuraCoreUrl, resetAuraCoreUrl, checkAuraCoreHealth } from '../services/auraService';
+import { DEFAULT_SMS_TEMPLATE, getCustomerSmsText } from '../utils/smsUtils';
 
 const WEEK_DAYS = [
   { id: '1', short: 'Lun', full: 'Lunes', cycle: 'Martes a Lunes' },
@@ -21,7 +22,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
     bore_dw_bonus: '30.00',
     footage_base: '300',
     footage_extra_rate: '25.00',
-    cutoff_day: '0'
+    cutoff_day: '0',
+    sms_template: DEFAULT_SMS_TEMPLATE
   });
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -60,7 +62,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
               bore_dw_bonus: data.bore_dw_bonus || '30.00',
               footage_base: data.footage_base || '300',
               footage_extra_rate: data.footage_extra_rate || '25.00',
-              cutoff_day: String(cutoffVal)
+              cutoff_day: String(cutoffVal),
+              sms_template: data.sms_template && String(data.sms_template).trim() ? data.sms_template : DEFAULT_SMS_TEMPLATE
             });
           }
         })
@@ -88,7 +91,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
           bore_dw_bonus: settings.bore_dw_bonus,
           footage_base: settings.footage_base,
           footage_extra_rate: settings.footage_extra_rate,
-          cutoff_day: settings.cutoff_day
+          cutoff_day: settings.cutoff_day,
+          sms_template: settings.sms_template && String(settings.sms_template).trim() ? settings.sms_template.trim() : DEFAULT_SMS_TEMPLATE
         })
       });
 
@@ -378,7 +382,90 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             </div>
           </div>
 
-          {/* 5. SERVIDOR AURACORE IA (DE ÚLTIMO) */}
+          {/* 5. MENSAJE AUTOMÁTICO SMS AL CLIENTE */}
+          <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                <MessageSquare className="h-4 w-4" />
+                <span>Mensaje Automático SMS (Cliente)</span>
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 whitespace-nowrap">
+                Auto-Envío
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-300 leading-snug">
+              Este es el mensaje preescrito que se abre al tocar el ícono de SMS en cada trabajo. Usa <strong className="text-cyan-300 font-mono">(Dirección)</strong> para la casa del cliente y <strong className="text-emerald-300 font-mono">(Operador)</strong> para tu nombre:
+            </p>
+
+            {/* Botones rápidos para insertar variables o restaurar */}
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      sms_template: `${prev.sms_template || ''} (Dirección)`.trim()
+                    }))
+                  }
+                  className="px-2 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 text-[10.5px] font-mono font-bold transition cursor-pointer"
+                  title="Insertar marcador de dirección del cliente"
+                >
+                  + (Dirección)
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      sms_template: `${prev.sms_template || ''} (Operador)`.trim()
+                    }))
+                  }
+                  className="px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[10.5px] font-mono font-bold transition cursor-pointer"
+                  title="Insertar marcador de nombre del operador"
+                >
+                  + (Operador)
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSettings((prev) => ({ ...prev, sms_template: DEFAULT_SMS_TEMPLATE }))}
+                className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-[10.5px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                title="Restaurar mensaje predeterminado"
+              >
+                <RotateCcw className="h-3 w-3" />
+                <span>Restaurar original</span>
+              </button>
+            </div>
+
+            <textarea
+              rows={5}
+              value={settings.sms_template || ''}
+              onChange={(e) => setSettings({ ...settings, sms_template: e.target.value })}
+              placeholder={DEFAULT_SMS_TEMPLATE}
+              className="w-full bg-[#0f1722] border border-white/10 rounded-xl p-3 text-xs text-white font-sans leading-relaxed focus:outline-none focus:border-cyan-500 transition shadow-inner resize-y"
+            />
+
+            {/* Vista Previa en Tiempo Real */}
+            <div className="p-2.5 bg-[#0f1722] border border-emerald-500/20 rounded-xl space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                  Vista previa de cómo le llega al cliente:
+                </span>
+                <span className="text-[9.5px] text-slate-400 font-mono">Ej: 1420 Oak St</span>
+              </div>
+              <p className="text-[11px] text-slate-200 leading-relaxed italic select-all">
+                "{getCustomerSmsText('1420 Oak St', settings.tech_default, settings.sms_template)}"
+              </p>
+              <p className="text-[10px] text-slate-400 pt-1 border-t border-white/8 leading-snug">
+                <strong className="text-slate-300">Traducción base:</strong> Aviso de Xfinity / Comcast para (Dirección): Hola, le habla (Operador), su técnico de Drop Bury. Trabajaré afuera en breve para enterrar su cable exterior. No necesita estar en casa ni salir (solo es constancia de cortesía). Escríbame por texto ÚNICAMENTE si tiene portón con llave, mascotas en el patio o riego/cerca invisible.
+              </p>
+            </div>
+          </div>
+
+          {/* 6. SERVIDOR AURACORE IA (DE ÚLTIMO) */}
           <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">

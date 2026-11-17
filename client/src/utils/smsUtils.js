@@ -28,6 +28,13 @@ export function formatPhoneDisplay(phone) {
 }
 
 /**
+ * Plantilla predeterminada del mensaje SMS para el cliente.
+ * Soporta marcadores dinámicos (Dirección) y (Operador).
+ */
+export const DEFAULT_SMS_TEMPLATE =
+  "Xfinity / Comcast Notice for (Dirección): Hi, this is (Operador), your Drop Bury technician. I'll be working outside shortly to bury your exterior cable line. You do not need to be home or come outside—this is just a courtesy notice. Please text back ONLY if you have a locked gate, pets in the yard, or private sprinklers/invisible dog fences. Thank you!";
+
+/**
  * Obtiene el nombre del técnico configurado en los ajustes locales si no se proporciona explícitamente.
  */
 export function getStoredTechName() {
@@ -41,6 +48,24 @@ export function getStoredTechName() {
     }
   } catch (e) {}
   return null;
+}
+
+/**
+ * Obtiene la plantilla SMS configurada en Ajustes o devuelve la predeterminada.
+ */
+export function getStoredSmsTemplate() {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const cached = localStorage.getItem('xfinity_cached_settings');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.sms_template && String(parsed.sms_template).trim()) {
+          return String(parsed.sms_template).trim();
+        }
+      }
+    }
+  } catch (e) {}
+  return DEFAULT_SMS_TEMPLATE;
 }
 
 /**
@@ -65,12 +90,20 @@ export function formatTechDisplayName(rawName) {
 }
 
 /**
- * Redacta el mensaje formal en inglés para el cliente antes de enterrar el cable.
+ * Redacta el mensaje formal en inglés para el cliente antes de enterrar el cable,
+ * reemplazando dinámicamente (Dirección) y (Operador) según la plantilla de Ajustes.
  */
-export function getCustomerSmsText(address = '', techName = '') {
+export function getCustomerSmsText(address = '', techName = '', customTemplate = null) {
   const finalTechName = formatTechDisplayName(techName);
-  const cleanAddr = address ? ` at ${address.trim()}` : '';
-  return `Hello! This is ${finalTechName}, your Xfinity / Comcast Drop Bury technician. I am in the area and preparing to bury your temporary cable line${cleanAddr}. If you have any locked gates, pets in the yard, or private underground systems (like sprinklers or invisible dog fences), please let me know. Thank you!`;
+  const cleanAddr = address && String(address).trim() ? String(address).trim() : 'your property';
+  const rawTemplate =
+    customTemplate !== null && customTemplate !== undefined && String(customTemplate).trim()
+      ? String(customTemplate).trim()
+      : getStoredSmsTemplate();
+
+  return rawTemplate
+    .replace(/(\(Direcci[oó]n\)|\[Direcci[oó]n\]|\{Direcci[oó]n\})/gi, cleanAddr)
+    .replace(/(\(Operador\)|\[Operador\]|\{Operador\})/gi, finalTechName);
 }
 
 /**

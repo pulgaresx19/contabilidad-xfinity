@@ -88,7 +88,9 @@ async function checkAndSeedInitialData(db) {
             bore_dw_bonus: '30.00',
             cutoff_day: '0',
             footage_base: '300',
-            footage_extra_rate: '25.00'
+            footage_extra_rate: '25.00',
+            sms_template:
+              "Xfinity / Comcast Notice for (Dirección): Hi, this is (Operador), your Drop Bury technician. I'll be working outside shortly to bury your exterior cable line. You do not need to be home or come outside—this is just a courtesy notice. Please text back ONLY if you have a locked gate, pets in the yard, or private sprinklers/invisible dog fences. Thank you!"
           };
           for (const [key, value] of Object.entries(defaultSettings)) {
             settingsStore.put({ key, value: String(value) });
@@ -232,13 +234,20 @@ export async function getSettings() {
         bore_dw_bonus: '30.00',
         cutoff_day: '0',
         footage_base: '300',
-        footage_extra_rate: '25.00'
+        footage_extra_rate: '25.00',
+        sms_template:
+          "Xfinity / Comcast Notice for (Dirección): Hi, this is (Operador), your Drop Bury technician. I'll be working outside shortly to bury your exterior cable line. You do not need to be home or come outside—this is just a courtesy notice. Please text back ONLY if you have a locked gate, pets in the yard, or private sprinklers/invisible dog fences. Thank you!"
       };
       if (req.result) {
         req.result.forEach((item) => {
           result[item.key] = item.value;
         });
       }
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('xfinity_cached_settings', JSON.stringify(result));
+        }
+      } catch (_) {}
       resolve(result);
     };
     req.onerror = () => reject(req.error);
