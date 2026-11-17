@@ -1385,15 +1385,10 @@ ${jobLines}
                         <FileText className="w-5 h-5 stroke-[2.2]" />
                       </div>
                       <div className="min-w-0 text-left">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-black text-rose-300 uppercase tracking-wide">
-                            Subir Reporte PDF
-                          </span>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase">
-                            Principal
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-slate-400 block truncate">
+                        <span className="text-xs font-black text-rose-300 uppercase tracking-wide block truncate">
+                          Subir Reporte PDF
+                        </span>
+                        <span className="text-[10px] text-slate-400 block truncate mt-0.5">
                           Daily Tech Summary / Nómina semanal para auditar con IA
                         </span>
                       </div>
