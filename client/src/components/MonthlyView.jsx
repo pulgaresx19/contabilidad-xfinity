@@ -530,32 +530,42 @@ ${weeksLines || '  (No hay semanas registradas)'}
                         <span className="text-sm font-black text-white font-mono group-hover:text-cyan-400 transition">
                           Semana {w.displayLabel || w.key}
                         </span>
-                        {w.isPaid ? (
-                          <span className="inline-flex items-center gap-1 text-[9px] text-emerald-400 font-bold bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Cobrado
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[9px] text-amber-400 font-bold bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30">
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                            Pendiente
-                          </span>
-                        )}
                       </div>
                       <p className="text-[11px] text-slate-400 font-medium">
                         {w.startDate} al {w.endDate} • {completedCount} de {totalJobs} hechos
                       </p>
                     </div>
 
-                    <div className="text-right">
-                      <span className={`text-base sm:text-lg font-black font-mono block ${
-                        w.isPaid ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]' : 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]'
-                      }`}>
-                        ${(w.totalEarnings || 0).toFixed(2)}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono font-bold">
-                        {Math.round(w.totalFootage || 0)} ft
-                      </span>
+                    <div className="text-right flex items-center gap-2">
+                      {/* SOLO ICONO DE RECIBO EN LA ESQUINA (SIN TEXTO 'Recibo') */}
+                      {(() => {
+                        const weekReceipt = w.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null);
+                        if (!weekReceipt) return null;
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedReceiptModal({ photo: weekReceipt, week: w });
+                            }}
+                            className="p-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center justify-center transition active:scale-90 cursor-pointer shadow-2xs shrink-0"
+                            title="Ver comprobante de liquidación / cheque"
+                          >
+                            <Paperclip className="h-3.5 w-3.5 stroke-[2.2]" />
+                          </button>
+                        );
+                      })()}
+
+                      <div>
+                        <span className={`text-base sm:text-lg font-black font-mono block ${
+                          w.isPaid ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]' : 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]'
+                        }`}>
+                          ${(w.totalEarnings || 0).toFixed(2)}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono font-bold">
+                          {Math.round(w.totalFootage || 0)} ft
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -568,36 +578,16 @@ ${weeksLines || '  (No hay semanas registradas)'}
 
                     <div className="flex items-center gap-2">
                       {w.isPaid ? (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            disabled={isUpdating}
-                            onClick={(e) => handleToggleWeekPayment(w, 'Pendiente', e)}
-                            className="px-2.5 py-1 bg-emerald-500/15 hover:bg-rose-500/15 text-emerald-400 hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30 rounded-xl text-[10px] font-black flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-xs"
-                            title="Toca para cambiar a Pendiente si hubo algún error"
-                          >
-                            <CheckCircle className="h-3 w-3" />
-                            <span>Cobrado ✓</span>
-                          </button>
-                          {(() => {
-                            const weekReceipt = w.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null);
-                            if (!weekReceipt) return null;
-                            return (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedReceiptModal({ photo: weekReceipt, week: w });
-                                }}
-                                className="px-2 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 transition active:scale-90 cursor-pointer shadow-2xs"
-                                title="Ver comprobante de liquidación / cheque"
-                              >
-                                <Paperclip className="h-3 w-3 stroke-[2.2]" />
-                                <span className="text-[10px] font-bold tracking-tight">Recibo</span>
-                              </button>
-                            );
-                          })()}
-                        </div>
+                        <button
+                          type="button"
+                          disabled={isUpdating}
+                          onClick={(e) => handleToggleWeekPayment(w, 'Pendiente', e)}
+                          className="px-2.5 py-1 bg-emerald-500/15 hover:bg-rose-500/15 text-emerald-400 hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30 rounded-xl text-[10px] font-black flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-xs"
+                          title="Toca para cambiar a Pendiente si hubo algún error"
+                        >
+                          <CheckCircle className="h-3 w-3" />
+                          <span>Cobrado ✓</span>
+                        </button>
                       ) : (
                         <button
                           type="button"
@@ -919,16 +909,15 @@ ${weeksLines || '  (No hay semanas registradas)'}
                 </div>
 
                 <div className="flex items-center gap-2 ml-2 shrink-0">
-                  {/* Botón Comprobante en Header */}
+                  {/* Botón Comprobante en Header (Solo icono sin texto) */}
                   {modalReceiptPhoto && (
                     <button
                       type="button"
                       onClick={() => setSelectedReceiptModal({ photo: modalReceiptPhoto, week: selectedWeekModal })}
-                      className="h-8 px-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 transition active:scale-95 shadow-xs cursor-pointer"
+                      className="h-8 w-8 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer"
                       title="Ver comprobante de pago o cheque de esta semana"
                     >
-                      <Paperclip className="h-3.5 w-3.5 stroke-[2.2]" />
-                      <span className="text-[10px] font-bold tracking-tight">Recibo</span>
+                      <Paperclip className="h-4 w-4 stroke-[2.2]" />
                     </button>
                   )}
 

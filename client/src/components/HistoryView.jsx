@@ -13,6 +13,7 @@ import EditJobModal from './EditJobModal';
 import HistoricalOrderCard from './HistoricalOrderCard';
 import ZoomableImageViewer from './ZoomableImageViewer';
 import { getOrderRemark } from '../utils/remarkUtils';
+import { stampReceiptPhoto } from '../utils/receiptStamper';
 
 const CUTOFF_LABELS = {
   '0': 'Domingo (Lunes a Domingo)',
@@ -59,7 +60,39 @@ export default function HistoryView({
   const [savingPayment, setSavingPayment] = useState(false);
   const [selectedReceiptModal, setSelectedReceiptModal] = useState(null);
 
+  // Galería y Filtro de Constancia General de Recibos
+  const [isReceiptsExpanded, setIsReceiptsExpanded] = useState(true);
+  const [receiptDateFilter, setReceiptDateFilter] = useState('');
+
   const weeks = summaryData?.weeks || [];
+
+  // Recopilar todos los recibos de cobro de las semanas con comprobante
+  const allWeeklyReceipts = useMemo(() => {
+    return weeks
+      .map(w => {
+        const photo = w.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null);
+        if (!photo) return null;
+        return {
+          ...w,
+          photo
+        };
+      })
+      .filter(Boolean);
+  }, [weeks]);
+
+  // Filtrar los recibos por fecha escrita por el usuario
+  const filteredReceipts = useMemo(() => {
+    if (!receiptDateFilter || !receiptDateFilter.trim()) {
+      return allWeeklyReceipts;
+    }
+    const q = receiptDateFilter.toLowerCase().trim();
+    return allWeeklyReceipts.filter(r => {
+      const weekLabel = (r.displayLabel || r.key || '').toLowerCase();
+      const start = (r.startDate || '').toLowerCase();
+      const end = (r.endDate || '').toLowerCase();
+      return weekLabel.includes(q) || start.includes(q) || end.includes(q);
+    });
+  }, [allWeeklyReceipts, receiptDateFilter]);
 
   // Años disponibles detectados en las semanas y órdenes
   const availableYears = useMemo(() => {
@@ -506,6 +539,119 @@ ${jobLines}
                 </p>
               </div>
             </div>
+
+            {/* FILA DE CONSTANCIA GENERAL DE RECIBOS DE COBRO */}
+            <div className="bg-[#131b26] border border-white/10 rounded-2xl p-3 shadow-md space-y-2.5">
+              {/* Header de la fila (clicable para expandir/plegar) */}
+              <div 
+                onClick={() => setIsReceiptsExpanded(prev => !prev)}
+                className="flex items-center justify-between cursor-pointer select-none group"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 shadow-xs">
+                    <Paperclip className="w-3.5 h-3.5 stroke-[2.2]" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-white group-hover:text-cyan-400 transition flex items-center gap-1.5">
+                      <span>Constancia de Recibos</span>
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded-md border border-emerald-500/20">
+                        {allWeeklyReceipts.length}
+                      </span>
+                    </h4>
+                    <p className="text-[10px] text-slate-400">
+                      Historial general de cheques y recibos de cobro
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-cyan-400 group-hover:text-cyan-300">
+                  <span>{isReceiptsExpanded ? 'Ocultar' : 'Ver Recibos'}</span>
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isReceiptsExpanded ? 'rotate-180' : ''}`} />
+                </div>
+              </div>
+
+              {/* Contenido expandido con Buscador por Fecha y Galería */}
+              {isReceiptsExpanded && (
+                <div className="space-y-2.5 pt-1 border-t border-white/5 animate-fade-in">
+                  {/* Filtro por Fecha */}
+                  <div className="relative">
+                    <Calendar className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-cyan-400" />
+                    <input
+                      type="text"
+                      placeholder="Filtrar por fecha (ej. 2026, 10, Oct, Sem 44)..."
+                      value={receiptDateFilter}
+                      onChange={(e) => setReceiptDateFilter(e.target.value)}
+                      className="w-full bg-[#0d141f] border border-white/10 focus:border-cyan-400 rounded-xl pl-8.5 pr-8 py-2 text-[11px] text-white placeholder-slate-500 focus:outline-none transition shadow-inner"
+                    />
+                    {receiptDateFilter && (
+                      <button
+                        type="button"
+                        onClick={() => setReceiptDateFilter('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 cursor-pointer"
+                        title="Borrar filtro de fecha"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Galería de Recibos */}
+                  {allWeeklyReceipts.length === 0 ? (
+                    <div className="p-4 rounded-xl bg-[#0d141f] border border-white/5 text-center space-y-1">
+                      <p className="text-[11px] font-bold text-slate-300">
+                        No hay recibos de cobro archivados aún
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        Al confirmar el cobro de una semana con comprobante, se estampará con su fecha y se guardará aquí.
+                      </p>
+                    </div>
+                  ) : filteredReceipts.length === 0 ? (
+                    <div className="p-3.5 rounded-xl bg-[#0d141f] border border-white/5 text-center space-y-1.5">
+                      <p className="text-[11px] font-bold text-slate-300">
+                        No se encontraron recibos con la fecha "{receiptDateFilter}"
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setReceiptDateFilter('')}
+                        className="px-2.5 py-0.5 bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 rounded-lg text-[10px] font-bold cursor-pointer"
+                      >
+                        Mostrar todos
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {filteredReceipts.map((r) => (
+                        <div
+                          key={r.key}
+                          onClick={() => setSelectedReceiptModal({ photo: r.photo, week: r })}
+                          className="bg-[#0d141f] border border-emerald-500/30 hover:border-emerald-400/60 rounded-xl p-1.5 cursor-pointer transition select-none group shadow-sm hover:shadow-emerald-500/10 space-y-1 active:scale-95"
+                          title={`Ver recibo de Semana ${r.displayLabel || r.key} (${r.startDate} al ${r.endDate})`}
+                        >
+                          <div className="relative aspect-[4/3] rounded-lg overflow-hidden bg-black/50 border border-white/5">
+                            <img
+                              src={r.photo}
+                              alt={`Recibo Semana ${r.displayLabel || r.key}`}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            <div className="absolute top-1 right-1 px-1.5 py-0.2 rounded bg-black/75 backdrop-blur-xs text-[8.5px] font-mono font-bold text-emerald-400 border border-white/10">
+                              ${(r.totalEarnings || 0).toFixed(0)}
+                            </div>
+                          </div>
+                          <div className="px-0.5">
+                            <p className="text-[10.5px] font-bold text-white truncate font-mono leading-tight">
+                              Semana {r.displayLabel || r.key}
+                            </p>
+                            <p className="text-[9px] text-slate-400 truncate mt-0.5 font-medium">
+                              {r.startDate} al {r.endDate}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* 2. Buscador de Semanas por Fecha / Término */}
@@ -625,32 +771,42 @@ ${jobLines}
                         <span className="text-sm font-black text-white font-mono group-hover:text-cyan-400 transition">
                           Semana {w.displayLabel || w.key}
                         </span>
-                        {w.isPaid ? (
-                          <span className="inline-flex items-center gap-1 text-[9px] text-emerald-400 font-bold bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Cobrado
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[9px] text-amber-400 font-bold bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30">
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                            Pendiente
-                          </span>
-                        )}
                       </div>
                       <p className="text-[11px] text-slate-400 font-medium">
                         {w.startDate} al {w.endDate} • {completedCount} de {w.totalJobs} hechos
                       </p>
                     </div>
 
-                    <div className="text-right">
-                      <span className={`text-base sm:text-lg font-black font-mono block ${
-                        w.isPaid ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]' : 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]'
-                      }`}>
-                        ${w.totalEarnings.toFixed(2)}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono font-bold">
-                        {Math.round(w.totalFootage)} ft
-                      </span>
+                    <div className="text-right flex items-center gap-2">
+                      {/* SOLO ICONO DE RECIBO EN LA ESQUINA (SIN TEXTO 'Recibo') */}
+                      {(() => {
+                        const weekReceipt = w.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null);
+                        if (!weekReceipt) return null;
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedReceiptModal({ photo: weekReceipt, week: w });
+                            }}
+                            className="p-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center justify-center transition active:scale-90 cursor-pointer shadow-2xs shrink-0"
+                            title="Ver comprobante de cobro de esta semana"
+                          >
+                            <Paperclip className="h-3.5 w-3.5 stroke-[2.2]" />
+                          </button>
+                        );
+                      })()}
+
+                      <div>
+                        <span className={`text-base sm:text-lg font-black font-mono block ${
+                          w.isPaid ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]' : 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]'
+                        }`}>
+                          ${w.totalEarnings.toFixed(2)}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono font-bold">
+                          {Math.round(w.totalFootage)} ft
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -663,36 +819,16 @@ ${jobLines}
 
                     <div className="flex items-center gap-2">
                       {w.isPaid ? (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            disabled={isUpdating}
-                            onClick={(e) => handleTogglePayment(w, 'Pendiente', e)}
-                            className="px-2.5 py-1 bg-emerald-500/15 hover:bg-rose-500/15 text-emerald-400 hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30 rounded-xl text-[10px] font-black flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-xs"
-                            title="Toca para cambiar a Pendiente si hubo algún error"
-                          >
-                            <CheckCircle className="h-3 w-3" />
-                            <span>Cobrado ✓</span>
-                          </button>
-                          {(() => {
-                            const weekReceipt = w.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null);
-                            if (!weekReceipt) return null;
-                            return (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedReceiptModal({ photo: weekReceipt, week: w });
-                                }}
-                                className="px-2 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 transition active:scale-90 cursor-pointer shadow-2xs"
-                                title="Ver comprobante de liquidación / cheque"
-                              >
-                                <Paperclip className="h-3 w-3 stroke-[2.2]" />
-                                <span className="text-[10px] font-bold tracking-tight">Recibo</span>
-                              </button>
-                            );
-                          })()}
-                        </div>
+                        <button
+                          type="button"
+                          disabled={isUpdating}
+                          onClick={(e) => handleTogglePayment(w, 'Pendiente', e)}
+                          className="px-2.5 py-1 bg-emerald-500/15 hover:bg-rose-500/15 text-emerald-400 hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30 rounded-xl text-[10px] font-black flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-xs"
+                          title="Toca para cambiar a Pendiente si hubo algún error"
+                        >
+                          <CheckCircle className="h-3 w-3" />
+                          <span>Cobrado ✓</span>
+                        </button>
                       ) : (
                         <button
                           type="button"
@@ -969,16 +1105,15 @@ ${jobLines}
                 </div>
 
                 <div className="flex items-center gap-2 ml-2 shrink-0">
-                  {/* Botón Comprobante en Header */}
+                  {/* Botón Comprobante en Header (Solo icono sin texto) */}
                   {modalReceiptPhoto ? (
                     <button
                       type="button"
                       onClick={() => setSelectedReceiptModal({ photo: modalReceiptPhoto, week: selectedWeekModal })}
-                      className="h-8 px-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 transition active:scale-95 shadow-xs cursor-pointer"
+                      className="h-8 w-8 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer"
                       title="Ver comprobante de pago o cheque de esta semana"
                     >
-                      <Paperclip className="h-3.5 w-3.5 stroke-[2.2]" />
-                      <span className="text-[10px] font-bold tracking-tight">Recibo</span>
+                      <Paperclip className="h-4 w-4 stroke-[2.2]" />
                     </button>
                   ) : selectedWeekModal.isPaid ? (
                     <label
@@ -995,9 +1130,8 @@ ${jobLines}
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            const reader = new FileReader();
-                            reader.onload = async () => {
-                              const photoData = reader.result;
+                            try {
+                              const photoData = await stampReceiptPhoto(file, { week: selectedWeekModal });
                               try {
                                 if (typeof window !== 'undefined') {
                                   localStorage.setItem('receipt_' + selectedWeekModal.key, photoData);
@@ -1012,8 +1146,9 @@ ${jobLines}
                               });
                               setSelectedWeekModal(prev => ({ ...prev, receipt_photo: photoData }));
                               if (onRefresh) await onRefresh();
-                            };
-                            reader.readAsDataURL(file);
+                            } catch (err) {
+                              console.warn('Error al estampar recibo:', err);
+                            }
                           }
                         }}
                       />
@@ -1237,12 +1372,18 @@ ${jobLines}
                     accept="image/*"
                     capture="environment"
                     className="hidden"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const f = e.target.files?.[0];
                       if (f) {
-                        const r = new FileReader();
-                        r.onload = () => setReceiptPhotoPreview(r.result);
-                        r.readAsDataURL(f);
+                        try {
+                          const stamped = await stampReceiptPhoto(f, { week: confirmPaymentWeek });
+                          setReceiptPhotoPreview(stamped);
+                        } catch (err) {
+                          console.warn('Error al estampar recibo:', err);
+                          const r = new FileReader();
+                          r.onload = () => setReceiptPhotoPreview(r.result);
+                          r.readAsDataURL(f);
+                        }
                       }
                     }}
                   />
