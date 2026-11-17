@@ -765,20 +765,12 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
           {extractedOrders.map((o, idx) => (
             <div
               key={idx}
-              className={`border rounded-xl p-2.5 space-y-1.5 transition shadow-xs ${
-                o.is_priority
-                  ? 'bg-rose-950/25 border-rose-500/60 hover:border-rose-400'
-                  : 'bg-[#141d28] border-white/10 hover:border-cyan-500/40'
-              }`}
+              className="border rounded-xl p-2.5 space-y-1.5 transition shadow-xs bg-[#141d28] border-white/10 hover:border-cyan-500/40"
             >
-              {/* Fila 1: Número, Job ID, Prioridad y Tarifa */}
+              {/* Fila 1: Número, Job ID y Tarifa */}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
-                  <span className={`w-5 h-5 rounded-md text-[10px] font-mono font-bold flex items-center justify-center shrink-0 border ${
-                    o.is_priority
-                      ? 'bg-rose-500/30 text-rose-200 border-rose-500/50'
-                      : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
-                  }`}>
+                  <span className="w-5 h-5 rounded-md text-[10px] font-mono font-bold flex items-center justify-center shrink-0 border bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
                     {idx + 1}
                   </span>
                   <div className="flex items-center gap-1 bg-[#0b1017] px-2 py-0.5 rounded-lg border border-white/10">
@@ -791,18 +783,6 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                       className="bg-transparent text-xs font-mono text-cyan-300 font-black w-20 focus:outline-none"
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => updateOrderField(idx, 'is_priority', o.is_priority ? 0 : 1)}
-                    className={`px-1.5 py-0.5 rounded-md text-[9.5px] font-bold flex items-center gap-1 border transition cursor-pointer ${
-                      o.is_priority
-                        ? 'bg-rose-500/25 text-rose-200 border-rose-500/60 shadow-xs'
-                        : 'bg-[#0b1017] text-slate-400 hover:text-rose-300 border-white/10'
-                    }`}
-                    title="Marcar/desmarcar como Trabajo Prioritario (Resaltado en rojo en la hoja)"
-                  >
-                    <span>{o.is_priority ? '🔴 Prioritario' : '⚪ Normal'}</span>
-                  </button>
                 </div>
 
                 <div className="flex items-center gap-1.5">
@@ -823,17 +803,13 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
               {/* Fila 2: Dirección */}
               <div className="relative">
-                <MapPin className={`w-3 h-3 absolute left-2 top-2 pointer-events-none ${o.is_priority ? 'text-rose-400' : 'text-slate-500'}`} />
+                <MapPin className="w-3 h-3 absolute left-2 top-2 pointer-events-none text-slate-500" />
                 <input
                   type="text"
                   placeholder="Dirección completa"
                   value={o.address}
                   onChange={(e) => updateOrderField(idx, 'address', e.target.value)}
-                  className={`w-full rounded-lg pl-6 pr-2 py-1 text-xs placeholder-slate-500 font-semibold focus:outline-none transition border ${
-                    o.is_priority
-                      ? 'bg-rose-950/40 border-rose-500/50 text-rose-100 focus:border-rose-400'
-                      : 'bg-[#0b1017] border-white/10 text-white focus:border-cyan-500'
-                  }`}
+                  className="w-full rounded-lg pl-6 pr-2 py-1 text-xs placeholder-slate-500 font-semibold focus:outline-none transition border bg-[#0b1017] border-white/10 text-white focus:border-cyan-500"
                 />
               </div>
 
@@ -926,6 +902,18 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                   }
                   return <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 text-[9.5px] font-medium">🟢 Acceso libre</span>;
                 })()}
+
+                {/* Indicador de Prioritario (Abajo en notas con punto rojo) */}
+                {Boolean(o.is_priority) && (
+                  <button
+                    type="button"
+                    onClick={() => updateOrderField(idx, 'is_priority', o.is_priority ? 0 : 1)}
+                    className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/50 text-[9.5px] font-bold flex items-center gap-1 cursor-pointer hover:bg-rose-500/30 transition shadow-2xs"
+                    title="Trabajo Prioritario (Toca para alternar)"
+                  >
+                    <span>🔴 Prioritario</span>
+                  </button>
+                )}
 
                 {/* Cruce de Vecinos (SOLO si hay cruce real) */}
                 {(() => {
