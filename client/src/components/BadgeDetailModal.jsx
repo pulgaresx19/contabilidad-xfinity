@@ -72,27 +72,31 @@ export default function BadgeDetailModal({
         {/* Contenido Principal con Scroll Seguro */}
         <div className="p-4 sm:p-5 space-y-3.5 overflow-y-auto max-h-[70dvh] modal-scroll-container">
           
-          {/* Badge Oficial de Despacho */}
-          <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-black/40 border border-white/5">
-            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
-              Código en Despacho:
-            </span>
-            <span className={`px-2.5 py-0.5 rounded-lg border text-[11px] font-mono font-bold tracking-tight ${color.badge}`}>
-              {info.dispatchCode}
-            </span>
-          </div>
-
-          {/* Bloque 1: Deducción de la IA (AuraCore) */}
-          <div className="rounded-2xl border border-white/10 bg-[#131b26] p-3.5 space-y-1.5 shadow-sm">
-            <div className="flex items-center gap-1.5 text-cyan-400">
-              <Sparkles className="w-4 h-4 shrink-0" />
-              <span className="text-xs font-black uppercase tracking-wider text-slate-200">
-                ¿Qué patrón deduce la IA?
+          {/* Bloque Unificado: Código de Despacho y Deducción de la IA */}
+          <div className="rounded-2xl border border-cyan-500/25 bg-[#0e1622] p-3.5 space-y-2.5 shadow-sm text-left">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 text-cyan-400">
+                <Sparkles className="w-4 h-4 shrink-0" />
+                <span className="text-xs font-black uppercase tracking-wider text-slate-200 font-mono">
+                  Código y Deducción IA
+                </span>
+              </div>
+              <span className={`px-2.5 py-0.5 rounded-lg border text-[11px] font-mono font-bold tracking-tight ${color.badge} shrink-0`}>
+                {info.dispatchCode}
               </span>
             </div>
-            <p className="text-[11.5px] text-slate-300 font-mono leading-relaxed pl-5">
-              {info.aiPattern}
-            </p>
+
+            <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 space-y-1.5 text-left">
+              <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
+                Patrón analizado en la orden:
+              </div>
+              <div className="text-[11.5px] text-cyan-200 font-mono leading-relaxed">
+                {info.aiPattern}
+              </div>
+              <p className="text-[10.5px] text-slate-400 leading-snug pt-1 border-t border-white/5">
+                Al detectar este código o texto en la hoja de trabajo, la IA marca automáticamente este estado para advertir las condiciones del terreno al técnico.
+              </p>
+            </div>
           </div>
 
           {/* Bloque 2: Significado de Campo y Recomendación */}
