@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { getLocalDateStr, normalizeDateStr } from '../utils/dateUtils';
 import { interactWithAuraCore } from '../services/auraService';
+import { cleanRawNotes } from '../utils/remarkUtils';
 
 export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech }) {
   const [sheetDate, setSheetDate] = useState(() => getLocalDateStr());
@@ -230,11 +231,21 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
           drop_footage: parseFloat(o.drop_footage) || 0,
           cable_type: o.cable_type === 'RG-11' ? 'RG-11' : 'RG-6',
           bore_type: o.bore_type || 'N',
-          obstacles: o.obstacles || 'N',
+          obstacles: (() => {
+            const rawObs = String(o.obstacles || '').toUpperCase();
+            if (rawObs.includes('LANDSC') || rawObs.includes('LANS') || /LANS/i.test(String(o.raw_notes || ''))) {
+              return 'LANDSC';
+            }
+            if (rawObs.includes('SPRKLR') || rawObs.includes('SPRKL') || /SPRKLR|SPRKL/i.test(String(o.raw_notes || ''))) {
+              return 'SPRKL';
+            }
+            return o.obstacles || 'N';
+          })(),
+          is_temp: o.is_temp ? 1 : (/TEMP[:\s.\-_]*Y/i.test(String(o.raw_notes || '')) ? 1 : 0),
           rate_calculated: calcOrderRate(o.drop_footage, o.bore_type),
           status: 'Pendiente',
           payment_status: 'Pendiente',
-          raw_notes: o.raw_notes || ''
+          raw_notes: cleanRawNotes(o.raw_notes || '')
         }))
       );
       if (aiNeedsConfirmation && aiNote) {

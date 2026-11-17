@@ -1,4 +1,5 @@
 import Tesseract from 'tesseract.js';
+import { cleanRawNotes } from '../utils/remarkUtils';
 
 // Normalizer for address keys (for deduplication)
 function normalizeAddrKey(addr) {
@@ -67,7 +68,8 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
         } else if (up.startsWith('TEMP:')) {
           is_temp = t.substring(5).trim().toUpperCase() === 'Y';
         } else if (up.startsWith('OBSTACLES:')) {
-          obstacles = t.substring(10).trim();
+          const obsRaw = t.substring(10).trim();
+          obstacles = (obsRaw.toUpperCase().includes('LANDSC') || obsRaw.toUpperCase().includes('LANS')) ? 'LANDSC' : obsRaw;
         } else if (up.startsWith('PREMISE ACS:')) {
           premise_access = t.substring(12).trim() || 'N';
         } else if (up.startsWith('NBR:')) {
@@ -99,7 +101,7 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
       obstacles,
       premise_access,
       neighbor_notice,
-      raw_notes: notes,
+      raw_notes: cleanRawNotes(notes),
       rate_calculated: rate,
       manual_adjustment: 0,
       adjustment_reason: '',
@@ -276,7 +278,7 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
   if (obsMatch) {
     const obsVal = obsMatch[1].trim().toUpperCase();
     if (obsVal !== 'N' && obsVal.length > 0) {
-      obstacles = obsVal.includes('LANDSC') ? 'LANDSC' : (obsVal.includes('SPRKR') || obsVal.includes('SPRKLR') ? 'SPRKL' : obsVal);
+      obstacles = (obsVal.includes('LANDSC') || obsVal.includes('LANS')) ? 'LANDSC' : (obsVal.includes('SPRKR') || obsVal.includes('SPRKLR') ? 'SPRKL' : obsVal);
     }
   }
 
@@ -296,7 +298,7 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
     obstacles,
     premise_access: /RQHM/i.test(postJobText) ? 'RQHM' : /DOG/i.test(postJobText) ? 'DOG' : 'N',
     neighbor_notice: /NBR[:\s]*2/i.test(postJobText) ? '2' : 'N',
-    raw_notes: '',
+    raw_notes: cleanRawNotes(postJobText),
     rate_calculated: rate,
     manual_adjustment: 0,
     adjustment_reason: '',

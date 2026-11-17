@@ -13,6 +13,7 @@ import {
 import { formatDateFriendly, normalizeDateStr, formatRouteDuration } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
 import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
+import { getOrderRemark } from '../utils/remarkUtils';
 import { useTheme } from '../context/ThemeContext';
 
 const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
@@ -102,26 +103,6 @@ function optimizeStopsSequence(ordersList, startPoint) {
   }
 
   return [...optimized, ...invalid];
-}
-
-// Helper to extract clean remark or obstacles
-function getOrderRemark(order) {
-  if (!order) return null;
-  const parts = [];
-  if (order.obstacles && order.obstacles !== 'N') {
-    const cleanObs = String(order.obstacles).replace(/^remark[:\s-]*/i, '').trim();
-    if (cleanObs && cleanObs !== 'N') parts.push(cleanObs);
-  }
-  if (order.raw_notes && typeof order.raw_notes === 'string') {
-    let trimmed = order.raw_notes.trim();
-    if (trimmed && !trimmed.startsWith('P#:') && !trimmed.startsWith('CALLFIRST/P#:')) {
-      trimmed = trimmed.replace(/^remark[:\s-]*/i, '').trim();
-      if (trimmed && !parts.includes(trimmed)) {
-        parts.push(trimmed);
-      }
-    }
-  }
-  return parts.length > 0 ? parts.join(' • ') : null;
 }
 
 export default function UberDriverView({
@@ -2619,7 +2600,7 @@ export default function UberDriverView({
                   )}
                 </div>
                 <p className="text-[10.5px] text-slate-400 truncate mt-0.5 font-medium">
-                  {selectedRemark || (selectedOrder.raw_notes ? selectedOrder.raw_notes.slice(0, 45) : 'Notas del trabajo...')}
+                  {selectedRemark || 'Sin observaciones'}
                 </p>
               </div>
 

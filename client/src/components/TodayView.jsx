@@ -14,6 +14,7 @@ import LiveCameraModal from './LiveCameraModal';
 import { stampPhotoWithWatermark } from '../utils/watermark';
 import { getLocalDateStr, normalizeDateStr, formatDateFriendly } from '../utils/dateUtils';
 import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
+import { getOrderRemark } from '../utils/remarkUtils';
 
 export default function TodayView({ 
   orders, 
@@ -138,25 +139,6 @@ export default function TodayView({
     if (statusFilter !== 'ALL' && o.status !== statusFilter) return false;
     return true;
   });
-
-  // Helper to extract clean remark or obstacles
-  const getOrderRemark = (order) => {
-    const parts = [];
-    if (order.obstacles && order.obstacles !== 'N') {
-      const cleanObs = String(order.obstacles).replace(/^remark[:\s-]*/i, '').trim();
-      if (cleanObs && cleanObs !== 'N') parts.push(cleanObs);
-    }
-    if (order.raw_notes && typeof order.raw_notes === 'string') {
-      let trimmed = order.raw_notes.trim();
-      if (trimmed && !trimmed.startsWith('P#:') && !trimmed.startsWith('CALLFIRST/P#:')) {
-        trimmed = trimmed.replace(/^remark[:\s-]*/i, '').trim();
-        if (trimmed && !parts.includes(trimmed)) {
-          parts.push(trimmed);
-        }
-      }
-    }
-    return parts.length > 0 ? parts.join(' • ') : null;
-  };
 
   // Base calculation without manual adjustment
   const getOrderBaseCalculation = (order) => {

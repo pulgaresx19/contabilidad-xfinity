@@ -156,6 +156,40 @@ function initDb() {
   }
 }
 
+// Clean raw notes utility to prevent duplicating telephone, footage, cable, bore in remarks
+function cleanRawNotes(rawText) {
+  if (!rawText || typeof rawText !== 'string') return '';
+  const text = rawText.trim();
+  if (!text) return '';
+
+  const remarkMatch = text.match(/\bREMARKS?[:\s-]+(.*)$/i);
+  if (remarkMatch && remarkMatch[1].trim()) {
+    let afterRemark = remarkMatch[1].trim();
+    afterRemark = afterRemark.replace(/^[\s/|,;:-]+|[\s/|,;:-]+$/g, '').trim();
+    if (afterRemark) return afterRemark;
+  }
+
+  let cleaned = text
+    .replace(/\bCALLFIRST\b/gi, ' ')
+    .replace(/(?:P#?|TEL|PHONE|CELL)[:\s]*[0-9\s().-]{7,15}/gi, ' ')
+    .replace(/(?:DR[O0]{1,2}P|DROP)[:\s->.]*[0-9]+(?:[.,]\d+)?(?:\s*FT)?/gi, ' ')
+    .replace(/(?:Type|Cable)[:\s]*(?:RG[- ]?(?:6|11|M|II))/gi, ' ')
+    .replace(/\bRG[- ]?(?:6|11)\b/gi, ' ')
+    .replace(/BORE[:\s]*(?:DW[:\s]*1?|SW[:\s]*1?|DV[:\s]*1?|SV[:\s]*1?|N\b)/gi, ' ')
+    .replace(/\b(?:DW|SW)[:\s]*1\b/gi, ' ')
+    .replace(/\bTEMP[:\s]*[YN]\b/gi, ' ')
+    .replace(/Obstacl(?:es|ias)?[:\s]*[A-Za-z0-9, ]*(?=\/|$|\b(?:Premise|NBR|REMARKS?)\b)/gi, ' ')
+    .replace(/Premise\s*ACS[:\s]*[A-Za-z0-9, ]*(?=\/|$|\b(?:NBR|REMARKS?)\b)/gi, ' ')
+    .replace(/\bNBR[:\s]*\d+\b/gi, ' ')
+    .replace(/\bREMARKS?[:\s-]*/gi, ' ')
+    .replace(/[/|~_\[\]]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  cleaned = cleaned.replace(/^[\s/|,;:-]+|[\s/|,;:-]+$/g, '').trim();
+  return cleaned;
+}
+
 // Smart parser for Xfinity dispatch format lines
 function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
   if (!line || typeof line !== 'string') return null;
@@ -218,7 +252,8 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
         } else if (up.startsWith('TEMP:')) {
           is_temp = t.substring(5).trim().toUpperCase() === 'Y';
         } else if (up.startsWith('OBSTACLES:')) {
-          obstacles = t.substring(10).trim();
+          const obsRaw = t.substring(10).trim();
+          obstacles = (obsRaw.toUpperCase().includes('LANDSC') || obsRaw.toUpperCase().includes('LANS')) ? 'LANDSC' : obsRaw;
         } else if (up.startsWith('PREMISE ACS:')) {
           premise_access = t.substring(12).trim() || 'N';
         } else if (up.startsWith('NBR:')) {
@@ -250,7 +285,7 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
       obstacles,
       premise_access,
       neighbor_notice,
-      raw_notes: notes,
+      raw_notes: cleanRawNotes(notes),
       rate_calculated: rate,
       manual_adjustment: 0,
       adjustment_reason: '',
@@ -428,7 +463,7 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
   if (obsMatch) {
     const obsVal = obsMatch[1].trim().toUpperCase();
     if (obsVal !== 'N' && obsVal.length > 0) {
-      obstacles = obsVal.includes('LANDSC') ? 'LANDSC' : (obsVal.includes('SPRKR') || obsVal.includes('SPRKLR') ? 'SPRKL' : obsVal);
+      obstacles = (obsVal.includes('LANDSC') || obsVal.includes('LANS')) ? 'LANDSC' : (obsVal.includes('SPRKR') || obsVal.includes('SPRKLR') ? 'SPRKL' : obsVal);
     }
   }
 
@@ -448,7 +483,7 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
     obstacles,
     premise_access: /RQHM/i.test(postJobText) ? 'RQHM' : /DOG/i.test(postJobText) ? 'DOG' : 'N',
     neighbor_notice: /NBR[:\s]*2/i.test(postJobText) ? '2' : 'N',
-    raw_notes: '',
+    raw_notes: cleanRawNotes(postJobText),
     rate_calculated: rate,
     manual_adjustment: 0,
     adjustment_reason: '',
@@ -501,5 +536,6 @@ initDb();
 
 module.exports = {
   db,
-  parseDispatchLine
+  parseDispatchLine,
+  cleanRawNotes
 };
