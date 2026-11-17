@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Settings, Save, Check, Calendar, DollarSign, ShieldCheck, Sun, Moon, Monitor, Sparkles, Wifi, MessageSquare, RotateCcw } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { getAuraCoreUrl, setAuraCoreUrl, resetAuraCoreUrl, checkAuraCoreHealth } from '../services/auraService';
-import { DEFAULT_SMS_TEMPLATE, getCustomerSmsText } from '../utils/smsUtils';
+import { DEFAULT_SMS_TEMPLATE } from '../utils/smsUtils';
 
 const WEEK_DAYS = [
   { id: '1', short: 'Lun', full: 'Lunes', cycle: 'Martes a Lunes' },
@@ -447,19 +447,10 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
               className="w-full bg-[#0f1722] border border-white/10 rounded-xl p-3 text-xs text-white font-sans leading-relaxed focus:outline-none focus:border-cyan-500 transition shadow-inner resize-y"
             />
 
-            {/* Vista Previa en Tiempo Real */}
-            <div className="p-2.5 bg-[#0f1722] border border-emerald-500/20 rounded-xl space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                  Vista previa de cómo le llega al cliente:
-                </span>
-                <span className="text-[9.5px] text-slate-400 font-mono">Ej: 1420 Oak St</span>
-              </div>
-              <p className="text-[11px] text-slate-200 leading-relaxed italic select-all">
-                "{getCustomerSmsText('1420 Oak St', settings.tech_default, settings.sms_template)}"
-              </p>
-              <p className="text-[10px] text-slate-400 pt-1 border-t border-white/8 leading-snug">
-                <strong className="text-slate-300">Traducción base:</strong> Aviso de Xfinity / Comcast para (Dirección): Hola, le habla (Operador), su técnico de Drop Bury. Trabajaré afuera en breve para enterrar su cable exterior. No necesita estar en casa ni salir (solo es constancia de cortesía). Escríbame por texto ÚNICAMENTE si tiene portón con llave, mascotas en el patio o riego/cerca invisible.
+            {/* Traducción Base en Español */}
+            <div className="p-2.5 bg-[#0f1722] border border-white/10 rounded-xl">
+              <p className="text-[10.5px] text-slate-300 leading-relaxed">
+                <strong className="text-emerald-400">Traducción base:</strong> Aviso de Xfinity / Comcast para (Dirección): Hola, le habla (Operador), su técnico de soterrado de cable (Drop Bury). Estaré trabajando afuera en breve para enterrar su línea de cable exterior. No necesita estar en casa ni salir; este es solo un aviso de cortesía. Por favor escríbame por texto ÚNICAMENTE si tiene algún portón con llave, mascotas en el patio o sistemas privados de riego/cercas invisibles para perros. ¡Gracias!
               </p>
             </div>
           </div>
