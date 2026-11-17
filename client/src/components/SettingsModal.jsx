@@ -398,44 +398,43 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
               Este es el mensaje preescrito que se abre al tocar el ícono de SMS en cada trabajo. Usa <strong className="text-cyan-300 font-mono">(Dirección)</strong> para la casa del cliente y <strong className="text-emerald-300 font-mono">(Operador)</strong> para tu nombre:
             </p>
 
-            {/* Botones rápidos para insertar variables o restaurar */}
-            <div className="flex flex-wrap items-center justify-between gap-1.5">
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      sms_template: `${prev.sms_template || ''} (Dirección)`.trim()
-                    }))
-                  }
-                  className="px-2 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 text-[10.5px] font-mono font-bold transition cursor-pointer"
-                  title="Insertar marcador de dirección del cliente"
-                >
-                  + (Dirección)
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      sms_template: `${prev.sms_template || ''} (Operador)`.trim()
-                    }))
-                  }
-                  className="px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[10.5px] font-mono font-bold transition cursor-pointer"
-                  title="Insertar marcador de nombre del operador"
-                >
-                  + (Operador)
-                </button>
-              </div>
+            {/* Botones rápidos en una sola fila lineal */}
+            <div className="grid grid-cols-3 gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    sms_template: `${prev.sms_template || ''} (Dirección)`.trim()
+                  }))
+                }
+                className="py-1.5 px-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 text-[9.5px] sm:text-[10px] font-mono font-bold flex items-center justify-center whitespace-nowrap transition cursor-pointer active:scale-95"
+                title="Insertar marcador de dirección del cliente"
+              >
+                + (Dirección)
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    sms_template: `${prev.sms_template || ''} (Operador)`.trim()
+                  }))
+                }
+                className="py-1.5 px-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[9.5px] sm:text-[10px] font-mono font-bold flex items-center justify-center whitespace-nowrap transition cursor-pointer active:scale-95"
+                title="Insertar marcador de nombre del operador"
+              >
+                + (Operador)
+              </button>
 
               <button
                 type="button"
                 onClick={() => setSettings((prev) => ({ ...prev, sms_template: DEFAULT_SMS_TEMPLATE }))}
-                className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-[10.5px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                className="py-1.5 px-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-[9.5px] sm:text-[10px] font-semibold flex items-center justify-center gap-1 whitespace-nowrap transition cursor-pointer active:scale-95"
                 title="Restaurar mensaje predeterminado"
               >
-                <RotateCcw className="h-3 w-3" />
+                <RotateCcw className="h-2.5 w-2.5 shrink-0" />
                 <span>Restaurar original</span>
               </button>
             </div>
