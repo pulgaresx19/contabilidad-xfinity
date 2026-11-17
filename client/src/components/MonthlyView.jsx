@@ -5,7 +5,7 @@ import {
   Car, Utensils, Smartphone, Shield, Package, Home, Trash2, Copy, 
   Check, CheckCheck, Share2, AlertCircle, FileText, ChevronDown, ChevronUp, Image as ImageIcon,
   ShieldCheck, CheckCircle, Edit3, Pencil, Camera, Sparkles, AlertTriangle, ExternalLink, X,
-  ArrowDownWideNarrow
+  ArrowDownWideNarrow, Paperclip
 } from 'lucide-react';
 import { 
   getCurrentMonthStr, formatMonthFriendly, 
@@ -16,6 +16,7 @@ import AddExpenseModal from './AddExpenseModal';
 import EditJobModal from './EditJobModal';
 import ShareReportModal from './ShareReportModal';
 import HistoricalOrderCard from './HistoricalOrderCard';
+import ZoomableImageViewer from './ZoomableImageViewer';
 
 const CATEGORY_ICONS = {
   // Orden oficial solicitado:
@@ -53,6 +54,7 @@ export default function MonthlyView({
   const [editingOrder, setEditingOrder] = useState(null);
   const [selectedWeekModal, setSelectedWeekModal] = useState(null);
   const [selectedExpenseModal, setSelectedExpenseModal] = useState(null);
+  const [selectedReceiptModal, setSelectedReceiptModal] = useState(null);
   const [copiedWeekKey, setCopiedWeekKey] = useState(null);
   const [copiedReport, setCopiedReport] = useState(false);
   const [updatingWeekKey, setUpdatingWeekKey] = useState(null);
@@ -566,16 +568,36 @@ ${weeksLines || '  (No hay semanas registradas)'}
 
                     <div className="flex items-center gap-2">
                       {w.isPaid ? (
-                        <button
-                          type="button"
-                          disabled={isUpdating}
-                          onClick={(e) => handleToggleWeekPayment(w, 'Pendiente', e)}
-                          className="px-2.5 py-1 bg-emerald-500/15 hover:bg-rose-500/15 text-emerald-400 hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30 rounded-xl text-[10px] font-black flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-xs"
-                          title="Toca para cambiar a Pendiente si hubo algún error"
-                        >
-                          <CheckCircle className="h-3 w-3" />
-                          <span>Cobrado ✓</span>
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={isUpdating}
+                            onClick={(e) => handleToggleWeekPayment(w, 'Pendiente', e)}
+                            className="px-2.5 py-1 bg-emerald-500/15 hover:bg-rose-500/15 text-emerald-400 hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30 rounded-xl text-[10px] font-black flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-xs"
+                            title="Toca para cambiar a Pendiente si hubo algún error"
+                          >
+                            <CheckCircle className="h-3 w-3" />
+                            <span>Cobrado ✓</span>
+                          </button>
+                          {(() => {
+                            const weekReceipt = w.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null);
+                            if (!weekReceipt) return null;
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedReceiptModal({ photo: weekReceipt, week: w });
+                                }}
+                                className="px-2 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 transition active:scale-90 cursor-pointer shadow-2xs"
+                                title="Ver comprobante de liquidación / cheque"
+                              >
+                                <Paperclip className="h-3 w-3 stroke-[2.2]" />
+                                <span className="text-[10px] font-bold tracking-tight">Recibo</span>
+                              </button>
+                            );
+                          })()}
+                        </div>
                       ) : (
                         <button
                           type="button"
@@ -862,94 +884,100 @@ ${weeksLines || '  (No hay semanas registradas)'}
       )}
 
       {/* MODAL OVERLAY DE ÓRDENES DE LA SEMANA (IDÉNTICO A CIERRE SEMANAL) */}
-      {selectedWeekModal && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
-          style={{
-            paddingTop: 'max(env(safe-area-inset-top, 0px) + 16px, 1.25rem)',
-            paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setSelectedWeekModal(null);
-          }}
-        >
+      {selectedWeekModal && (() => {
+        const modalReceiptPhoto = selectedWeekModal.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + selectedWeekModal.key) : null);
+        return (
           <div 
-            className="bg-[#101722] border border-white/10 rounded-3xl w-full max-w-sm sm:max-w-md h-[80dvh] sm:h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
+            style={{
+              paddingTop: 'max(env(safe-area-inset-top, 0px) + 16px, 1.25rem)',
+              paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setSelectedWeekModal(null);
+            }}
           >
-            {/* Header del Modal */}
-            <div className="px-4 sm:px-5 py-3 border-b border-white/10 flex items-center justify-between bg-slate-900/70 shrink-0">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white font-bold shrink-0">
-                  <FileText className="w-4 h-4" />
+            <div 
+              className="bg-[#101722] border border-white/10 rounded-3xl w-full max-w-sm sm:max-w-md h-[80dvh] sm:h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header del Modal */}
+              <div className="px-4 sm:px-5 py-3 border-b border-white/10 flex items-center justify-between bg-slate-900/70 shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white font-bold shrink-0">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono truncate">
+                      Semana {selectedWeekModal.displayLabel || selectedWeekModal.key}
+                    </h3>
+                    <p className="text-[11px] text-cyan-400/90 font-mono font-medium flex items-center gap-1.5 truncate">
+                      <Calendar className="w-3 h-3 text-cyan-400/70 shrink-0" />
+                      <span>{selectedWeekModal.startDate} al {selectedWeekModal.endDate}</span>
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono truncate">
-                    Semana {selectedWeekModal.displayLabel || selectedWeekModal.key}
-                  </h3>
-                  <p className="text-[11px] text-cyan-400/90 font-mono font-medium flex items-center gap-1.5 truncate">
-                    <Calendar className="w-3 h-3 text-cyan-400/70 shrink-0" />
-                    <span>{selectedWeekModal.startDate} al {selectedWeekModal.endDate}</span>
-                  </p>
-                </div>
-              </div>
 
-              {/* Botón Cerrar */}
-              <button
-                type="button"
-                onClick={() => setSelectedWeekModal(null)}
-                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition shrink-0 ml-2 cursor-pointer"
-                title="Cerrar ventana"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* KPI Bar de 3 Columnas Cockpit */}
-            <div className="grid grid-cols-3 gap-2 px-4 py-2 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
-              <div className="bg-[#16202c] border border-white/5 rounded-xl py-1 px-1">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Total Liquidar</span>
-                <span className={`text-xs sm:text-sm font-black font-mono leading-none ${
-                  selectedWeekModal.isPaid ? 'text-emerald-400' : 'text-amber-400'
-                }`}>
-                  ${(selectedWeekModal.totalEarnings || 0).toFixed(2)}
-                </span>
-              </div>
-              <div className="bg-[#16202c] border border-white/5 rounded-xl py-1 px-1">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Metraje</span>
-                <span className="text-xs sm:text-sm font-black text-amber-300 font-mono leading-none">
-                  {Math.round(selectedWeekModal.totalFootage || 0)} ft
-                </span>
-              </div>
-              <div className="bg-[#16202c] border border-white/5 rounded-xl py-1 px-1">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Trabajos</span>
-                <span className="text-xs sm:text-sm font-black text-cyan-400 font-mono leading-none">
-                  {selectedWeekModal.orders?.length || 0}
-                </span>
-              </div>
-            </div>
-
-            {/* Cuerpo del Modal con Scroll */}
-            <div className="p-3.5 overflow-y-auto space-y-3 flex-1 min-h-0 scrollbar-none">
-              {/* Listado Completo de Trabajos */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between px-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <span className="flex items-center gap-1.5">
-                    <span>Historial de Trabajos</span>
-                    <span className="text-cyan-400 font-mono">({selectedWeekModal.orders?.length || 0})</span>
-                  </span>
-                  {selectedWeekModal.isPaid ? (
-                    <span className="text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-black flex items-center gap-1 shrink-0 normal-case tracking-normal">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Cobrado
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-black flex items-center gap-1 shrink-0 normal-case tracking-normal">
-                      <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                      Pendiente
-                    </span>
+                <div className="flex items-center gap-2 ml-2 shrink-0">
+                  {/* Botón Comprobante en Header */}
+                  {modalReceiptPhoto && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedReceiptModal({ photo: modalReceiptPhoto, week: selectedWeekModal })}
+                      className="h-8 px-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 transition active:scale-95 shadow-xs cursor-pointer"
+                      title="Ver comprobante de pago o cheque de esta semana"
+                    >
+                      <Paperclip className="h-3.5 w-3.5 stroke-[2.2]" />
+                      <span className="text-[10px] font-bold tracking-tight">Recibo</span>
+                    </button>
                   )}
+
+                  {/* Botón Cerrar */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedWeekModal(null)}
+                    className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition shrink-0 cursor-pointer"
+                    title="Cerrar ventana"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
+              </div>
+
+              {/* KPI Bar de 3 Columnas Cockpit */}
+              <div className="grid grid-cols-3 gap-2 px-4 py-2 bg-[#0d141e] border-b border-white/5 shrink-0 text-center">
+                <div className="bg-[#16202c] border border-white/5 rounded-xl py-1 px-1">
+                  <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Total Liquidar</span>
+                  <span className={`text-xs sm:text-sm font-black font-mono leading-none ${
+                    selectedWeekModal.isPaid ? 'text-emerald-400' : 'text-amber-400'
+                  }`}>
+                    ${(selectedWeekModal.totalEarnings || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="bg-[#16202c] border border-white/5 rounded-xl py-1 px-1">
+                  <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Metraje</span>
+                  <span className="text-xs sm:text-sm font-black text-amber-300 font-mono leading-none">
+                    {Math.round(selectedWeekModal.totalFootage || 0)} ft
+                  </span>
+                </div>
+                <div className="bg-[#16202c] border border-white/5 rounded-xl py-1 px-1">
+                  <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Trabajos</span>
+                  <span className="text-xs sm:text-sm font-black text-cyan-400 font-mono leading-none">
+                    {selectedWeekModal.orders?.length || 0}
+                  </span>
+                </div>
+              </div>
+
+              {/* Cuerpo del Modal con Scroll */}
+              <div className="p-3.5 overflow-y-auto space-y-3 flex-1 min-h-0 scrollbar-none">
+                {/* Listado Completo de Trabajos */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between px-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <span className="flex items-center gap-1.5">
+                      <span>Historial de Trabajos</span>
+                      <span className="text-cyan-400 font-mono">({selectedWeekModal.orders?.length || 0})</span>
+                    </span>
+                  </div>
 
                 {(selectedWeekModal.orders || []).map((order, idx) => (
                   <HistoricalOrderCard
@@ -1014,7 +1042,7 @@ ${weeksLines || '  (No hay semanas registradas)'}
             </div>
           </div>
         </div>
-      )}
+      ); })()}
 
       {/* MODAL DETALLE DE GASTO Y EVIDENCIA DE TICKETS */}
       {selectedExpenseModal && (
@@ -1197,52 +1225,44 @@ ${weeksLines || '  (No hay semanas registradas)'}
         </div>
       )}
 
-      {/* FULLSCREEN PHOTO PREVIEW MODAL (FOTO CENTRADA Y BOTONES DESPEGADOS) */}
+      {/* FULLSCREEN PHOTO PREVIEW MODAL (CON ZOOM Y PAN INTERACTIVO) */}
       {selectedPhoto && (
-        <div
-          onClick={() => setSelectedPhoto(null)}
-          className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-4 animate-fade-in select-none"
-          style={{
-            paddingTop: 'max(env(safe-area-inset-top, 0px) + 12px, 1rem)',
-            paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
-          }}
-        >
-          {/* Barra superior con botón X despejado en la esquina superior derecha sin tapar la foto */}
-          <div className="w-full flex items-center justify-end px-2 py-1 shrink-0 z-50">
+        <ZoomableImageViewer
+          src={selectedPhoto}
+          alt="Evidencia"
+          title="Evidencia de Trabajo"
+          onClose={() => setSelectedPhoto(null)}
+          extraFooterActions={
             <button
               type="button"
               onClick={() => setSelectedPhoto(null)}
-              className="p-2.5 rounded-full bg-slate-900/90 text-white hover:text-cyan-400 border border-white/20 shadow-2xl transition active:scale-90 cursor-pointer"
-              title="Cerrar foto"
+              className="px-6 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5"
             >
-              <X className="h-5 w-5 stroke-[2.5]" />
+              <X className="h-3.5 w-3.5" />
+              <span>Cerrar</span>
             </button>
-          </div>
+          }
+        />
+      )}
 
-          {/* Contenedor central: foto perfectamente centrada en el medio */}
-          <div 
-            className="flex-1 min-h-0 w-full flex items-center justify-center p-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <img
-              src={selectedPhoto}
-              alt="Evidencia"
-              className="max-h-[62dvh] sm:max-h-[68dvh] max-w-[92vw] sm:max-w-lg w-auto h-auto rounded-2xl object-contain border border-white/10 shadow-2xl"
-            />
-          </div>
-
-          {/* Botón inferior despegado abajo con margen prudente */}
-          <div className="shrink-0 pt-3 pb-1" onClick={(e) => e.stopPropagation()}>
+      {/* MODAL FULLSCREEN: VISOR DE COMPROBANTE DE PAGO (CON ZOOM Y PAN INTERACTIVO) */}
+      {selectedReceiptModal && (
+        <ZoomableImageViewer
+          src={selectedReceiptModal.photo}
+          alt="Comprobante de Pago"
+          title={`Comprobante • Semana ${selectedReceiptModal.week?.displayLabel || selectedReceiptModal.week?.key}`}
+          onClose={() => setSelectedReceiptModal(null)}
+          extraFooterActions={
             <button
               type="button"
-              onClick={() => setSelectedPhoto(null)}
-              className="px-6 py-2.5 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-2"
+              onClick={() => setSelectedReceiptModal(null)}
+              className="px-6 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5"
             >
-              <X className="h-4 w-4" />
-              <span>Cerrar Foto</span>
+              <X className="h-3.5 w-3.5" />
+              <span>Cerrar</span>
             </button>
-          </div>
-        </div>
+          }
+        />
       )}
 
       {/* MODAL DE REPORTE PARA WHATSAPP */}

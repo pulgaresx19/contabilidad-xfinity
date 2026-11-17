@@ -313,7 +313,34 @@ export function initApiAdapter() {
         // --- MONTHLY SUMMARY ---
         if (cleanUrl === '/api/monthly-summary') {
           const monthParam = searchParams.get('month');
+          let backendReceipts = {};
+          try {
+            const rawRes = await nativeFetch(url, options);
+            if (rawRes.ok) {
+              const bData = await rawRes.clone().json();
+              if (bData && bData.weeks) {
+                bData.weeks.forEach(w => {
+                  if (w.key && w.receipt_photo) {
+                    backendReceipts[w.key] = w.receipt_photo;
+                    try { localStorage.setItem('receipt_' + w.key, w.receipt_photo); } catch (e) {}
+                  }
+                });
+              }
+            }
+          } catch (e) {}
+
           const summary = await localDb.getMonthlySummary(monthParam);
+          if (summary && summary.weeks) {
+            summary.weeks.forEach(w => {
+              if (!w.receipt_photo && backendReceipts[w.key]) {
+                w.receipt_photo = backendReceipts[w.key];
+              }
+              if (!w.receipt_photo && typeof window !== 'undefined') {
+                const lsPhoto = localStorage.getItem('receipt_' + w.key);
+                if (lsPhoto) w.receipt_photo = lsPhoto;
+              }
+            });
+          }
           return jsonResponse(summary);
         }
 

@@ -1500,13 +1500,23 @@ app.get('/api/monthly-summary', (req, res) => {
       w.orders.push(order);
     }
 
+    // Look up weekly receipts
+    let receiptsMap = {};
+    try {
+      const allR = db.prepare('SELECT week_key, receipt_photo FROM week_receipts').all();
+      for (const r of allR) {
+        if (r && r.week_key) receiptsMap[r.week_key] = r.receipt_photo;
+      }
+    } catch (e) {}
+
     const allWeeks = Object.values(weeksMap).map(w => {
       const completedList = w.orders.filter(o => o.status === 'Completado');
       const isPaid = completedList.length > 0 && completedList.every(o => o.payment_status === 'Cobrado');
       return {
         ...w,
         isPaid,
-        payment_status: isPaid ? 'Cobrado' : 'Pendiente'
+        payment_status: isPaid ? 'Cobrado' : 'Pendiente',
+        receipt_photo: receiptsMap[w.key] || null
       };
     }).sort((a, b) => b.startDate.localeCompare(a.startDate));
 

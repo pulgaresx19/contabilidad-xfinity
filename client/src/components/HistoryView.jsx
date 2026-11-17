@@ -688,7 +688,7 @@ ${jobLines}
                                 title="Ver comprobante de liquidación / cheque"
                               >
                                 <Paperclip className="h-3 w-3 stroke-[2.2]" />
-                                <span className="text-[10px] font-black uppercase">Recibo</span>
+                                <span className="text-[10px] font-bold tracking-tight">Recibo</span>
                               </button>
                             );
                           })()}
@@ -970,7 +970,7 @@ ${jobLines}
 
                 <div className="flex items-center gap-2 ml-2 shrink-0">
                   {/* Botón Comprobante en Header */}
-                  {modalReceiptPhoto && (
+                  {modalReceiptPhoto ? (
                     <button
                       type="button"
                       onClick={() => setSelectedReceiptModal({ photo: modalReceiptPhoto, week: selectedWeekModal })}
@@ -978,9 +978,47 @@ ${jobLines}
                       title="Ver comprobante de pago o cheque de esta semana"
                     >
                       <Paperclip className="h-3.5 w-3.5 stroke-[2.2]" />
-                      <span className="text-[10px] font-black uppercase tracking-wider">Recibo</span>
+                      <span className="text-[10px] font-bold tracking-tight">Recibo</span>
                     </button>
-                  )}
+                  ) : selectedWeekModal.isPaid ? (
+                    <label
+                      className="h-8 px-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-cyan-300 border border-white/10 flex items-center gap-1.5 transition active:scale-95 shadow-xs cursor-pointer"
+                      title="Adjuntar foto del recibo o cheque"
+                    >
+                      <Paperclip className="h-3.5 w-3.5 stroke-[2]" />
+                      <span className="text-[10px] font-bold tracking-tight">+ Recibo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = async () => {
+                              const photoData = reader.result;
+                              try {
+                                if (typeof window !== 'undefined') {
+                                  localStorage.setItem('receipt_' + selectedWeekModal.key, photoData);
+                                }
+                              } catch (err) {
+                                console.warn('localStorage quota', err);
+                              }
+                              await fetch(`/api/weeks/${encodeURIComponent(selectedWeekModal.key)}/receipt`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ receipt_photo: photoData })
+                              });
+                              setSelectedWeekModal(prev => ({ ...prev, receipt_photo: photoData }));
+                              if (onRefresh) await onRefresh();
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  ) : null}
 
                   {/* Botón Cerrar */}
                   <button
@@ -1018,73 +1056,6 @@ ${jobLines}
               </div>
             </div>
 
-            {/* Banner Destacado para el Comprobante Semanal (Si existe foto o para adjuntarla) */}
-            {modalReceiptPhoto ? (
-              <div 
-                onClick={() => setSelectedReceiptModal({ photo: modalReceiptPhoto, week: selectedWeekModal })}
-                className="mx-4 mt-3 p-2.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/35 hover:border-emerald-500/60 flex items-center justify-between gap-2.5 cursor-pointer transition active:scale-[0.99] shadow-md select-none shrink-0"
-                title="Toca para ver el comprobante en pantalla completa"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/35 flex items-center justify-center text-emerald-400 shrink-0">
-                    <Paperclip className="h-4 w-4 stroke-[2.2]" />
-                  </div>
-                  <div className="min-w-0">
-                    <span className="text-xs font-black text-emerald-300 block truncate leading-tight">
-                      Comprobante de Pago Archivado
-                    </span>
-                    <span className="text-[10px] text-slate-400 block truncate">
-                      Cheque / constancia de cobro semanal • Toca para abrir
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500 text-slate-950 font-black text-[11px] shadow-sm shrink-0">
-                  <Eye className="h-3.5 w-3.5 stroke-[2.5]" />
-                  <span>Ver Recibo</span>
-                </div>
-              </div>
-            ) : selectedWeekModal.isPaid ? (
-              <div className="mx-4 mt-2.5 px-3 py-2 rounded-2xl bg-slate-900/60 border border-white/10 flex items-center justify-between shrink-0">
-                <span className="text-[10px] text-slate-400 font-medium">
-                  Semana cobrada sin foto de cheque
-                </span>
-                <label className="text-[10px] font-bold text-cyan-300 hover:text-white flex items-center gap-1 cursor-pointer bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 px-2 py-0.5 rounded-lg transition shadow-2xs">
-                  <Paperclip className="h-2.5 w-2.5" />
-                  <span>+ Subir Comprobante</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = async () => {
-                          const photoData = reader.result;
-                          try {
-                            if (typeof window !== 'undefined') {
-                              localStorage.setItem('receipt_' + selectedWeekModal.key, photoData);
-                            }
-                          } catch (err) {
-                            console.warn('localStorage quota', err);
-                          }
-                          await fetch(`/api/weeks/${encodeURIComponent(selectedWeekModal.key)}/receipt`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ receipt_photo: photoData })
-                          });
-                          setSelectedWeekModal(prev => ({ ...prev, receipt_photo: photoData }));
-                          if (onRefresh) await onRefresh();
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                  />
-                </label>
-              </div>
-            ) : null}
-
             {/* Cuerpo del Modal con Scroll */}
             <div className="p-3.5 overflow-y-auto space-y-3 flex-1 min-h-0 scrollbar-none">
               
@@ -1095,30 +1066,6 @@ ${jobLines}
                     <span>Historial de Trabajos</span>
                     <span className="text-cyan-400 font-mono">({selectedWeekModal.orders.length})</span>
                   </span>
-                  {selectedWeekModal.isPaid ? (
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-black flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        Cobrado
-                      </span>
-                      {modalReceiptPhoto && (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedReceiptModal({ photo: modalReceiptPhoto, week: selectedWeekModal })}
-                          className="text-[10px] text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 hover:bg-cyan-500/25 transition cursor-pointer"
-                          title="Ver foto del cheque / comprobante de liquidación"
-                        >
-                          <Paperclip className="h-3 w-3 stroke-[2.2]" />
-                          <span>Comprobante</span>
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-[10px] text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-black flex items-center gap-1 shrink-0">
-                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                      Pendiente
-                    </span>
-                  )}
                 </div>
 
                 {selectedWeekModal.orders.map((order, idx) => (
