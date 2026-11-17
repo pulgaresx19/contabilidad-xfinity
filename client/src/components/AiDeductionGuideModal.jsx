@@ -162,9 +162,6 @@ export default function AiDeductionGuideModal({ isOpen, onClose }) {
               <div className="text-[11.5px] text-cyan-200 font-mono leading-relaxed">
                 {currentItem.aiPattern}
               </div>
-              <p className="text-[10.5px] text-slate-400 leading-snug pt-1 border-t border-white/5">
-                Al detectar este código o texto en la hoja de trabajo, la IA marca automáticamente este estado para advertir las condiciones del terreno al técnico.
-              </p>
             </div>
           </div>
 
