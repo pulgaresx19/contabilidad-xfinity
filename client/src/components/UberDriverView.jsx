@@ -2203,7 +2203,13 @@ export default function UberDriverView({
   const isSelectedCancelled = selectedOrder?.status === 'No Realizado';
   const isSelectedPending = selectedOrder?.status === 'Pendiente';
   const selectedPhotosCount = selectedOrder 
-    ? ((selectedOrder.work_photos_count !== undefined ? selectedOrder.work_photos_count : selectedOrder.photos_count) || (selectedOrder.photos ? selectedOrder.photos.length : 0) || 0)
+    ? (
+        (Number(selectedOrder.work_photos_count) > 0 ? Number(selectedOrder.work_photos_count) : 0) ||
+        (Number(selectedOrder.cancel_photos_count) > 0 ? Number(selectedOrder.cancel_photos_count) : 0) ||
+        (Number(selectedOrder.photos_count) > 0 ? Number(selectedOrder.photos_count) : 0) ||
+        (selectedOrder.photos ? selectedOrder.photos.length : 0) ||
+        0
+      )
     : 0;
 
   // Combined real-time photo list (from order payload + fetch fallback)
@@ -2217,7 +2223,7 @@ export default function UberDriverView({
     return [];
   }, [selectedOrder?.photos, selectedOrderPhotos, selectedOrder?.id]);
 
-  const activePhotosCount = activePhotos.length || selectedPhotosCount || 0;
+  const activePhotosCount = (activePhotos && activePhotos.length > 0) ? activePhotos.length : selectedPhotosCount;
   const isSelectedShared = selectedOrder ? Boolean(selectedOrder.whatsapp_shared || localSharedMap[selectedOrder.id]) : false;
   const selectedRemark = selectedOrder ? getOrderRemark(selectedOrder) : null;
   const hasDrivewayBore = Boolean(selectedOrder?.bore_type && selectedOrder.bore_type !== 'N' && (selectedOrder.bore_type.includes('DW') || selectedOrder.bore_type.length > 0));
@@ -2734,7 +2740,7 @@ export default function UberDriverView({
                   <button
                     type="button"
                     onClick={() => onOpenPhotos(selectedOrder)}
-                    className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer flex items-center justify-center ${
+                    className={`p-1.5 rounded-full transition active:scale-90 cursor-pointer flex items-center justify-center relative ${
                       isSelectedCompleted
                         ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 shadow-xs'
                         : activePhotosCount > 0
@@ -2745,7 +2751,7 @@ export default function UberDriverView({
                       isSelectedCompleted
                         ? 'Paso 1: Fotos listas y trabajo completado'
                         : activePhotosCount > 0
-                        ? 'Fotos tomadas - Toca para agregar más o finalizar'
+                        ? `${activePhotosCount} foto(s) tomada(s) - Toca para ver o agregar más`
                         : 'Paso 1: Solicita fotos de evidencia. Toca para tomar fotos'
                     }
                   >
@@ -2753,6 +2759,11 @@ export default function UberDriverView({
                       <Check className="h-4 w-4 stroke-[3]" />
                     ) : (
                       <Camera className="h-4 w-4 stroke-[2.2]" />
+                    )}
+                    {activePhotosCount > 0 && !isSelectedCompleted && (
+                      <span className="absolute -top-1 -right-1 px-1 min-w-[14px] h-[14px] bg-emerald-500 text-slate-950 text-[8.5px] font-black rounded-full flex items-center justify-center leading-none shadow-xs">
+                        {activePhotosCount}
+                      </span>
                     )}
                   </button>
                 )}
