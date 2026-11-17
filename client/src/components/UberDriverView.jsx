@@ -11,7 +11,7 @@ import {
   Route, MoveUp, MoveDown, CheckCheck, Zap, Maximize2, GripVertical, ArrowUpDown
 } from 'lucide-react';
 import { formatDateFriendly, normalizeDateStr, formatRouteDuration } from '../utils/dateUtils';
-import { geocodeAddressWithMapbox, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
+import { geocodeAddressWithMapbox, detectOrderState, buildNavigationUrl, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
 import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
 import { getOrderRemark, getOrderFieldBadges } from '../utils/remarkUtils';
 import { useTheme } from '../context/ThemeContext';
@@ -55,15 +55,28 @@ function getEstimatedDrivingMiles(lat1, lon1, lat2, lon2) {
   return R * c * 1.25;
 }
 
+// Helper to get cached real road miles if available, otherwise Haversine road estimate
+function getBestPairMiles(lat1, lng1, lat2, lng2, routeCache = null) {
+  if (!lat1 || !lng1 || !lat2 || !lng2) return 0;
+  if (routeCache) {
+    const key = `${Number(lng1).toFixed(5)},${Number(lat1).toFixed(5)}->${Number(lng2).toFixed(5)},${Number(lat2).toFixed(5)}`;
+    const cached = routeCache.get(key);
+    if (cached && cached.shortest && cached.shortest.miles > 0) {
+      return cached.shortest.miles;
+    }
+  }
+  return getEstimatedDrivingMiles(lat1, lng1, lat2, lng2);
+}
+
 // Calculate total driving distance for a full journey
-function calculateTotalTripMiles(ordersList, startPoint) {
+function calculateTotalTripMiles(ordersList, startPoint, routeCache = null) {
   if (!ordersList || ordersList.length === 0) return 0;
   let total = 0;
   let prev = startPoint;
   for (const ord of ordersList) {
     if (ord.latitude && ord.longitude) {
       if (prev && prev.lat && prev.lng) {
-        total += getEstimatedDrivingMiles(prev.lat, prev.lng, ord.latitude, ord.longitude);
+        total += getBestPairMiles(prev.lat, prev.lng, ord.latitude, ord.longitude, routeCache);
       }
       prev = { lat: ord.latitude, lng: ord.longitude };
     }
@@ -71,14 +84,37 @@ function calculateTotalTripMiles(ordersList, startPoint) {
   return total;
 }
 
-// Nearest Neighbor Travesía Optimizer (Shortest Driving Itinerary)
-function optimizeStopsSequence(ordersList, startPoint) {
+// Smart Travesía Optimizer: Keeps completed/cancelled jobs locked at top and optimizes remaining pending stops
+function optimizeStopsSequence(ordersList, startPoint, mode = 'nearest', routeCache = null) {
   if (!ordersList || ordersList.length <= 1) return ordersList;
 
-  const valid = ordersList.filter(o => o.latitude && o.longitude);
-  const invalid = ordersList.filter(o => !o.latitude || !o.longitude);
+  const isDone = (o) => o.status === 'Completado' || o.status === 'No Realizado';
+  const doneOrders = ordersList.filter(isDone);
+  const pendingOrders = ordersList.filter(o => !isDone(o));
 
-  let currentPos = startPoint || (valid[0] ? { lat: valid[0].latitude, lng: valid[0].longitude } : null);
+  // If there are both finished jobs and pending jobs, keep finished jobs locked at the top
+  const shouldLockDone = doneOrders.length > 0 && pendingOrders.length > 0;
+  const lockedPrefix = shouldLockDone ? doneOrders : [];
+  const poolToOptimize = shouldLockDone ? pendingOrders : ordersList;
+
+  const valid = poolToOptimize.filter(o => o.latitude && o.longitude);
+  const invalid = poolToOptimize.filter(o => !o.latitude || !o.longitude);
+
+  if (valid.length <= 1) {
+    return [...lockedPrefix, ...valid, ...invalid].map((ord, idx) => ({
+      ...ord,
+      route_order: idx + 1
+    }));
+  }
+
+  // Determine starting position for the next pending stop
+  const lastLockedWithCoords = [...lockedPrefix].reverse().find(o => o.latitude && o.longitude);
+  let currentPos = startPoint || (
+    lastLockedWithCoords
+      ? { lat: lastLockedWithCoords.latitude, lng: lastLockedWithCoords.longitude }
+      : (valid[0] ? { lat: valid[0].latitude, lng: valid[0].longitude } : null)
+  );
+
   const unvisited = [...valid];
   const optimized = [];
 
@@ -89,7 +125,7 @@ function optimizeStopsSequence(ordersList, startPoint) {
     for (let i = 0; i < unvisited.length; i++) {
       const ord = unvisited[i];
       const dist = currentPos 
-        ? getEstimatedDrivingMiles(currentPos.lat, currentPos.lng, ord.latitude, ord.longitude)
+        ? getBestPairMiles(currentPos.lat, currentPos.lng, ord.latitude, ord.longitude, routeCache)
         : 0;
       if (dist < minDistance) {
         minDistance = dist;
@@ -102,7 +138,12 @@ function optimizeStopsSequence(ordersList, startPoint) {
     currentPos = { lat: nextStop.latitude, lng: nextStop.longitude };
   }
 
-  return [...optimized, ...invalid];
+  const finalValid = mode === 'furthest' ? [...optimized].reverse() : optimized;
+
+  return [...lockedPrefix, ...finalValid, ...invalid].map((ord, idx) => ({
+    ...ord,
+    route_order: idx + 1
+  }));
 }
 
 export default function UberDriverView({
@@ -416,13 +457,15 @@ export default function UberDriverView({
         try {
           const geo = await geocodeAddressWithMapbox(ord.address, ord.city, ord.zip_code);
           if (geo && geo.latitude && geo.longitude) {
+            const isApprox = Boolean(geo.isApproximate);
             ord.latitude = geo.latitude;
             ord.longitude = geo.longitude;
+            ord.is_approx_geo = isApprox;
 
             // Actualizar el estado reactivo inmediatamente para que aparezcan los marcadores de todos los trabajos en el mapa
-            setLiveOrders(prev => (prev || []).map(o => o.id === ord.id ? { ...o, latitude: geo.latitude, longitude: geo.longitude } : o));
+            setLiveOrders(prev => (prev || []).map(o => o.id === ord.id ? { ...o, latitude: geo.latitude, longitude: geo.longitude, is_approx_geo: isApprox } : o));
             if (onUpdateOrders) {
-              onUpdateOrders(prev => (prev || []).map(o => o.id === ord.id ? { ...o, latitude: geo.latitude, longitude: geo.longitude } : o));
+              onUpdateOrders(prev => (prev || []).map(o => o.id === ord.id ? { ...o, latitude: geo.latitude, longitude: geo.longitude, is_approx_geo: isApprox } : o));
             }
 
             fetch(`/api/orders/${ord.id}/coords`, {
@@ -437,13 +480,14 @@ export default function UberDriverView({
               if (idx >= 0) {
                 cached[idx].latitude = geo.latitude;
                 cached[idx].longitude = geo.longitude;
+                cached[idx].is_approx_geo = isApprox;
                 localStorage.setItem('xfinity_cached_orders', JSON.stringify(cached));
               }
             } catch (e) {}
 
             setSelectedOrder(prev => {
               if (prev && prev.id === ord.id) {
-                return { ...prev, latitude: geo.latitude, longitude: geo.longitude };
+                return { ...prev, latitude: geo.latitude, longitude: geo.longitude, is_approx_geo: isApprox };
               }
               return prev;
             });
@@ -486,40 +530,45 @@ export default function UberDriverView({
     return { coords: DEFAULT_LNG_LAT, label: 'Base Comcast' };
   };
 
-  // Helper to fetch and cache shortest route (Mapbox primary + OSRM secondary fallback)
-  const fetchShortestRoute = async (startCoords, destCoords, signal) => {
+  // Helper to fetch and cache shortest route (Mapbox driving-traffic / driving primary + OSRM secondary fallback)
+  const fetchShortestRoute = async (startCoords, destCoords, signal, preferTraffic = isViewingToday) => {
     const cacheKey = `${startCoords[0].toFixed(5)},${startCoords[1].toFixed(5)}->${destCoords[0].toFixed(5)},${destCoords[1].toFixed(5)}`;
     if (routeCacheRef.current.has(cacheKey)) {
       return routeCacheRef.current.get(cacheKey);
     }
 
-    // 1. Primary: Mapbox Directions API
+    // 1. Primary: Mapbox Directions API (uses driving-traffic on today's route for real-time traffic ETA, with driving fallback)
     if (MAPBOX_ACCESS_TOKEN) {
-      try {
-        const dirUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords[0]},${startCoords[1]};${destCoords[0]},${destCoords[1]}?alternatives=true&overview=full&geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`;
-        const res = await fetch(dirUrl, { signal });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.routes && data.routes.length > 0) {
-            const parsed = data.routes.map((r, idx) => ({
-              index: idx,
-              coordinates: r.geometry.coordinates,
-              miles: r.distance / 1609.34,
-              minutes: Math.max(1, Math.round(r.duration / 60)),
-              summary: r.legs?.[0]?.summary || `Vía opción ${idx + 1}`
-            })).sort((a, b) => a.miles - b.miles);
+      const profiles = preferTraffic ? ['driving-traffic', 'driving'] : ['driving'];
+      for (const profile of profiles) {
+        if (signal?.aborted) return null;
+        try {
+          const dirUrl = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${startCoords[0]},${startCoords[1]};${destCoords[0]},${destCoords[1]}?alternatives=true&overview=full&geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`;
+          const res = await fetch(dirUrl, { signal });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.routes && data.routes.length > 0) {
+              const parsed = data.routes.map((r, idx) => ({
+                index: idx,
+                coordinates: r.geometry.coordinates,
+                miles: r.distance / 1609.34,
+                minutes: Math.max(1, Math.round(r.duration / 60)),
+                summary: r.legs?.[0]?.summary || `Vía opción ${idx + 1}`,
+                hasLiveTraffic: profile === 'driving-traffic'
+              })).sort((a, b) => a.miles - b.miles);
 
-            const result = {
-              shortest: parsed[0],
-              allRoutes: parsed
-            };
-            routeCacheRef.current.set(cacheKey, result);
-            return result;
+              const result = {
+                shortest: parsed[0],
+                allRoutes: parsed
+              };
+              routeCacheRef.current.set(cacheKey, result);
+              return result;
+            }
           }
+        } catch (e) {
+          if (e.name === 'AbortError' || signal?.aborted) return null;
+          console.warn(`Mapbox ${profile} directions note:`, e.message);
         }
-      } catch (e) {
-        if (e.name === 'AbortError' || signal?.aborted) return null;
-        console.warn('Mapbox directions note:', e.message);
       }
     }
 
@@ -589,7 +638,7 @@ export default function UberDriverView({
         if (isCancelled) break;
         const target = valid[i];
         const origin = getOriginPoint(target).coords;
-        await fetchShortestRoute(origin, [target.longitude, target.latitude]);
+        await fetchShortestRoute(origin, [target.longitude, target.latitude], undefined, isViewingToday);
       }
     };
 
@@ -599,7 +648,19 @@ export default function UberDriverView({
       isCancelled = true;
       clearTimeout(timer);
     };
-  }, [activeOrders, userLocation?.lat, userLocation?.lng]);
+  }, [activeOrders, userLocation?.lat, userLocation?.lng, isViewingToday]);
+
+  // Helper to extract the true road midpoint coordinate from a route leg's steps
+  const extractLegRoadMidpoint = (leg, fromStop, toStop) => {
+    const stepCoords = (leg?.steps || []).flatMap(s => s.geometry?.coordinates || []);
+    if (stepCoords.length > 0) {
+      return stepCoords[Math.floor(stepCoords.length / 2)];
+    }
+    return [
+      (Number(fromStop.longitude) + Number(toStop.longitude)) / 2,
+      (Number(fromStop.latitude) + Number(toStop.latitude)) / 2
+    ];
+  };
 
   // Compute multi-stop sequence route for the whole day in light sky blue (#38bdf8)
   const updateTravesiaRoute = async (sequenceList) => {
@@ -689,57 +750,62 @@ export default function UberDriverView({
     const controller = new AbortController();
     travesiaAbortControllerRef.current = controller;
 
-    // 1. Primary Attempt: Mapbox Multi-Stop Directions API (up to 25 waypoints)
+    // 1. Primary Attempt: Mapbox Multi-Stop Directions API (up to 25 waypoints, with live traffic on Today)
     if (MAPBOX_ACCESS_TOKEN && sequenceStops.length <= 25) {
-      try {
-        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsStr}?overview=full&geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`;
-        const res = await fetch(url, { signal: controller.signal });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.routes && data.routes[0]) {
-            const r = data.routes[0];
-            const coordinates = r.geometry.coordinates;
-            const totalMiles = r.distance / 1609.34;
-            const totalMinutes = Math.max(1, Math.round(r.duration / 60));
-            const hasGpsStart = Boolean(sequenceStops[0]?.isCurrentGps);
-            const legs = (r.legs || []).map((leg, idx) => ({
-              fromOrder: sequenceStops[idx],
-              toOrder: sequenceStops[idx + 1],
-              fromIndex: hasGpsStart ? (idx === 0 ? -1 : idx - 1) : idx,
-              toIndex: hasGpsStart ? idx : idx + 1,
-              isFromGps: hasGpsStart && idx === 0,
-              miles: leg.distance / 1609.34,
-              minutes: Math.max(1, Math.round(leg.duration / 60))
-            }));
+      const profiles = isViewingToday ? ['driving-traffic', 'driving'] : ['driving'];
+      for (const profile of profiles) {
+        if (controller.signal.aborted) return;
+        try {
+          const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordsStr}?overview=full&geometries=geojson&steps=true&access_token=${MAPBOX_ACCESS_TOKEN}`;
+          const res = await fetch(url, { signal: controller.signal });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.routes && data.routes[0]) {
+              const r = data.routes[0];
+              const coordinates = r.geometry.coordinates;
+              const totalMiles = r.distance / 1609.34;
+              const totalMinutes = Math.max(1, Math.round(r.duration / 60));
+              const hasGpsStart = Boolean(sequenceStops[0]?.isCurrentGps);
+              const legs = (r.legs || []).map((leg, idx) => ({
+                fromOrder: sequenceStops[idx],
+                toOrder: sequenceStops[idx + 1],
+                fromIndex: hasGpsStart ? (idx === 0 ? -1 : idx - 1) : idx,
+                toIndex: hasGpsStart ? idx : idx + 1,
+                isFromGps: hasGpsStart && idx === 0,
+                miles: leg.distance / 1609.34,
+                minutes: Math.max(1, Math.round(leg.duration / 60)),
+                midCoord: extractLegRoadMidpoint(leg, sequenceStops[idx], sequenceStops[idx + 1])
+              }));
 
-            const result = {
-              coordinates,
-              legs,
-              summary: { totalMiles, totalMinutes }
-            };
+              const result = {
+                coordinates,
+                legs,
+                summary: { totalMiles, totalMinutes }
+              };
 
-            routeCacheRef.current.set(cacheKey, result);
-            setTravesiaLegs(legs);
-            setTravesiaSummary({ totalMiles, totalMinutes });
-            travesiaGeometryRef.current = coordinates;
+              routeCacheRef.current.set(cacheKey, result);
+              setTravesiaLegs(legs);
+              setTravesiaSummary({ totalMiles, totalMinutes });
+              travesiaGeometryRef.current = coordinates;
 
-            const map = mapInstanceRef.current;
-            if (map && map.getSource('route-travesia')) {
-              map.getSource('route-travesia').setData({
-                type: 'Feature',
-                properties: {},
-                geometry: { type: 'LineString', coordinates }
-              });
+              const map = mapInstanceRef.current;
+              if (map && map.getSource('route-travesia')) {
+                map.getSource('route-travesia').setData({
+                  type: 'Feature',
+                  properties: {},
+                  geometry: { type: 'LineString', coordinates }
+                });
+              }
+              if (map) {
+                renderTravesiaLegBadges(map, legs);
+              }
+              return;
             }
-            if (map) {
-              renderTravesiaLegBadges(map, legs);
-            }
-            return;
           }
+        } catch (e) {
+          if (e.name === 'AbortError' || controller.signal.aborted) return;
+          console.warn(`Mapbox travesia (${profile}) directions note:`, e.message);
         }
-      } catch (e) {
-        if (e.name === 'AbortError' || controller.signal.aborted) return;
-        console.warn('Mapbox travesia directions note:', e.message);
       }
     }
 
@@ -747,7 +813,7 @@ export default function UberDriverView({
 
     // 2. Secondary Attempt: OSRM Multi-Stop Driving API (Free OSM road routing, seamlessly navigates around lakes and highways)
     try {
-      const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
+      const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson&steps=true`;
       const res = await fetch(osrmUrl, { signal: controller.signal });
       if (res.ok) {
         const data = await res.json();
@@ -764,7 +830,8 @@ export default function UberDriverView({
             toIndex: hasGpsStart ? idx : idx + 1,
             isFromGps: hasGpsStart && idx === 0,
             miles: leg.distance / 1609.34,
-            minutes: Math.max(1, Math.round(leg.duration / 60))
+            minutes: Math.max(1, Math.round(leg.duration / 60)),
+            midCoord: extractLegRoadMidpoint(leg, sequenceStops[idx], sequenceStops[idx + 1])
           }));
 
           const result = {
@@ -825,13 +892,18 @@ export default function UberDriverView({
           const legMinutes = legRoute.shortest.minutes;
           accumulatedMiles += legMiles;
           accumulatedMinutes += legMinutes;
+          const midCoord = coords.length > 0
+            ? coords[Math.floor(coords.length / 2)]
+            : [(Number(s1.longitude) + Number(s2.longitude)) / 2, (Number(s1.latitude) + Number(s2.latitude)) / 2];
+
           stitchedLegs.push({
             fromOrder: s1,
             toOrder: s2,
             fromIndex: i,
             toIndex: i + 1,
             miles: legMiles,
-            minutes: legMinutes
+            minutes: legMinutes,
+            midCoord
           });
         }
       }
@@ -884,7 +956,8 @@ export default function UberDriverView({
         fromIndex: i,
         toIndex: i + 1,
         miles,
-        minutes
+        minutes,
+        midCoord: [(Number(s1.longitude) + Number(s2.longitude)) / 2, (Number(s1.latitude) + Number(s2.latitude)) / 2]
       });
     }
     const fallbackSummary = {
@@ -907,7 +980,7 @@ export default function UberDriverView({
     }
   };
 
-  // Render subtle floating badges on the map along each travesía leg (between consecutive stops)
+  // Render subtle floating badges on the map along each travesía leg (positioned directly on road curve)
   const renderTravesiaLegBadges = (map, legs) => {
     if (!map) return;
     // Clear previous travesía leg badges
@@ -917,14 +990,18 @@ export default function UberDriverView({
     if (!legs || legs.length === 0) return;
 
     legs.forEach((leg) => {
-      const { fromOrder, toOrder, minutes, miles, fromIndex, toIndex, isFromGps } = leg;
+      const { fromOrder, toOrder, minutes, miles, fromIndex, toIndex, isFromGps, midCoord } = leg;
       if (!fromOrder?.latitude || !fromOrder?.longitude || !toOrder?.latitude || !toOrder?.longitude) return;
 
       // Skip large highway badge from distant GPS to keep town view clean
       if (isFromGps && miles > 25) return;
 
-      const midLng = (Number(fromOrder.longitude) + Number(toOrder.longitude)) / 2;
-      const midLat = (Number(fromOrder.latitude) + Number(toOrder.latitude)) / 2;
+      const badgeLngLat = (Array.isArray(midCoord) && midCoord.length === 2 && !isNaN(midCoord[0]) && !isNaN(midCoord[1]))
+        ? midCoord
+        : [
+            (Number(fromOrder.longitude) + Number(toOrder.longitude)) / 2,
+            (Number(fromOrder.latitude) + Number(toOrder.latitude)) / 2
+          ];
 
       const legBadgeEl = document.createElement('div');
       legBadgeEl.className = 'apple-travesia-leg-badge';
@@ -942,7 +1019,7 @@ export default function UberDriverView({
       };
 
       const legMarker = new mapboxgl.Marker({ element: legBadgeEl, anchor: 'center' })
-        .setLngLat([midLng, midLat])
+        .setLngLat(badgeLngLat)
         .addTo(map);
 
       travesiaBadgeMarkersRef.current.push(legMarker);
@@ -974,6 +1051,16 @@ export default function UberDriverView({
           isFirst: true
         };
       }
+      const gpsLeg = travesiaLegs.find(l => l.isFromGps && String(l.toOrder?.id) === String(order.id));
+      if (gpsLeg) {
+        return {
+          minutes: gpsLeg.minutes,
+          miles: gpsLeg.miles,
+          text: `A ${gpsLeg.minutes} min (${gpsLeg.miles.toFixed(1)} mi) de tu GPS`,
+          shortText: `A ${gpsLeg.minutes} min`,
+          isFirst: true
+        };
+      }
       return {
         text: 'Punto de partida',
         shortText: 'Punto 1',
@@ -981,7 +1068,8 @@ export default function UberDriverView({
       };
     }
 
-    const leg = travesiaLegs.find(l => String(l.toOrder?.id) === String(order.id)) || travesiaLegs[indexInList - 1];
+    const hasGpsOffset = travesiaLegs[0]?.isFromGps ? 1 : 0;
+    const leg = travesiaLegs.find(l => !l.isFromGps && String(l.toOrder?.id) === String(order.id)) || travesiaLegs[indexInList - 1 + hasGpsOffset];
     if (leg) {
       const prevStopNum = indexInList; // 1-based previous stop number
       return {
@@ -1028,9 +1116,11 @@ export default function UberDriverView({
     if (!target.latitude || !target.longitude) {
       const geo = await geocodeAddressWithMapbox(target.address, target.city, target.zip_code);
       if (geo && geo.latitude && geo.longitude) {
-        target = { ...target, latitude: geo.latitude, longitude: geo.longitude };
+        const isApprox = Boolean(geo.isApproximate);
+        target = { ...target, latitude: geo.latitude, longitude: geo.longitude, is_approx_geo: isApprox };
         target.latitude = geo.latitude;
         target.longitude = geo.longitude;
+        target.is_approx_geo = isApprox;
 
         fetch(`/api/orders/${target.id}/coords`, {
           method: 'PATCH',
@@ -1603,7 +1693,11 @@ export default function UberDriverView({
     const activeTarget = selectedOrder || validOrders[0];
     const { coords: startCoords } = getOriginPoint(activeTarget);
 
-    // Technician Vehicle Puck
+    // Technician Vehicle Puck (Always stays at actual live GPS position, never jumps to previous stop)
+    const techGpsCoords = (userLocation && userLocation.lng && userLocation.lat)
+      ? [userLocation.lng, userLocation.lat]
+      : DEFAULT_LNG_LAT;
+
     const userPuckEl = document.createElement('div');
     userPuckEl.className = 'apple-user-puck-mapbox';
     userPuckEl.innerHTML = `
@@ -1612,7 +1706,7 @@ export default function UberDriverView({
     `;
 
     userMarkerRef.current = new mapboxgl.Marker({ element: userPuckEl, anchor: 'center' })
-      .setLngLat(startCoords)
+      .setLngLat(techGpsCoords)
       .addTo(map);
 
     const bounds = new mapboxgl.LngLatBounds();
@@ -2107,21 +2201,12 @@ export default function UberDriverView({
     }
 
     const origin = userLocation || { lat: DEFAULT_LNG_LAT[1], lng: DEFAULT_LNG_LAT[0] };
-    const beforeMiles = calculateTotalTripMiles(tempOrdersList, origin);
+    const beforeMiles = calculateTotalTripMiles(tempOrdersList, origin, routeCacheRef.current);
 
-    let newSequence;
-    if (targetMode === 'nearest') {
-      // 1. Ruta más corta / Más cercano primero (TSP Nearest-Neighbor)
-      newSequence = optimizeStopsSequence(tempOrdersList, origin);
-    } else {
-      // 2. Ruta Inversa / Más lejano primero (del más distante al más cercano)
-      const nearestSeq = optimizeStopsSequence(tempOrdersList, origin);
-      const valid = nearestSeq.filter(o => o.latitude && o.longitude);
-      const invalid = nearestSeq.filter(o => !o.latitude || !o.longitude);
-      newSequence = [...valid.reverse(), ...invalid];
-    }
+    // Organiza las paradas pendientes respetando los trabajos ya completados/cancelados al inicio
+    const newSequence = optimizeStopsSequence(tempOrdersList, origin, targetMode, routeCacheRef.current);
 
-    const afterMiles = calculateTotalTripMiles(newSequence, origin);
+    const afterMiles = calculateTotalTripMiles(newSequence, origin, routeCacheRef.current);
     const saved = Math.max(0, beforeMiles - afterMiles);
 
     setOptimizationMode(targetMode);
@@ -2188,10 +2273,9 @@ export default function UberDriverView({
     return `${Math.abs(lat).toFixed(5)}° ${latDir}, ${Math.abs(lng).toFixed(5)}° ${lngDir}`;
   };
 
-  // Open native navigation
+  // Open native navigation with dynamically detected state (IL, IN, MI)
   const getNavUrl = (order) => {
-    if (!order) return '#';
-    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${order.address}, ${order.city || 'Elkhart'}, IN ${order.zip_code || ''}`)}`;
+    return buildNavigationUrl(order, 'google');
   };
 
   const selectedIndex = selectedOrder ? activeOrders.findIndex(o => String(o.id) === String(selectedOrder.id)) : 0;
@@ -2573,6 +2657,15 @@ export default function UberDriverView({
               </h2>
               <div className="flex items-center justify-center gap-1.5 mt-0.5 text-[11px] text-slate-400 font-medium truncate">
                 <span>A {tripMiles} • {tripMinutes} ({tripSummary})</span>
+                {selectedOrder.is_approx_geo && (
+                  <span
+                    className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[9.5px] font-bold shrink-0"
+                    title="Ubicación aproximada al centro de la zona. Verifica la calle antes de conducir."
+                  >
+                    <AlertTriangle className="h-2.5 w-2.5 text-amber-400 shrink-0" />
+                    <span>Ubicación aprox.</span>
+                  </span>
+                )}
               </div>
             </div>
 
@@ -2903,15 +2996,20 @@ export default function UberDriverView({
                     <div className="text-right text-slate-100 font-semibold leading-tight">
                       <div>{selectedOrder.address}</div>
                       <div className="text-[11px] text-slate-400">
-                        {selectedOrder.city || 'Skokie'}, IN {selectedOrder.zip_code || ''}
+                        {selectedOrder.city || 'Skokie'}, {detectOrderState(selectedOrder.address, selectedOrder.city, selectedOrder.zip_code)} {selectedOrder.zip_code || ''}
                       </div>
                     </div>
                   </div>
 
                   <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
                     <span className="text-slate-400 font-medium">Coordenadas</span>
-                    <span className="text-slate-200 font-mono text-[11px]">
-                      {formatCoordinates(selectedOrder.latitude, selectedOrder.longitude)}
+                    <span className="text-slate-200 font-mono text-[11px] flex items-center gap-1.5">
+                      <span>{formatCoordinates(selectedOrder.latitude, selectedOrder.longitude)}</span>
+                      {selectedOrder.is_approx_geo && (
+                        <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 font-sans font-bold">
+                          ⚠️ Aprox.
+                        </span>
+                      )}
                     </span>
                   </div>
 

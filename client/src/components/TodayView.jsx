@@ -14,6 +14,7 @@ import UberDriverView from './UberDriverView';
 import LiveCameraModal from './LiveCameraModal';
 import { stampPhotoWithWatermark } from '../utils/watermark';
 import { getLocalDateStr, normalizeDateStr, formatDateFriendly } from '../utils/dateUtils';
+import { buildNavigationUrl } from '../utils/mapboxGeocode';
 import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
 import { getOrderRemark, getOrderFieldBadges } from '../utils/remarkUtils';
 import ZoomableImageViewer from './ZoomableImageViewer';
@@ -996,7 +997,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                     {/* Grupo de Acciones: GPS, Llamar y Mensaje circulares */}
                     <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                       <a
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${order.address}, ${order.city || 'Elkhart'}, IN ${order.zip_code || ''}`)}`}
+                        href={buildNavigationUrl(order, 'google')}
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}

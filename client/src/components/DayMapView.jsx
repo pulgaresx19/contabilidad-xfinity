@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { formatRouteDuration } from '../utils/dateUtils';
+import { buildNavigationUrl } from '../utils/mapboxGeocode';
 
 // Great-circle distance converted to realistic driving miles (~1.28 grid detour factor)
 function getEstimatedDrivingMiles(lat1, lon1, lat2, lon2) {
@@ -245,18 +246,24 @@ export default function DayMapView({
     }
   };
 
-  // Optimize route by nearest neighbor sequence
+  // Optimize route by nearest neighbor sequence (locking already completed/cancelled jobs at top)
   const handleOptimizeRoute = async () => {
     if (validOrders.length <= 1) return;
     setOptimizing(true);
 
     try {
-      // Start from technician current location or first job
-      const startLat = userLocation?.lat || validOrders[0].latitude;
-      const startLng = userLocation?.lng || validOrders[0].longitude;
+      const isDone = (o) => o.status === 'Completado' || o.status === 'No Realizado';
+      const doneOrders = validOrders.filter(isDone);
+      const pendingOrders = validOrders.filter(o => !isDone(o));
+      const shouldLockDone = doneOrders.length > 0 && pendingOrders.length > 0;
 
-      const unvisited = [...validOrders];
-      const ordered = [];
+      const lockedPrefix = shouldLockDone ? doneOrders : [];
+      const unvisited = shouldLockDone ? [...pendingOrders] : [...validOrders];
+      const ordered = [...lockedPrefix];
+
+      const lastLocked = lockedPrefix.length > 0 ? lockedPrefix[lockedPrefix.length - 1] : null;
+      const startLat = userLocation?.lat || lastLocked?.latitude || validOrders[0].latitude;
+      const startLng = userLocation?.lng || lastLocked?.longitude || validOrders[0].longitude;
       let currentPos = { lat: startLat, lng: startLng };
 
       while (unvisited.length > 0) {
@@ -294,16 +301,9 @@ export default function DayMapView({
     }
   };
 
-  // Open Turn-by-Turn GPS navigation
+  // Open Turn-by-Turn GPS navigation with dynamically detected state
   const openNavigation = (order, appType = 'google') => {
-    const fullAddr = `${order.address}, ${order.city || 'Elkhart'}, IN ${order.zip_code || ''}`;
-    const enc = encodeURIComponent(fullAddr);
-
-    if (appType === 'waze') {
-      window.open(`https://waze.com/ul?q=${enc}&navigate=yes`, '_blank');
-    } else {
-      window.open(`https://www.google.com/maps/dir/?api=1&destination=${enc}`, '_blank');
-    }
+    window.open(buildNavigationUrl(order, appType), '_blank');
   };
 
   // Calculate cumulative route miles

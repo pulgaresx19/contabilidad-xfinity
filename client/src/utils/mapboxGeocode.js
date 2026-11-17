@@ -29,6 +29,54 @@ const getFallbackToken = () => {
 export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || getFallbackToken();
 
 /**
+ * Detects the US state abbreviation (IL, IN, MI) from address, city, and zip code.
+ */
+export function detectOrderState(address = '', city = '', zipCode = '') {
+  const cleanAddr = String(address || '').trim();
+  const cleanCity = String(city || '').trim();
+  const cleanZip = String(zipCode || '').trim();
+  const combined = `${cleanAddr} ${cleanCity}`;
+
+  // 1. Check ZIP code prefix first (60-62 = IL, 46-47 = IN, 48-49 = MI)
+  if (/^6[012]\d{3}/.test(cleanZip)) return 'IL';
+  if (/^4[67]\d{3}/.test(cleanZip)) return 'IN';
+  if (/^4[89]\d{3}/.test(cleanZip)) return 'MI';
+
+  // 2. Check city / state keywords
+  if (/\b(IL|ILLINOIS|SKOKIE|CHICAGO|EVANSTON|NILES|LINCOLNWOOD|MORTON GROVE|DES PLAINES|PARK RIDGE|GLENVIEW|WILMETTE|WINNETKA|NORTHBROOK|OAK PARK|CICERO|BERWYN|SCHAUMBURG|ARLINGTON HEIGHTS|MOUNT PROSPECT|PALATINE|WAUKEGAN|ELGIN|AURORA|JOLIET|NAPERVILLE|WHEATON)\b/i.test(combined)) {
+    return 'IL';
+  }
+  if (/\b(MI|MICHIGAN|EDWARDSBURG|STURGIS|THREE RIVERS|BENTON HARBOR|ST JOSEPH|KALAMAZOO|CONSTANTINE|WHITE PIGEON|CASSOPOLIS|DOWAGIAC|BUCHANAN)\b/i.test(combined)) {
+    return 'MI';
+  }
+  if (/\b(IN|INDIANA|ELKHART|GOSHEN|MISHAWAKA|SOUTH BEND|GRANGER|OSCEOLA|BRISTOL|MIDDLEBURY|WAKARUSA|NAPPANEE|SYRACUSE|WARSAW|PLYMOUTH|LAPORTE|MICHIGAN CITY|BREMEN|LIGONIER|SHIPSHEWANA|TOPEKA|NEW PARIS|MILFORD)\b/i.test(combined)) {
+    return 'IN';
+  }
+
+  // Default to IL when city is empty (default Skokie area) or IN otherwise
+  return cleanCity ? 'IN' : 'IL';
+}
+
+/**
+ * Builds an external Turn-by-Turn GPS navigation URL (Google Maps or Waze)
+ * with the dynamically detected state (IL, IN, MI) instead of hardcoded IN.
+ */
+export function buildNavigationUrl(order, appType = 'google') {
+  if (!order) return '#';
+  const state = detectOrderState(order.address, order.city, order.zip_code);
+  const defaultCity = state === 'IL' ? 'Skokie' : 'Elkhart';
+  const city = (order.city || defaultCity).trim();
+  const zip = (order.zip_code || '').trim();
+  const fullAddr = `${order.address || ''}, ${city}, ${state}${zip ? ' ' + zip : ''}`.trim();
+  const enc = encodeURIComponent(fullAddr);
+
+  if (appType === 'waze') {
+    return `https://waze.com/ul?q=${enc}&navigate=yes`;
+  }
+  return `https://www.google.com/maps/dir/?api=1&destination=${enc}`;
+}
+
+/**
  * Resolves an address to precise [lat, lng] coordinates using Mapbox Geocoding v5 API.
  * Includes proximity bias for Skokie/Chicago, IL and Elkhart/Goshen, IN.
  */
@@ -40,14 +88,7 @@ export async function geocodeAddressWithMapbox(address, city = '', zipCode = '')
   const cleanZip = (zipCode || '').trim();
 
   // Detect state context
-  let state = 'IN';
-  if (/\b(IL|ILLINOIS|SKOKIE|CHICAGO|EVANSTON|NILES|LINCOLNWOOD)\b/i.test(`${cleanAddr} ${cleanCity}`)) {
-    state = 'IL';
-  } else if (/\b(MI|MICHIGAN)\b/i.test(`${cleanAddr} ${cleanCity}`)) {
-    state = 'MI';
-  } else if (/\b(IN|INDIANA|ELKHART|GOSHEN|MISHAWAKA|SOUTH BEND)\b/i.test(`${cleanAddr} ${cleanCity}`)) {
-    state = 'IN';
-  }
+  const state = detectOrderState(cleanAddr, cleanCity, cleanZip);
 
   let effectiveCity = cleanCity;
   if (!effectiveCity) {
@@ -67,6 +108,7 @@ export async function geocodeAddressWithMapbox(address, city = '', zipCode = '')
   queries.push(`${cleanAddr}, USA`.trim());
 
   const proximity = state === 'IL' ? '-87.7345,42.0335' : '-85.9766,41.6820';
+  let cityLevelFallback = null;
 
   for (const q of queries) {
     try {
@@ -75,12 +117,26 @@ export async function geocodeAddressWithMapbox(address, city = '', zipCode = '')
       if (res.ok) {
         const data = await res.json();
         if (data.features && data.features.length > 0) {
-          const [lng, lat] = data.features[0].center;
-          return {
-            latitude: lat,
-            longitude: lng,
-            displayName: data.features[0].place_name
-          };
+          const feat = data.features[0];
+          const [lng, lat] = feat.center;
+          const placeTypes = Array.isArray(feat.place_type) ? feat.place_type : [];
+          const isExactStreet = placeTypes.includes('address') || placeTypes.includes('poi') || Boolean(feat.address);
+
+          if (isExactStreet) {
+            return {
+              latitude: lat,
+              longitude: lng,
+              displayName: feat.place_name,
+              isApproximate: false
+            };
+          } else if (!cityLevelFallback) {
+            cityLevelFallback = {
+              latitude: lat,
+              longitude: lng,
+              displayName: `${feat.place_name} (Aprox)`,
+              isApproximate: true
+            };
+          }
         }
       }
     } catch (e) {
@@ -97,15 +153,21 @@ export async function geocodeAddressWithMapbox(address, city = '', zipCode = '')
       if (pData.features && pData.features.length > 0) {
         const feat = pData.features[0];
         const [lng, lat] = feat.geometry.coordinates;
+        const hasStreet = Boolean(feat.properties?.street || feat.properties?.housenumber);
         return {
           latitude: lat,
           longitude: lng,
-          displayName: [feat.properties?.housenumber, feat.properties?.street, feat.properties?.city, feat.properties?.state].filter(Boolean).join(', ') || feat.properties?.name || `${effectiveCity}, ${state}`
+          displayName: [feat.properties?.housenumber, feat.properties?.street, feat.properties?.city, feat.properties?.state].filter(Boolean).join(', ') || feat.properties?.name || `${effectiveCity}, ${state}`,
+          isApproximate: !hasStreet
         };
       }
     }
   } catch (e) {
     console.warn('Photon open geocoding fallback note:', e.message);
+  }
+
+  if (cityLevelFallback) {
+    return cityLevelFallback;
   }
 
   // Safe Fallback based on state center so pin and route ALWAYS show
@@ -117,7 +179,8 @@ export async function geocodeAddressWithMapbox(address, city = '', zipCode = '')
   return {
     latitude: baseLat + jitterLat,
     longitude: baseLng + jitterLng,
-    displayName: `${effectiveCity}, ${state} (Aprox)`
+    displayName: `${effectiveCity}, ${state} (Aprox)`,
+    isApproximate: true
   };
 }
 
