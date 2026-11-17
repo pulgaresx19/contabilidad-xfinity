@@ -17,6 +17,7 @@ import EditJobModal from './EditJobModal';
 import ShareReportModal from './ShareReportModal';
 import HistoricalOrderCard from './HistoricalOrderCard';
 import ZoomableImageViewer from './ZoomableImageViewer';
+import { stampReceiptPhoto } from '../utils/receiptStamper';
 
 const CATEGORY_ICONS = {
   // Orden oficial solicitado:
@@ -55,6 +56,9 @@ export default function MonthlyView({
   const [selectedWeekModal, setSelectedWeekModal] = useState(null);
   const [selectedExpenseModal, setSelectedExpenseModal] = useState(null);
   const [selectedReceiptModal, setSelectedReceiptModal] = useState(null);
+  const [confirmPaymentWeek, setConfirmPaymentWeek] = useState(null);
+  const [receiptPhotoPreview, setReceiptPhotoPreview] = useState(null);
+  const [savingPayment, setSavingPayment] = useState(false);
   const [copiedWeekKey, setCopiedWeekKey] = useState(null);
   const [copiedReport, setCopiedReport] = useState(false);
   const [updatingWeekKey, setUpdatingWeekKey] = useState(null);
@@ -188,9 +192,14 @@ ${jobList || '  (Sin órdenes registradas)'}
   const handleToggleWeekPayment = async (w, targetStatus, e) => {
     if (e) e.stopPropagation();
     const isPaid = targetStatus === 'Cobrado';
-    const msg = isPaid
-      ? `¿Confirmar que ya cobraste la Semana ${w.displayLabel || w.key} ($${w.totalEarnings.toFixed(2)})?`
-      : `¿Revertir la Semana ${w.displayLabel || w.key} a PENDIENTE por cobrar?`;
+    if (isPaid) {
+      setConfirmPaymentWeek(w);
+      const existingReceipt = w.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null);
+      setReceiptPhotoPreview(existingReceipt || null);
+      return;
+    }
+
+    const msg = `¿Revertir la Semana ${w.displayLabel || w.key} a PENDIENTE por cobrar?`;
     if (!confirm(msg)) return;
 
     setUpdatingWeekKey(w.key);
@@ -198,15 +207,62 @@ ${jobList || '  (Sin órdenes registradas)'}
       const res = await fetch(`/api/weeks/${encodeURIComponent(w.key)}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payment_status: targetStatus })
+        body: JSON.stringify({ payment_status: 'Pendiente' })
       });
       if (res.ok) {
+        if (selectedWeekModal?.key === w.key) {
+          setSelectedWeekModal(prev => ({ ...prev, isPaid: false }));
+        }
         await fetchMonthlyData(selectedMonth);
         if (onRefresh) onRefresh();
       }
     } catch (err) {
       alert('Error actualizando estado de la semana: ' + err.message);
     } finally {
+      setUpdatingWeekKey(null);
+    }
+  };
+
+  const handleConfirmPaymentWithReceipt = async () => {
+    if (!confirmPaymentWeek) return;
+    setSavingPayment(true);
+    setUpdatingWeekKey(confirmPaymentWeek.key);
+    try {
+      if (receiptPhotoPreview) {
+        try {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('receipt_' + confirmPaymentWeek.key, receiptPhotoPreview);
+          }
+        } catch (err) {
+          console.warn('localStorage quota', err);
+        }
+      }
+
+      const res = await fetch(`/api/weeks/${encodeURIComponent(confirmPaymentWeek.key)}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          payment_status: 'Cobrado',
+          receipt_photo: receiptPhotoPreview || null
+        })
+      });
+      if (res.ok) {
+        if (selectedWeekModal?.key === confirmPaymentWeek.key) {
+          setSelectedWeekModal(prev => ({
+            ...prev,
+            isPaid: true,
+            receipt_photo: receiptPhotoPreview || prev.receipt_photo
+          }));
+        }
+        await fetchMonthlyData(selectedMonth);
+        if (onRefresh) onRefresh();
+      }
+      setConfirmPaymentWeek(null);
+      setReceiptPhotoPreview(null);
+    } catch (err) {
+      alert('Error confirmando cobro: ' + err.message);
+    } finally {
+      setSavingPayment(false);
       setUpdatingWeekKey(null);
     }
   };
@@ -888,17 +944,53 @@ ${weeksLines || '  (No hay semanas registradas)'}
                 </div>
 
                 <div className="flex items-center gap-2 ml-2 shrink-0">
-                  {/* Botón Comprobante en Header (Solo icono sin texto) */}
-                  {modalReceiptPhoto && (
+                  {/* Botón Comprobante en Header (Solo icono cuadrado sin texto para evitar solapamientos) */}
+                  {modalReceiptPhoto ? (
                     <button
                       type="button"
                       onClick={() => setSelectedReceiptModal({ photo: modalReceiptPhoto, week: selectedWeekModal })}
-                      className="h-8 w-8 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer"
+                      className="h-8 w-8 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer shrink-0"
                       title="Ver comprobante de pago o cheque de esta semana"
                     >
                       <Paperclip className="h-4 w-4 stroke-[2.2]" />
                     </button>
-                  )}
+                  ) : selectedWeekModal.isPaid ? (
+                    <label
+                      className="h-8 w-8 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-slate-200 border border-white/10 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer shrink-0"
+                      title="Adjuntar foto del recibo o cheque"
+                    >
+                      <Paperclip className="h-4 w-4 stroke-[1.8]" />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            try {
+                              const photoData = await stampReceiptPhoto(file, { week: selectedWeekModal });
+                              try {
+                                if (typeof window !== 'undefined') {
+                                  localStorage.setItem('receipt_' + selectedWeekModal.key, photoData);
+                                }
+                              } catch (err) {}
+                              await fetch(`/api/weeks/${encodeURIComponent(selectedWeekModal.key)}/receipt`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ receipt_photo: photoData })
+                              });
+                              setSelectedWeekModal(prev => ({ ...prev, receipt_photo: photoData }));
+                              await fetchMonthlyData(selectedMonth);
+                              if (onRefresh) await onRefresh();
+                            } catch (err) {
+                              console.warn('Error al estampar recibo:', err);
+                            }
+                          }
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  ) : null}
 
                   {/* Botón Cerrar */}
                   <button
@@ -1244,6 +1336,167 @@ ${weeksLines || '  (No hay semanas registradas)'}
           fetchMonthlyData(selectedMonth);
         }}
       />
+
+      {/* MODAL DE CONFIRMACIÓN DE COBRO CON COMPROBANTE OPCIONAL */}
+      {confirmPaymentWeek && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !savingPayment) {
+              setConfirmPaymentWeek(null);
+            }
+          }}
+        >
+          <div 
+            className="bg-[#131b26] border border-white/10 rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-2xl animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono">
+                  Confirmar Cobro
+                </h3>
+                <span className="text-xs text-cyan-400 font-semibold">
+                  Semana {confirmPaymentWeek.displayLabel || confirmPaymentWeek.key}
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={savingPayment}
+                onClick={() => setConfirmPaymentWeek(null)}
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Monto de la semana */}
+            <div className="bg-[#0f1722] p-3 rounded-2xl border border-white/5 flex items-center justify-between">
+              <span className="text-xs text-slate-300 font-semibold">Total a Liquidar</span>
+              <span className="text-xl font-black text-emerald-400 font-mono">
+                ${confirmPaymentWeek.totalEarnings.toFixed(2)}
+              </span>
+            </div>
+
+            {/* Comprobante Opcional (Foto / Recibo / Cheque) */}
+            <div className="space-y-1.5">
+              <label className="text-[10.5px] font-bold text-slate-300 uppercase tracking-wider block">
+                Comprobante / Cheque <span className="text-slate-500 font-normal lowercase">(opcional)</span>
+              </label>
+
+              {receiptPhotoPreview ? (
+                <div className="relative rounded-2xl overflow-hidden border border-emerald-500/30 bg-[#0f1722] p-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <img
+                      src={receiptPhotoPreview}
+                      alt="Comprobante"
+                      className="h-12 w-12 object-cover rounded-xl border border-white/10 shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                        <Check className="h-3 w-3 stroke-[3]" /> Comprobante listo
+                      </span>
+                      <span className="text-[10px] text-slate-400 block truncate">
+                        Se guardará con la semana
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReceiptPhotoPreview(null)}
+                    className="p-1 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+                    title="Quitar foto"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group">
+                    <Camera className="h-5 w-5 text-cyan-400 group-hover:scale-110 transition" />
+                    <span className="text-xs font-bold text-slate-200">Tomar Foto</span>
+                    <span className="text-[9.5px] text-slate-400">Abrir cámara</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          try {
+                            const stamped = await stampReceiptPhoto(f, { week: confirmPaymentWeek });
+                            setReceiptPhotoPreview(stamped);
+                          } catch (err) {
+                            console.warn('Error al estampar recibo:', err);
+                            const r = new FileReader();
+                            r.onload = () => setReceiptPhotoPreview(r.result);
+                            r.readAsDataURL(f);
+                          }
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+
+                  <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group">
+                    <ImageIcon className="h-5 w-5 text-cyan-400 group-hover:scale-110 transition" />
+                    <span className="text-xs font-bold text-slate-200">Elegir Galería</span>
+                    <span className="text-[9.5px] text-slate-400">Fotos guardadas</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          try {
+                            const stamped = await stampReceiptPhoto(f, { week: confirmPaymentWeek });
+                            setReceiptPhotoPreview(stamped);
+                          } catch (err) {
+                            console.warn('Error al estampar recibo:', err);
+                            const r = new FileReader();
+                            r.onload = () => setReceiptPhotoPreview(r.result);
+                            r.readAsDataURL(f);
+                          }
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Botones de Acción */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                disabled={savingPayment}
+                onClick={() => setConfirmPaymentWeek(null)}
+                className="py-2.5 px-3 bg-white/10 hover:bg-white/15 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={savingPayment}
+                onClick={handleConfirmPaymentWithReceipt}
+                className="py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs rounded-xl transition shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                {savingPayment ? (
+                  <span>Guardando...</span>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 stroke-[3]" />
+                    <span>Confirmar Cobro</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

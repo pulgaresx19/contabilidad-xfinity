@@ -1002,27 +1002,25 @@ ${jobLines}
                 </div>
 
                 <div className="flex items-center gap-2 ml-2 shrink-0">
-                  {/* Botón Comprobante en Header (Solo icono sin texto) */}
+                  {/* Botón Comprobante en Header (Solo icono cuadrado sin texto para evitar solapamientos) */}
                   {modalReceiptPhoto ? (
                     <button
                       type="button"
                       onClick={() => setSelectedReceiptModal({ photo: modalReceiptPhoto, week: selectedWeekModal })}
-                      className="h-8 w-8 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer"
+                      className="h-8 w-8 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer shrink-0"
                       title="Ver comprobante de pago o cheque de esta semana"
                     >
                       <Paperclip className="h-4 w-4 stroke-[2.2]" />
                     </button>
                   ) : selectedWeekModal.isPaid ? (
                     <label
-                      className="h-8 px-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-cyan-300 border border-white/10 flex items-center gap-1.5 transition active:scale-95 shadow-xs cursor-pointer"
+                      className="h-8 w-8 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-slate-200 border border-white/10 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer shrink-0"
                       title="Adjuntar foto del recibo o cheque"
                     >
-                      <Paperclip className="h-3.5 w-3.5 stroke-[2]" />
-                      <span className="text-[10px] font-bold tracking-tight">+ Recibo</span>
+                      <Paperclip className="h-4 w-4 stroke-[1.8]" />
                       <input
                         type="file"
                         accept="image/*"
-                        capture="environment"
                         className="hidden"
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
@@ -1047,6 +1045,7 @@ ${jobLines}
                               console.warn('Error al estampar recibo:', err);
                             }
                           }
+                          e.target.value = '';
                         }}
                       />
                     </label>
@@ -1260,31 +1259,60 @@ ${jobLines}
                   </button>
                 </div>
               ) : (
-                <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group">
-                  <Camera className="h-5 w-5 text-cyan-400 group-hover:scale-110 transition" />
-                  <span className="text-xs font-bold text-slate-200">Tomar o subir foto</span>
-                  <span className="text-[9.5px] text-slate-400">Cheque, recibo o colilla de pago</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const f = e.target.files?.[0];
-                      if (f) {
-                        try {
-                          const stamped = await stampReceiptPhoto(f, { week: confirmPaymentWeek });
-                          setReceiptPhotoPreview(stamped);
-                        } catch (err) {
-                          console.warn('Error al estampar recibo:', err);
-                          const r = new FileReader();
-                          r.onload = () => setReceiptPhotoPreview(r.result);
-                          r.readAsDataURL(f);
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group">
+                    <Camera className="h-5 w-5 text-cyan-400 group-hover:scale-110 transition" />
+                    <span className="text-xs font-bold text-slate-200">Tomar Foto</span>
+                    <span className="text-[9.5px] text-slate-400">Abrir cámara</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          try {
+                            const stamped = await stampReceiptPhoto(f, { week: confirmPaymentWeek });
+                            setReceiptPhotoPreview(stamped);
+                          } catch (err) {
+                            console.warn('Error al estampar recibo:', err);
+                            const r = new FileReader();
+                            r.onload = () => setReceiptPhotoPreview(r.result);
+                            r.readAsDataURL(f);
+                          }
                         }
-                      }
-                    }}
-                  />
-                </label>
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+
+                  <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group">
+                    <ImageIcon className="h-5 w-5 text-cyan-400 group-hover:scale-110 transition" />
+                    <span className="text-xs font-bold text-slate-200">Elegir Galería</span>
+                    <span className="text-[9.5px] text-slate-400">Fotos guardadas</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          try {
+                            const stamped = await stampReceiptPhoto(f, { week: confirmPaymentWeek });
+                            setReceiptPhotoPreview(stamped);
+                          } catch (err) {
+                            console.warn('Error al estampar recibo:', err);
+                            const r = new FileReader();
+                            r.onload = () => setReceiptPhotoPreview(r.result);
+                            r.readAsDataURL(f);
+                          }
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
               )}
             </div>
 

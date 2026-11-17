@@ -36,16 +36,16 @@ export async function stampReceiptPhoto(fileOrDataUrl, { week, date = new Date()
         // 1. Dibujar imagen base del comprobante
         ctx.drawImage(img, 0, 0, width, height);
 
-        // 2. Parámetros de la banda de estampado inferior
-        const bannerHeight = Math.max(68, Math.round(height * 0.088));
+        // 2. Parámetros de la banda de estampado inferior (delgada y discreta, ~36-44px)
+        const bannerHeight = Math.max(36, Math.round(height * 0.042));
         const bannerY = height - bannerHeight;
 
-        // Fondo oscuro cockpit con borde superior esmeralda
-        ctx.fillStyle = 'rgba(10, 17, 26, 0.93)';
+        // Fondo oscuro cockpit sutil con borde superior esmeralda
+        ctx.fillStyle = 'rgba(10, 17, 26, 0.88)';
         ctx.fillRect(0, bannerY, width, bannerHeight);
 
-        // Línea acento esmeralda
-        const accentHeight = Math.max(3, Math.round(bannerHeight * 0.05));
+        // Línea acento esmeralda sutil de 2px
+        const accentHeight = Math.max(2, Math.round(bannerHeight * 0.05));
         const gradient = ctx.createLinearGradient(0, bannerY, width, bannerY);
         gradient.addColorStop(0, '#06b6d4'); // Cyan
         gradient.addColorStop(0.5, '#10b981'); // Emerald
@@ -53,11 +53,7 @@ export async function stampReceiptPhoto(fileOrDataUrl, { week, date = new Date()
         ctx.fillStyle = gradient;
         ctx.fillRect(0, bannerY, width, accentHeight);
 
-        // 3. Textos formateados
-        const weekLabel = week ? (week.displayLabel || week.key || 'Semanal') : 'Semanal';
-        const periodStr = week && week.startDate && week.endDate 
-          ? `${week.startDate} al ${week.endDate}` 
-          : '';
+        // 3. Textos limpios en una sola línea horizontal (CERO colisiones o textos sobrepuestos)
         const earningsStr = week && week.totalEarnings !== undefined
           ? `$${Number(week.totalEarnings).toFixed(2)} USD`
           : '';
@@ -66,34 +62,24 @@ export async function stampReceiptPhoto(fileOrDataUrl, { week, date = new Date()
         const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
         const dateStampStr = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()} • ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-        // Configuración de fuentes responsive según resolución
-        const paddingX = Math.max(16, Math.round(width * 0.025));
-        const titleFontSize = Math.max(13, Math.round(bannerHeight * 0.28));
-        const subFontSize = Math.max(10, Math.round(bannerHeight * 0.22));
+        // Configuración de fuentes responsive y centrado vertical
+        const paddingX = Math.max(14, Math.round(width * 0.025));
+        const fontSize = Math.max(12, Math.round(bannerHeight * 0.36));
+        const centerY = bannerY + accentHeight + Math.round((bannerHeight - accentHeight) / 2);
 
-        // LADO IZQUIERDO: Título y Período
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${titleFontSize}px system-ui, -apple-system, sans-serif`;
+        // LADO IZQUIERDO: Estado y Fecha exacta del cobro
+        ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        const line1Y = bannerY + accentHeight + Math.round(bannerHeight * 0.16);
-        ctx.fillText(`🧾 CONSTANCIA DE COBRO • SEMANA ${weekLabel}`, paddingX, line1Y);
+        ctx.fillStyle = '#38bdf8'; // Sky cyan
+        ctx.font = `bold ${fontSize}px system-ui, -apple-system, sans-serif`;
+        ctx.fillText(`✓ Cobrado • ${dateStampStr}`, paddingX, centerY);
 
-        ctx.fillStyle = '#94a3b8'; // Slate 400
-        ctx.font = `500 ${subFontSize}px system-ui, -apple-system, sans-serif`;
-        const line2Y = line1Y + titleFontSize + 4;
-        ctx.fillText(`📅 Período: ${periodStr || 'Cierre de Pago'}  •  🕒 Registro: ${dateStampStr}`, paddingX, line2Y);
-
-        // LADO DERECHO: Monto del Cobro
+        // LADO DERECHO: Monto de la semana
         if (earningsStr) {
-          ctx.fillStyle = '#34d399'; // Emerald 400
-          ctx.font = `900 ${titleFontSize + 2}px monospace, system-ui`;
           ctx.textAlign = 'right';
-          ctx.fillText(earningsStr, width - paddingX, line1Y);
-
-          ctx.fillStyle = '#38bdf8'; // Sky 400
-          ctx.font = `bold ${subFontSize}px system-ui, -apple-system, sans-serif`;
-          ctx.fillText(`✓ PAGO CONFIRMADO`, width - paddingX, line2Y);
+          ctx.fillStyle = '#34d399'; // Emerald 400
+          ctx.font = `900 ${fontSize + 1}px monospace, system-ui`;
+          ctx.fillText(earningsStr, width - paddingX, centerY);
         }
 
         const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
