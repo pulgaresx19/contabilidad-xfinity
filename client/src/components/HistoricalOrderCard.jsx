@@ -17,7 +17,7 @@ export default function HistoricalOrderCard({
   if (!order) return null;
 
   const isCompleted = order.status === 'Completado';
-  const isCancelled = order.status === 'No Realizado';
+  const isCancelled = order.status === 'No Realizado' || order.status === 'Cancelado';
   const hasDrivewayBore = Boolean(
     order.bore_type && (
       order.bore_type.includes('DW') || 
@@ -27,9 +27,14 @@ export default function HistoricalOrderCard({
   );
 
   const photos = order.photos || [];
-  const photosCount = order.work_photos_count !== undefined 
-    ? order.work_photos_count 
-    : (order.photos_count !== undefined ? order.photos_count : photos.length);
+  const cancelCount = Number(order.cancel_photos_count) || 0;
+  const workCount = Number(order.work_photos_count) || 0;
+  const totalCount = Number(order.photos_count) || (photos ? photos.length : 0);
+
+  // Contar con precisión según el estado (en No Realizado se toma cancelCount o totalCount)
+  const photosCount = isCancelled
+    ? (cancelCount > 0 ? cancelCount : totalCount)
+    : (workCount > 0 ? workCount : totalCount);
 
   const orderRemark = getOrderRemark(order);
 
@@ -115,8 +120,8 @@ export default function HistoricalOrderCard({
 
       {/* FILA 3: ESPECIFICACIONES TÉCNICAS (Contador de Fotos Adelante + Metraje + Cable + Bore + Nota) */}
       <div className="flex items-center gap-1.5 text-[10px] overflow-x-auto scrollbar-none py-0.5 whitespace-nowrap">
-        {/* 1. Contador de Fotos siempre al principio (tonito rojizo si no realizado, cian si completado) */}
-        {(photosCount > 0 || isCancelled) && (
+        {/* 1. Contador de Fotos siempre al principio */}
+        {photosCount > 0 && (
           <button
             type="button"
             onClick={(e) => {
@@ -131,7 +136,7 @@ export default function HistoricalOrderCard({
             title={isCancelled ? `${photosCount} foto(s) de la constancia. Toca para ver reporte.` : `${photosCount} foto(s) de evidencia archivada(s). Toca para ver o gestionar.`}
           >
             <Camera className={`h-3 w-3 shrink-0 ${isCancelled ? 'text-rose-400' : 'text-cyan-400'}`} />
-            <span className="font-semibold">{photosCount} {photosCount === 1 ? 'foto' : 'fotos'}</span>
+            <span className="font-semibold">{photosCount} foto</span>
           </button>
         )}
 
