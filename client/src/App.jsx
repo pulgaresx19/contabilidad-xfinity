@@ -255,6 +255,7 @@ export default function App() {
                 onUpdateOrders={setOrders}
                 viewMode="uber"
                 hideModeToggle={true}
+                techName={techName}
               />
             )}
 

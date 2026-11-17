@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   X, DollarSign, Calendar, Tag, FileText, Camera, 
   Upload, Fuel, Wrench, Car, Utensils, Smartphone, Shield, Package, Home, Check,
-  AlertCircle, SlidersHorizontal, RotateCcw
+  AlertCircle, SlidersHorizontal, RotateCcw, ZoomIn
 } from 'lucide-react';
 import { getLocalDateStr } from '../utils/dateUtils';
 import { compressImageFile } from '../utils/watermark';
@@ -42,6 +42,7 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
   const [expenseDate, setExpenseDate] = useState(initialDate || getLocalDateStr());
   const [receiptFiles, setReceiptFiles] = useState([]);
   const [receiptPreviews, setReceiptPreviews] = useState([]);
+  const [previewEnlargedPhoto, setPreviewEnlargedPhoto] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [quickAmounts, setQuickAmounts] = useState(() => getStoredQuickAmounts());
@@ -457,28 +458,42 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
                 </label>
               </div>
 
-              {/* Tira Horizontal de Tickets con Scroll Estilizado */}
+              {/* Tira Horizontal de Tickets con Scroll Estilizado y Click para Agrandar */}
               {receiptPreviews.length > 0 && (
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 sleek-scroll">
-                  {receiptPreviews.map((src, idx) => (
-                    <div
-                      key={idx}
-                      className="relative w-20 h-16 flex-shrink-0 rounded-2xl overflow-hidden border border-white/15 bg-[#0d141e] shadow-sm group hover:border-cyan-500/40 transition"
-                    >
-                      <img src={src} alt={`Ticket ${idx + 1}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveReceiptPhoto(idx)}
-                        className="absolute top-1 right-1 p-1 rounded-full bg-rose-600/90 hover:bg-rose-500 text-white shadow active:scale-90 transition cursor-pointer"
-                        title="Quitar ticket"
+                <div className="space-y-1 pt-1">
+                  <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 sleek-scroll">
+                    {receiptPreviews.map((src, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => setPreviewEnlargedPhoto(src)}
+                        className="relative w-20 h-16 flex-shrink-0 rounded-2xl overflow-hidden border border-white/15 bg-[#0d141e] shadow-sm group hover:border-cyan-500/60 transition cursor-pointer"
+                        title="Toca para agrandar y ver foto completa"
                       >
-                        <X className="w-2.5 h-2.5 stroke-[2.5]" />
-                      </button>
-                      <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-xs text-[9px] font-mono text-cyan-300 font-bold border border-white/10">
-                        #{idx + 1}
-                      </span>
-                    </div>
-                  ))}
+                        <img src={src} alt={`Ticket ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition" />
+                        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
+                          <ZoomIn className="w-4 h-4 text-cyan-300 drop-shadow" />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveReceiptPhoto(idx);
+                          }}
+                          className="absolute top-1 right-1 p-1 rounded-full bg-rose-600/90 hover:bg-rose-500 text-white shadow active:scale-90 transition cursor-pointer z-10"
+                          title="Quitar ticket"
+                        >
+                          <X className="w-2.5 h-2.5 stroke-[2.5]" />
+                        </button>
+                        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-xs text-[9px] font-mono text-cyan-300 font-bold border border-white/10 pointer-events-none">
+                          #{idx + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-cyan-400 font-medium flex items-center gap-1">
+                    <ZoomIn className="w-3 h-3 stroke-[2.5]" />
+                    <span>Toca cualquier foto para agrandarla y verificarla</span>
+                  </p>
                 </div>
               )}
             </div>
@@ -520,6 +535,57 @@ export default function AddExpenseModal({ isOpen, onClose, onExpenseAdded, initi
           </div>
         </form>
       </div>
+
+      {/* MODAL FULLSCREEN PARA AGRANDAR Y VISUALIZAR EL TICKET / COMPROBANTE */}
+      {previewEnlargedPhoto && (
+        <div
+          onClick={() => setPreviewEnlargedPhoto(null)}
+          className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-4 animate-fade-in select-none"
+          style={{
+            paddingTop: 'max(env(safe-area-inset-top, 0px) + 12px, 1rem)',
+            paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
+          }}
+        >
+          {/* Barra superior con botón X despejado sin tapar la foto */}
+          <div className="w-full flex items-center justify-between px-2 py-1 shrink-0 z-50">
+            <span className="text-xs font-bold text-slate-300 bg-white/10 px-3 py-1 rounded-full border border-white/10">
+              Vista previa del Ticket
+            </span>
+            <button
+              type="button"
+              onClick={() => setPreviewEnlargedPhoto(null)}
+              className="p-2.5 rounded-full bg-slate-900/90 text-white hover:text-cyan-400 border border-white/20 shadow-2xl transition active:scale-90 cursor-pointer"
+              title="Cerrar vista ampliada"
+            >
+              <X className="h-5 w-5 stroke-[2.5]" />
+            </button>
+          </div>
+
+          {/* Contenedor central: foto en tamaño grande y nítido */}
+          <div 
+            className="flex-1 min-h-0 w-full flex items-center justify-center p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={previewEnlargedPhoto}
+              alt="Ticket ampliado"
+              className="max-h-[65dvh] sm:max-h-[72dvh] max-w-[94vw] sm:max-w-lg w-auto h-auto rounded-2xl object-contain border border-white/15 shadow-2xl"
+            />
+          </div>
+
+          {/* Botón inferior para cerrar */}
+          <div className="shrink-0 pt-2 pb-1" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setPreviewEnlargedPhoto(null)}
+              className="px-6 py-2.5 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-2"
+            >
+              <X className="h-4 w-4" />
+              <span>Cerrar Vista</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

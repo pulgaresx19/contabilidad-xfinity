@@ -145,7 +145,8 @@ export default function UberDriverView({
   localSharedMap = {},
   onOrderUpdated,
   onUpdateOrders,
-  onSwitchToClassic
+  onSwitchToClassic,
+  techName = ''
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -154,6 +155,7 @@ export default function UberDriverView({
   const travesiaBadgeMarkersRef = useRef([]);
   const userMarkerRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const lastRequestedRouteRef = useRef('');
 
   // High-Speed In-Memory Route Cache: start_lng,lat->dest_lng,lat => routeData
   const routeCacheRef = useRef(new Map());
@@ -434,6 +436,12 @@ export default function UberDriverView({
             ord.latitude = geo.latitude;
             ord.longitude = geo.longitude;
 
+            // Actualizar el estado reactivo inmediatamente para que aparezcan los marcadores de todos los trabajos en el mapa
+            setLiveOrders(prev => (prev || []).map(o => o.id === ord.id ? { ...o, latitude: geo.latitude, longitude: geo.longitude } : o));
+            if (onUpdateOrders) {
+              onUpdateOrders(prev => (prev || []).map(o => o.id === ord.id ? { ...o, latitude: geo.latitude, longitude: geo.longitude } : o));
+            }
+
             fetch(`/api/orders/${ord.id}/coords`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
@@ -638,16 +646,20 @@ export default function UberDriverView({
       return;
     }
 
-    // Sequence starts from user's live GPS location -> Stop 1 -> Stop 2 -> Stop 3...
+    // Sequence starts from user's live GPS location (si está cerca de la zona) -> Stop 1 -> Stop 2 -> Stop 3...
     const sequenceStops = [];
-    if (userLocation && userLocation.lng && userLocation.lat) {
-      sequenceStops.push({
-        id: 'start-current-gps',
-        latitude: userLocation.lat,
-        longitude: userLocation.lng,
-        isCurrentGps: true,
-        address: 'Ubicación actual'
-      });
+    if (userLocation && userLocation.lng && userLocation.lat && validStops.length > 0) {
+      const distToFirst = getEstimatedDrivingMiles(userLocation.lat, userLocation.lng, validStops[0].latitude, validStops[0].longitude);
+      // Solo anteponer GPS si está a menos de 15 millas del primer trabajo para no distorsionar el trazado del día al probar fuera de zona
+      if (distToFirst <= 15) {
+        sequenceStops.push({
+          id: 'start-current-gps',
+          latitude: userLocation.lat,
+          longitude: userLocation.lng,
+          isCurrentGps: true,
+          address: 'Ubicación actual'
+        });
+      }
     }
     sequenceStops.push(...validStops);
 
@@ -655,10 +667,18 @@ export default function UberDriverView({
       setTravesiaLegs([]);
       setTravesiaSummary({ totalMiles: 0, totalMinutes: 0 });
       travesiaGeometryRef.current = [];
+      const map = mapInstanceRef.current;
+      if (map && map.getSource('route-travesia')) {
+        map.getSource('route-travesia').setData({
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: [] }
+        });
+      }
       return;
     }
 
-    const coordsStr = sequenceStops.map(o => `${Number(o.longitude).toFixed(5)},${Number(o.latitude).toFixed(5)}`).join(';');
+    const coordsStr = sequenceStops.map(o => `${Number(o.longitude).toFixed(4)},${Number(o.latitude).toFixed(4)}`).join(';');
     const cacheKey = `travesia:${coordsStr}`;
 
     if (routeCacheRef.current.has(cacheKey)) {
@@ -946,10 +966,17 @@ export default function UberDriverView({
     });
   };
 
-  // Keep travesia route updated whenever activeOrders or userLocation changes
+  // Firma reactiva basada exclusivamente en las coordenadas y orden de las paradas
+  const stopsSignature = useMemo(() => {
+    return (activeOrders || [])
+      .map(o => `${o.id}:${Number(o.latitude || 0).toFixed(4)},${Number(o.longitude || 0).toFixed(4)}:${o.route_order || ''}`)
+      .join('|');
+  }, [activeOrders]);
+
+  // Actualiza la travesía completa de todo el día sin que se interrumpa por el micro-movimiento del GPS
   useEffect(() => {
     updateTravesiaRoute(activeOrders);
-  }, [activeOrders, userLocation?.lat, userLocation?.lng]);
+  }, [stopsSignature]);
 
   // Helper to get driving time and distance for each stop in sequence
   const getLegInfoForOrder = (order, indexInList) => {
@@ -1667,54 +1694,63 @@ export default function UberDriverView({
       }
     });
 
-    // Abort previous in-flight request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
     // Compute or retrieve shortest route
     if (activeTarget && activeTarget.latitude && activeTarget.longitude && startCoords) {
       const destCoords = [activeTarget.longitude, activeTarget.latitude];
+      const startKey = `${startCoords[0].toFixed(4)},${startCoords[1].toFixed(4)}`;
+      const destKey = `${destCoords[0].toFixed(4)},${destCoords[1].toFixed(4)}`;
+      const routeTargetKey = `${startKey}->${destKey}:${selectedRouteIdx}`;
 
-      fetchShortestRoute(startCoords, destCoords, controller.signal).then(routeData => {
-        if (!routeData) return;
-        const currentActive = routeData.allRoutes[selectedRouteIdx] || routeData.shortest;
-        setActiveRouteInfo(currentActive);
-        setAvailableRoutes(routeData.allRoutes);
+      // Si la ruta solicitada ya está calculada o en proceso hacia el mismo destino, no abortar innecesariamente por micro-drift de GPS
+      if (lastRequestedRouteRef.current !== routeTargetKey) {
+        lastRequestedRouteRef.current = routeTargetKey;
 
-        if (map.getSource('route-nav')) {
-          map.getSource('route-nav').setData({
-            type: 'Feature',
-            properties: {},
-            geometry: {
-              type: 'LineString',
-              coordinates: currentActive.coordinates
-            }
-          });
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
         }
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
 
-        // Floating ETA Badge on Route
-        if (currentActive.coordinates && currentActive.coordinates.length > 2) {
-          const midIdx = Math.floor(currentActive.coordinates.length / 2);
-          const midPoint = currentActive.coordinates[midIdx];
+        fetchShortestRoute(startCoords, destCoords, controller.signal).then(routeData => {
+          if (!routeData) return;
+          const currentActive = routeData.allRoutes[selectedRouteIdx] || routeData.shortest;
+          setActiveRouteInfo(currentActive);
+          setAvailableRoutes(routeData.allRoutes);
 
-          const activeBadgeEl = document.createElement('div');
-          activeBadgeEl.className = 'apple-active-route-badge';
-          const durationFormatted = formatRouteDuration(currentActive.minutes);
-          activeBadgeEl.innerHTML = `
-            <div class="eta-main">${durationFormatted}</div>
-            <div class="eta-sub">${currentActive.miles.toFixed(1)} mi • Más corta</div>
-          `;
+          if (map.getSource('route-nav')) {
+            map.getSource('route-nav').setData({
+              type: 'Feature',
+              properties: {},
+              geometry: {
+                type: 'LineString',
+                coordinates: currentActive.coordinates
+              }
+            });
+          }
 
-          const activeMarker = new mapboxgl.Marker({ element: activeBadgeEl, anchor: 'center' })
-            .setLngLat(midPoint)
-            .addTo(map);
+          // Floating ETA Badge on Route
+          routeBadgeMarkersRef.current.forEach(m => m.remove());
+          routeBadgeMarkersRef.current = [];
+          if (currentActive.coordinates && currentActive.coordinates.length > 2) {
+            const midIdx = Math.floor(currentActive.coordinates.length / 2);
+            const midPoint = currentActive.coordinates[midIdx];
 
-          routeBadgeMarkersRef.current.push(activeMarker);
-        }
-      });
+            const activeBadgeEl = document.createElement('div');
+            activeBadgeEl.className = 'apple-active-route-badge';
+            const durationFormatted = formatRouteDuration(currentActive.minutes);
+            activeBadgeEl.innerHTML = `
+              <div class="eta-main">${durationFormatted}</div>
+              <div class="eta-sub">${currentActive.miles.toFixed(1)} mi • Más corta</div>
+            `;
+
+            const activeMarker = new mapboxgl.Marker({ element: activeBadgeEl, anchor: 'center' })
+              .setLngLat(midPoint)
+              .addTo(map);
+
+            routeBadgeMarkersRef.current.push(activeMarker);
+          }
+        });
+      }
     } else {
       // Clear route lines and badges if no active destination for this date
       if (map.getSource('route-nav')) {
@@ -2524,7 +2560,7 @@ export default function UberDriverView({
               <div className="flex items-center gap-1.5 justify-end">
                 {selectedOrder.phone && (
                   <a
-                    href={getCustomerSmsUrl(selectedOrder.phone, selectedOrder.address)}
+                    href={getCustomerSmsUrl(selectedOrder.phone, selectedOrder.address, selectedOrder.tech_id || techName)}
                     className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
                     title={`Enviar SMS con aviso al cliente (${selectedOrder.phone})`}
                   >
