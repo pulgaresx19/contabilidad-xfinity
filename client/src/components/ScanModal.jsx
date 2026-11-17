@@ -874,6 +874,34 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                   />
                 </div>
 
+                {/* Indicador de Acceso */}
+                {(() => {
+                  const pa = String(o.premise_access || 'N').toUpperCase();
+                  if (pa === 'RQHM') {
+                    return <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[9.5px] font-bold">🏠 Req. Cliente</span>;
+                  } else if (pa === 'DOG') {
+                    return <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[9.5px] font-bold">🐕 Perro</span>;
+                  } else if (pa.includes('GATE') || pa.includes('LOCK')) {
+                    return <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9.5px] font-bold">🔒 Portón</span>;
+                  } else if (pa === 'CALL' || o.call_first) {
+                    return <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[9.5px] font-bold">📞 Llamar 1ro</span>;
+                  }
+                  return <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 text-[9.5px] font-medium">🟢 Acceso libre</span>;
+                })()}
+
+                {/* Cruce de Vecinos (SOLO si hay cruce real) */}
+                {(() => {
+                  const nVal = String(o.neighbor_notice || 'N').toUpperCase();
+                  if (nVal && nVal !== 'N' && nVal !== 'NO' && nVal !== '0') {
+                    return (
+                      <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/35 text-[9.5px] font-bold shadow-2xs">
+                        👥 Cruce: {nVal} {nVal === '1' ? 'vecino' : 'vecinos'}
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
+
                 {/* Notas adicionales */}
                 {o.raw_notes && o.raw_notes !== o.address && (
                   <span className="text-[9.5px] text-slate-400 truncate max-w-[120px] font-mono bg-[#0b1017] px-1.5 py-0.5 rounded-lg border border-white/5" title={o.raw_notes}>

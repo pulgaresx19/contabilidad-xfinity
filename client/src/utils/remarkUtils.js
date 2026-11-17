@@ -78,8 +78,178 @@ export function cleanRawNotes(rawText) {
  * @param {Object} order - Objeto con datos de la orden de trabajo
  * @returns {string} - Cadena formateada
  */
+/**
+ * Devuelve una lista de badges estructurados listos para renderizar como micro-chips
+ * interactivos e independientes en las tarjetas del trabajo:
+ * - Acceso: '🟢 Acceso libre' o '🐕 Perro' o '🔒 Portón' o '🏠 Req. Cliente' o '📞 Llamar 1ro'
+ * - Cruce de Vecinos: '👥 Cruce: 1 vecino' o '👥 Cruce: 2 vecinos' (SOLO si hay cruce; si NBR:N no se muestra nada para evitar redundancia)
+ * - Obstáculos: '🌿 Jardinería' o '💦 Aspersores'
+ * - Cable Temporal: '⚡ Temp'
+ * - Nota humana: 'Nota: ...'
+ * @param {Object} order - Objeto con datos de la orden de trabajo
+ * @returns {Array<Object>}
+ */
+export function getOrderFieldBadges(order) {
+  if (!order) return [];
+  const badges = [];
+  const rawNotesStr = String(order.raw_notes || '').toUpperCase();
+
+  // 1. CONDICIÓN DE ACCESO A LA PROPIEDAD
+  const pa = String(order.premise_access || 'N').trim().toUpperCase();
+  if (pa === 'RQHM' || rawNotesStr.includes('RQHM')) {
+    badges.push({
+      key: 'access-rqhm',
+      type: 'access',
+      icon: '🏠',
+      text: 'Req. Cliente',
+      tooltip: 'Cliente en casa requerido para realizar el trabajo (RQHM)',
+      className: 'bg-blue-950/40 text-blue-300 border-blue-500/30'
+    });
+  } else if (pa === 'DOG' || /\bDOGS?\b/i.test(rawNotesStr)) {
+    badges.push({
+      key: 'access-dog',
+      type: 'access',
+      icon: '🐕',
+      text: 'Perro',
+      tooltip: 'Perro en la propiedad: Precaución al ingresar',
+      className: 'bg-rose-950/40 text-rose-300 border-rose-500/30'
+    });
+  } else if (pa.includes('GATE') || pa.includes('LOCK') || /(?:PORT[OÓ]N|CANDADO|LOCKED\s*GATE)/i.test(rawNotesStr)) {
+    badges.push({
+      key: 'access-gate',
+      type: 'access',
+      icon: '🔒',
+      text: 'Portón',
+      tooltip: 'Portón cerrado o con candado / reja trasera',
+      className: 'bg-amber-950/40 text-amber-300 border-amber-500/30'
+    });
+  } else if (pa === 'CALL' || /\bCALLFIRST\b/i.test(rawNotesStr) || order.call_first === 1 || order.call_first === true) {
+    badges.push({
+      key: 'access-call',
+      type: 'access',
+      icon: '📞',
+      text: 'Llamar 1ro',
+      tooltip: 'Llamar al cliente antes de entrar a la propiedad',
+      className: 'bg-cyan-950/40 text-cyan-300 border-cyan-500/30'
+    });
+  } else {
+    // Acceso completamente libre (predeterminado)
+    badges.push({
+      key: 'access-free',
+      type: 'access',
+      icon: '🟢',
+      text: 'Acceso libre',
+      tooltip: 'Acceso libre a la propiedad sin restricciones reportadas',
+      className: 'bg-emerald-950/30 text-emerald-300 border-emerald-500/25'
+    });
+  }
+
+  // 2. AVISO DE VECINOS (NBR) - SOLO si hay cruce real
+  let neighborVal = String(order.neighbor_notice || '').trim().toUpperCase();
+  if (!neighborVal || neighborVal === 'UNDEFINED' || neighborVal === 'NULL') {
+    const m = rawNotesStr.match(/\b(?:NBR|NB)[:\s]*([A-Za-z0-9]+)\b/i);
+    if (m) {
+      neighborVal = m[1].toUpperCase();
+    } else if (/\bNB\b/i.test(rawNotesStr)) {
+      neighborVal = 'N';
+    }
+  }
+
+  const requiresNeighborCrossing = neighborVal && neighborVal !== 'N' && neighborVal !== 'NO' && neighborVal !== 'NONE' && neighborVal !== '0';
+
+  if (requiresNeighborCrossing) {
+    const countText = neighborVal === '1' ? '1 vecino' : neighborVal === '2' ? '2 vecinos' : /^\d+$/.test(neighborVal) ? `${neighborVal} vecinos` : 'vecinos';
+    badges.push({
+      key: 'neighbor-crossing',
+      type: 'neighbor',
+      icon: '👥',
+      text: `Cruce: ${countText}`,
+      tooltip: `Cruce de servidumbre requerido: pasa por la propiedad de ${countText}`,
+      className: 'bg-purple-950/40 text-purple-300 border-purple-500/35 font-semibold shadow-2xs'
+    });
+  }
+
+  // 3. OBSTÁCULOS DE TERRENO (Jardinería, Aspersores)
+  if (order.obstacles && order.obstacles !== 'N') {
+    const rawObs = String(order.obstacles).trim().toUpperCase();
+    if (rawObs && rawObs !== 'N' && rawObs !== 'NONE') {
+      const tokens = rawObs.split(/[,/]/).map(t => t.trim()).filter(Boolean);
+      for (const tok of tokens) {
+        if (tok.includes('LANDSC') || tok.includes('LANS')) {
+          if (!badges.some(b => b.key === 'obs-landsc')) {
+            badges.push({
+              key: 'obs-landsc',
+              type: 'obstacle',
+              icon: '🌿',
+              text: 'Jardinería',
+              tooltip: 'Jardinería delicada: Cuidar plantas y canteros',
+              className: 'bg-teal-950/30 text-teal-300 border-teal-500/25'
+            });
+          }
+        } else if (tok.includes('SPRKLR') || tok.includes('SPRKL')) {
+          if (!badges.some(b => b.key === 'obs-sprklr')) {
+            badges.push({
+              key: 'obs-sprklr',
+              type: 'obstacle',
+              icon: '💦',
+              text: 'Aspersores',
+              tooltip: 'Sistema de aspersores de riego enterrados en el césped',
+              className: 'bg-sky-950/30 text-sky-300 border-sky-500/25'
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 4. CABLE TEMPORAL
+  const hasTemp =
+    order.is_temp === 1 ||
+    order.is_temp === true ||
+    /\bTEMP[:\s]*Y\b/i.test(rawNotesStr);
+  if (hasTemp) {
+    badges.push({
+      key: 'temp-cable',
+      type: 'temp',
+      icon: '⚡',
+      text: 'Línea Temp',
+      tooltip: 'Cable temporal superficial ya tendido en el terreno',
+      className: 'bg-amber-950/30 text-amber-300 border-amber-500/25'
+    });
+  }
+
+  // 5. NOTA HUMANA REAL (Limpia)
+  if (order.raw_notes && typeof order.raw_notes === 'string') {
+    const cleanedNotes = cleanRawNotes(order.raw_notes);
+    if (
+      cleanedNotes &&
+      cleanedNotes.toUpperCase() !== String(order.address || '').toUpperCase() &&
+      !/^(?:N|NO|NONE|NULL)$/i.test(cleanedNotes)
+    ) {
+      badges.push({
+        key: 'human-note',
+        type: 'note',
+        tag: 'Nota',
+        tagClassName: 'text-amber-400 text-[9px] uppercase tracking-wider font-semibold',
+        text: cleanedNotes,
+        tooltip: `Nota del despacho: ${cleanedNotes}`,
+        className: 'bg-slate-800/80 text-slate-300 border-slate-700/60 max-w-xs sm:max-w-sm truncate'
+      });
+    }
+  }
+
+  return badges;
+}
+
+/**
+ * Devuelve un resumen limpio, compacto y directo de las notas y alertas de campo.
+ * Traduce términos técnicos a español conciso para no saturar el espacio visual.
+ * Muestra '🟢 Acceso libre' cuando el predio no tiene restricciones.
+ * @param {Object} order - Objeto con datos de la orden de trabajo
+ * @returns {string} - Cadena formateada
+ */
 export function getOrderRemark(order) {
-  if (!order) return '🟢 Acceso libre • Sin cruce de vecinos';
+  if (!order) return '🟢 Acceso libre';
   const parts = [];
 
   // 1. Observación humana limpia (sin repetir teléfono, pies, cable, bore, ni NBR)
@@ -139,7 +309,7 @@ export function getOrderRemark(order) {
     if (!parts.some(p => p.toUpperCase().includes(pa))) parts.push(pa);
   }
 
-  // 5. Aviso de Vecinos (NBR / NB) - Interpretación automática en español
+  // 5. Aviso de Vecinos (NBR / NB) - Interpretación automática en español (SOLO si hay cruce real)
   let neighborVal = String(order.neighbor_notice || '').trim().toUpperCase();
   if (!neighborVal || neighborVal === 'UNDEFINED' || neighborVal === 'NULL') {
     const m = rawNotesStr.match(/\b(?:NBR|NB)[:\s]*([A-Za-z0-9]+)\b/i);
@@ -168,14 +338,7 @@ export function getOrderRemark(order) {
 
   // 6. Si no hay ninguna restricción de premisa ni obstáculos ni cruce de vecinos:
   if (parts.length === 0) {
-    return '🟢 Acceso libre • Sin cruce de vecinos';
-  }
-
-  // 7. Si hay detalles pero se confirma sin cruce de vecinos y no requiere vecino:
-  if (!requiresNeighborCrossing && (neighborVal === 'N' || neighborVal === 'NO' || /\b(?:NBR|NB)[:\s]*N\b/i.test(rawNotesStr) || /\bNB\b/i.test(rawNotesStr))) {
-    if (!parts.some(p => /vecino/i.test(p))) {
-      parts.push('🟢 Sin cruce de vecinos');
-    }
+    return '🟢 Acceso libre';
   }
 
   return parts.join(' • ');

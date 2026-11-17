@@ -15,7 +15,7 @@ import LiveCameraModal from './LiveCameraModal';
 import { stampPhotoWithWatermark } from '../utils/watermark';
 import { getLocalDateStr, normalizeDateStr, formatDateFriendly } from '../utils/dateUtils';
 import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
-import { getOrderRemark } from '../utils/remarkUtils';
+import { getOrderRemark, getOrderFieldBadges } from '../utils/remarkUtils';
 
 export default function TodayView({ 
   orders, 
@@ -1114,16 +1114,18 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                         </span>
                       )}
 
-                      {/* 7. Nota / Detalle Especial */}
-                      {orderRemark && (
+                      {/* 7. Badges de Campo Especializados (Acceso, Cruce de Vecinos, Obstáculos, Notas) */}
+                      {getOrderFieldBadges(order).map((b) => (
                         <span 
-                          className="shrink-0 bg-slate-800/80 text-slate-300 px-2.5 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-medium flex items-center gap-1.5 max-w-sm sm:max-w-md"
-                          title={`Nota del trabajo: ${orderRemark}`}
+                          key={b.key}
+                          className={`shrink-0 px-2 py-0.5 rounded-md border text-[10px] font-medium flex items-center gap-1 shadow-2xs ${b.className}`}
+                          title={b.tooltip}
                         >
-                          <span className="text-amber-400 text-[9px] uppercase tracking-wider font-semibold">Nota</span>
-                          <span className="text-slate-200">{orderRemark}</span>
+                          {b.icon && <span className="shrink-0">{b.icon}</span>}
+                          {b.tag && <span className={b.tagClassName}>{b.tag}</span>}
+                          <span>{b.text}</span>
                         </span>
-                      )}
+                      ))}
                     </div>
                   );
                 })()}
