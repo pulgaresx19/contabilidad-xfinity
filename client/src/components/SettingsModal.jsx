@@ -375,12 +375,12 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             </div>
           </div>
 
-          {/* 5. SERVIDOR AURACORE IA (DE ÚLTIMO) */}
+          {/* 5. SERVIDOR AURYCORE IA (DE ÚLTIMO) */}
           <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="h-4 w-4" />
-                <span>AuraCore IA (Escaneo de Fotos)</span>
+                <span>AuryCore IA</span>
               </span>
               {auraHealth && (
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 whitespace-nowrap shrink-0 ${
