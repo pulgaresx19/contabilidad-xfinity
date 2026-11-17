@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { getLocalDateStr, normalizeDateStr } from '../utils/dateUtils';
 import { interactWithAuraCore } from '../services/auraService';
-import { cleanRawNotes } from '../utils/remarkUtils';
+import { cleanRawNotes, getOrderFieldBadges } from '../utils/remarkUtils';
 import { compressImage, detectPriorityRowIndices } from '../services/imageUtils';
 import ZoomableImageViewer from './ZoomableImageViewer';
 
@@ -278,7 +278,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
             rate_calculated: calcOrderRate(o.drop_footage, o.bore_type),
             status: 'Pendiente',
             payment_status: 'Pendiente',
-            raw_notes: cleanRawNotes(rawNotesStr)
+            raw_notes: cleanRawNotes(rawNotesStr) || (rawNotesStr && !/^(?:N|NO|NONE|NULL)$/i.test(rawNotesStr.trim()) ? rawNotesStr.trim() : '')
           };
         })
       );
@@ -327,6 +327,10 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
         cable_type: 'RG-6',
         bore_type: 'N',
         obstacles: 'N',
+        is_priority: 0,
+        premise_access: 'N',
+        neighbor_notice: 'N',
+        is_temp: 0,
         rate_calculated: 100,
         status: 'Pendiente',
         payment_status: 'Pendiente',
@@ -760,6 +764,64 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
           </button>
         </div>
 
+        {/* Fila Scrolleable de Leyenda: Guía de Detección de la IA */}
+        <div className="pt-2 pb-1 shrink-0">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 text-[10px] select-none scroll-smooth">
+            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 shrink-0 font-mono flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded-lg border border-white/5">
+              <span>🔍</span>
+              <span>Detección IA:</span>
+            </span>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 shrink-0 font-bold" title="Marcado en rojo en la hoja de despacho: trabajo obligatorio">
+              <span>🔴</span>
+              <span>Prioritario</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 shrink-0 font-medium" title="Predio sin restricciones reportadas">
+              <span>🟢</span>
+              <span>Acceso libre</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 shrink-0 font-semibold" title="Llamar al cliente antes de entrar a la propiedad (CALLFIRST)">
+              <span>📞</span>
+              <span>Llamar 1ro</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-300 shrink-0 font-semibold" title="Cliente en casa requerido para trabajar (RQHM)">
+              <span>🏠</span>
+              <span>Req. Cliente</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 shrink-0 font-semibold" title="Perro en propiedad: precaución (DOG)">
+              <span>🐕</span>
+              <span>Perro</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 shrink-0 font-semibold" title="Portón cerrado o con candado (GATE / LOCK)">
+              <span>🔒</span>
+              <span>Portón</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-300 shrink-0 font-semibold" title="Cruce de servidumbre por propiedad de vecinos (NBR / NB)">
+              <span>👥</span>
+              <span>Cruce Vecinos</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-600/15 border border-emerald-600/30 text-emerald-300 shrink-0 font-semibold" title="Jardinería delicada / plantas (LANDSC)">
+              <span>🌿</span>
+              <span>Jardinería</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-500/15 border border-sky-500/30 text-sky-300 shrink-0 font-semibold" title="Aspersores de riego enterrados en césped (SPRKLR)">
+              <span>💦</span>
+              <span>Aspersores</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-600/15 border border-amber-600/30 text-amber-300 shrink-0 font-semibold" title="Cable o línea temporal tendida en superficie (TEMP:Y)">
+              <span>⚡</span>
+              <span>Línea Temp</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 shrink-0 font-semibold" title="Iluminación o cableado privado subterráneo (PRIVLITE)">
+              <span>💡</span>
+              <span>Luz Privada</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-700/40 border border-slate-600/40 text-slate-300 shrink-0 font-semibold" title="Notas u observaciones de despacho (código de portón, etc.)">
+              <span>📝</span>
+              <span>Notas / Código</span>
+            </div>
+          </div>
+        </div>
+
         {/* Lista de Filas en el Recuadro */}
         <div className="space-y-2 py-2 flex-1 min-h-0">
           {extractedOrders.map((o, idx) => (
@@ -888,52 +950,67 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                   />
                 </div>
 
-                {/* Indicador de Acceso */}
-                {(() => {
-                  const pa = String(o.premise_access || 'N').toUpperCase();
-                  if (pa === 'RQHM') {
-                    return <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[9.5px] font-bold">🏠 Req. Cliente</span>;
-                  } else if (pa === 'DOG') {
-                    return <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[9.5px] font-bold">🐕 Perro</span>;
-                  } else if (pa.includes('GATE') || pa.includes('LOCK')) {
-                    return <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9.5px] font-bold">🔒 Portón</span>;
-                  } else if (pa === 'CALL' || o.call_first) {
-                    return <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[9.5px] font-bold">📞 Llamar 1ro</span>;
-                  }
-                  return <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 text-[9.5px] font-medium">🟢 Acceso libre</span>;
-                })()}
-
-                {/* Indicador de Prioritario (Abajo en notas con punto rojo) */}
-                {Boolean(o.is_priority) && (
-                  <button
-                    type="button"
-                    onClick={() => updateOrderField(idx, 'is_priority', o.is_priority ? 0 : 1)}
-                    className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/50 text-[9.5px] font-bold flex items-center gap-1 cursor-pointer hover:bg-rose-500/30 transition shadow-2xs"
-                    title="Trabajo Prioritario (Toca para alternar)"
-                  >
-                    <span>🔴 Prioritario</span>
-                  </button>
-                )}
-
-                {/* Cruce de Vecinos (SOLO si hay cruce real) */}
-                {(() => {
-                  const nVal = String(o.neighbor_notice || 'N').toUpperCase();
-                  if (nVal && nVal !== 'N' && nVal !== 'NO' && nVal !== '0') {
+                {/* Badges de Campo: Solo Iconos de lo detectado con Tooltip descriptivo */}
+                <div className="flex items-center gap-1 flex-wrap">
+                  {getOrderFieldBadges(o).map((badge) => {
+                    if (badge.type === 'priority') {
+                      return (
+                        <button
+                          key={badge.key}
+                          type="button"
+                          onClick={() => updateOrderField(idx, 'is_priority', o.is_priority ? 0 : 1)}
+                          className="h-6 w-6 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/50 flex items-center justify-center text-[12px] cursor-pointer transition active:scale-90 shadow-xs shrink-0"
+                          title="🔴 Trabajo Prioritario (Toca para alternar)"
+                        >
+                          <span>🔴</span>
+                        </button>
+                      );
+                    }
+                    if (badge.type === 'note') {
+                      return (
+                        <div
+                          key={badge.key}
+                          className="h-6 px-1.5 rounded-lg bg-[#0b1017] border border-white/10 text-slate-300 text-[10px] flex items-center gap-1 max-w-[130px] sm:max-w-[160px] truncate shadow-xs shrink-0"
+                          title={`📝 Observaciones de Despacho: ${badge.text}`}
+                        >
+                          <span className="shrink-0 text-[11px]">📝</span>
+                          <span className="truncate font-mono text-[9px] text-slate-300">{badge.text}</span>
+                        </div>
+                      );
+                    }
                     return (
-                      <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/35 text-[9.5px] font-bold shadow-2xs">
-                        👥 Cruce: {nVal} {nVal === '1' ? 'vecino' : 'vecinos'}
-                      </span>
+                      <div
+                        key={badge.key}
+                        className={`h-6 w-6 rounded-lg border flex items-center justify-center text-[12px] select-none shadow-xs shrink-0 ${
+                          badge.key === 'access-free'
+                            ? 'bg-emerald-500/15 border-emerald-500/30'
+                            : badge.key === 'access-call'
+                            ? 'bg-cyan-500/15 border-cyan-500/30'
+                            : badge.key === 'access-dog'
+                            ? 'bg-rose-500/15 border-rose-500/30'
+                            : badge.key === 'access-gate'
+                            ? 'bg-amber-500/15 border-amber-500/30'
+                            : badge.key === 'access-rqhm'
+                            ? 'bg-blue-500/15 border-blue-500/30'
+                            : badge.key === 'neighbor-crossing'
+                            ? 'bg-purple-500/15 border-purple-500/30'
+                            : badge.key === 'obs-landsc'
+                            ? 'bg-emerald-600/15 border-emerald-600/30'
+                            : badge.key === 'obs-sprklr'
+                            ? 'bg-sky-500/15 border-sky-500/30'
+                            : badge.key === 'temp-cable'
+                            ? 'bg-amber-600/15 border-amber-600/30'
+                            : badge.key === 'obs-privlite'
+                            ? 'bg-indigo-500/15 border-indigo-500/30'
+                            : 'bg-white/5 border-white/10'
+                        }`}
+                        title={`${badge.icon} ${badge.text}${badge.tooltip ? ` • ${badge.tooltip}` : ''}`}
+                      >
+                        <span>{badge.icon}</span>
+                      </div>
                     );
-                  }
-                  return null;
-                })()}
-
-                {/* Notas adicionales */}
-                {o.raw_notes && o.raw_notes !== o.address && (
-                  <span className="text-[9.5px] text-slate-400 truncate max-w-[120px] font-mono bg-[#0b1017] px-1.5 py-0.5 rounded-lg border border-white/5" title={o.raw_notes}>
-                    {o.raw_notes}
-                  </span>
-                )}
+                  })}
+                </div>
               </div>
             </div>
           ))}
