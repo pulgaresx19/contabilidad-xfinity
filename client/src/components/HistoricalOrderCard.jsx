@@ -115,8 +115,8 @@ export default function HistoricalOrderCard({
 
       {/* FILA 3: ESPECIFICACIONES TÉCNICAS (Contador de Fotos Adelante + Metraje + Cable + Bore + Nota) */}
       <div className="flex items-center gap-1.5 text-[10px] overflow-x-auto scrollbar-none py-0.5 whitespace-nowrap">
-        {/* 1. Contador de Fotos adelante de los pies */}
-        {photosCount > 0 && (
+        {/* 1. Contador de Fotos adelante de los pies (para trabajos realizados) */}
+        {!isCancelled && photosCount > 0 && (
           <button
             type="button"
             onClick={(e) => {
@@ -187,23 +187,39 @@ export default function HistoricalOrderCard({
         )}
       </div>
 
-      {/* FILA 4: MOTIVO DE CANCELACIÓN (Si aplica) */}
-      {isCancelled && (
-        <div className="bg-rose-950/25 border border-rose-500/25 p-2 rounded-xl text-xs text-rose-200 flex items-start gap-1.5">
-          <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0 mt-0.5" />
-          <div className="min-w-0">
-            <span className="text-[9px] uppercase font-bold text-rose-400 block tracking-wider">
-              Motivo No Realizado:
+      {/* FILA 4 / 5: CONTENIDO VISUAL UNIFICADO (Sin agrandar la tarjeta para trabajos no realizados) */}
+      {isCancelled ? (
+        /* Trabajo No Realizado: Muestra el motivo en el mismo espacio donde irían las fotos, compacto y con el botón/icono de fotos del obstáculo */
+        <div 
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenPhotos && onOpenPhotos(order);
+          }}
+          className="bg-rose-950/20 border border-rose-500/25 hover:border-rose-500/40 p-2 rounded-xl text-xs text-rose-200 flex items-center justify-between gap-2 transition cursor-pointer active:scale-[0.99] group/reason"
+          title="Toca para ver la constancia y fotos del obstáculo"
+        >
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+            <span className="text-[10px] uppercase font-bold text-rose-400 shrink-0 tracking-wider">
+              Motivo:
             </span>
-            <p className="font-semibold text-xs leading-tight">
-              {order.cancel_reason || 'Sin motivo detallado'}
-            </p>
+            <span className="font-semibold text-xs text-rose-100 truncate">
+              {order.cancel_reason || 'Inconveniente en la propiedad'}
+            </span>
           </div>
-        </div>
-      )}
 
-      {/* FILA 5: TIRA DE FOTOS DE EVIDENCIA (100% libre, de borde a borde, sin botones al lado) */}
-      {photos.length > 0 && (
+          {photosCount > 0 && (
+            <span 
+              className="shrink-0 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/35 px-2 py-0.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs"
+              title={`${photosCount} foto(s) del obstáculo. Toca para ver.`}
+            >
+              <Camera className="h-3 w-3 text-rose-300 shrink-0" />
+              <span>{photosCount} {photosCount === 1 ? 'foto' : 'fotos'}</span>
+            </span>
+          )}
+        </div>
+      ) : photos.length > 0 ? (
+        /* Trabajo Realizado: Tira horizontal de fotos de evidencia */
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none pt-0.5 w-full">
           {photos.map((p, pIdx) => {
             const src = p.photo_data || (p.filename ? `/uploads/${p.filename}` : '');
@@ -229,7 +245,7 @@ export default function HistoricalOrderCard({
             );
           })}
         </div>
-      )}
+      ) : null}
 
       {/* FILA 6: ACCIONES RÁPIDAS (Copiar Comprobante | Editar | Recompartir Reporte) */}
       <div className="pt-2 border-t border-white/8 grid grid-cols-3 gap-1.5 sm:gap-2" onClick={(e) => e.stopPropagation()}>
