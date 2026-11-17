@@ -868,26 +868,26 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                 <div className="h-4 w-px bg-white/10 shrink-0" />
 
                 {/* Cápsula de Ciudad y ZIP (Estilo Ejecutivo / Despacho) */}
-                <div className="flex items-center gap-1 bg-[#141d29] px-2 py-0.5 rounded-lg border border-white/5 shrink-0 shadow-inner">
+                <div className="flex items-center justify-center gap-1.5 bg-[#141d29] px-2.5 py-0.5 rounded-lg border border-white/5 shrink-0 shadow-inner">
                   {/* Ciudad */}
                   <input
                     type="text"
                     placeholder="CIUDAD"
                     value={o.city}
                     onChange={(e) => updateOrderField(idx, 'city', e.target.value)}
-                    className="bg-transparent text-slate-200 hover:text-white focus:text-white font-bold uppercase text-[10px] tracking-wider font-mono focus:outline-none w-[70px] sm:w-[90px] text-center placeholder-slate-600 truncate"
+                    className="bg-transparent text-slate-200 hover:text-white focus:text-white font-bold uppercase text-[10px] tracking-wider font-mono focus:outline-none w-[64px] sm:w-[80px] text-center placeholder-slate-600 truncate"
                     title="Ciudad (detectada por IA)"
                   />
 
-                  <span className="text-slate-500 font-mono text-[9px] select-none">•</span>
+                  <span className="text-slate-500 font-mono text-[9px] select-none shrink-0">•</span>
 
-                  {/* Código Postal (ZIP) */}
+                  {/* Código Postal (ZIP) - Con ancho optimizado para visualizar los 5 dígitos sin cortes */}
                   <input
                     type="text"
                     placeholder="ZIP"
                     value={o.zip_code}
                     onChange={(e) => updateOrderField(idx, 'zip_code', e.target.value)}
-                    className="bg-transparent text-slate-400 hover:text-slate-200 focus:text-white font-mono text-[10px] focus:outline-none w-11 sm:w-12 text-center placeholder-slate-600"
+                    className="bg-transparent text-slate-300 hover:text-white focus:text-white font-mono text-[10.5px] focus:outline-none w-14 sm:w-16 text-center placeholder-slate-600 shrink-0 pr-1 tracking-tight"
                     title="Código Postal (ZIP)"
                   />
                 </div>
