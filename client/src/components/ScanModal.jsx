@@ -861,21 +861,60 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                 />
               </div>
 
-              {/* Fila 3: Ciudad */}
-              <div>
-                <input
-                  type="text"
-                  placeholder="Ciudad (ej. GOSHEN)"
-                  value={o.city}
-                  onChange={(e) => updateOrderField(idx, 'city', e.target.value)}
-                  className="w-full bg-[#0b1017] border border-white/10 rounded-lg px-2 py-0.5 text-[11px] text-white uppercase placeholder-slate-500 font-bold focus:outline-none focus:border-cyan-500 transition"
-                />
+              {/* Fila 3: Ciudad, ZIP, Selector de Bore y Teléfono del Cliente */}
+              <div className="flex items-center gap-1.5 pt-0.5">
+                {/* Ciudad y ZIP */}
+                <div className="flex items-center gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-2 py-0.5 flex-1 min-w-0" title="Ciudad y Código Postal (ZIP)">
+                  <input
+                    type="text"
+                    placeholder="Ciudad (ej. GOSHEN)"
+                    value={o.city || ''}
+                    onChange={(e) => updateOrderField(idx, 'city', e.target.value)}
+                    className="w-full bg-transparent text-[11px] text-white uppercase placeholder-slate-500 font-bold focus:outline-none min-w-0"
+                  />
+                  <span className="text-slate-600 font-mono text-[10.5px]">,</span>
+                  <input
+                    type="text"
+                    placeholder="ZIP"
+                    value={o.zip_code || ''}
+                    onChange={(e) => updateOrderField(idx, 'zip_code', e.target.value)}
+                    className="w-14 bg-transparent text-[10.5px] text-slate-400 font-mono focus:outline-none text-right shrink-0 placeholder-slate-600"
+                    title="Código Postal (ZIP)"
+                  />
+                </div>
+
+                {/* Bore Selector */}
+                <select
+                  value={o.bore_type || 'N'}
+                  onChange={(e) => updateOrderField(idx, 'bore_type', e.target.value)}
+                  className="bg-[#0b1017] border border-white/10 hover:border-cyan-500/40 rounded-lg px-1.5 py-0.5 text-[10px] text-slate-200 focus:outline-none cursor-pointer shrink-0 font-medium"
+                  title="Tipo de Perforación (Bore)"
+                >
+                  <option value="N">Sin Bore ($0)</option>
+                  <option value="DW:1">Driveway (+${rateConfig.bore_dw_bonus})</option>
+                  <option value="SW:1,DW:1">SW + DW (+${rateConfig.bore_dw_bonus})</option>
+                  <option value="SW:1">Sidewalk ($0)</option>
+                  <option value="RD:2">Road Bore ($0)</option>
+                  <option value="RD:1">Road Bore 1 ($0)</option>
+                </select>
+
+                {/* Teléfono del Cliente */}
+                <div className="flex items-center gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-1.5 py-0.5 w-[110px] sm:w-[125px] shrink-0" title="Teléfono del cliente para llamadas o SMS">
+                  <Phone className="w-3 h-3 text-cyan-400 shrink-0" />
+                  <input
+                    type="text"
+                    placeholder="Teléfono"
+                    value={o.phone || ''}
+                    onChange={(e) => updateOrderField(idx, 'phone', e.target.value)}
+                    className="w-full bg-transparent text-cyan-300 font-mono text-[10.5px] focus:outline-none placeholder-slate-600"
+                  />
+                </div>
               </div>
 
-              {/* Fila 4: Metraje, Cable, Bore y Notas */}
+              {/* Fila 4: Metraje Drop, Cable e Iconos de Terreno */}
               <div className="flex flex-wrap items-center gap-1.5 text-[10px] pt-0.5">
                 {/* Metraje Drop */}
-                <div className="flex items-center gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-1.5 py-0.5">
+                <div className="flex items-center gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-1.5 py-0.5 shrink-0">
                   <Ruler className="w-3 h-3 text-amber-400 shrink-0" />
                   <input
                     type="number"
@@ -893,7 +932,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                 </div>
 
                 {/* Cable Selector */}
-                <div className="flex bg-[#0b1017] p-0.5 rounded-lg border border-white/10">
+                <div className="flex bg-[#0b1017] p-0.5 rounded-lg border border-white/10 shrink-0">
                   {['RG-6', 'RG-11'].map((cab) => (
                     <button
                       key={cab}
@@ -908,32 +947,6 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                       {cab}
                     </button>
                   ))}
-                </div>
-
-                {/* Bore Selector */}
-                <select
-                  value={o.bore_type || 'N'}
-                  onChange={(e) => updateOrderField(idx, 'bore_type', e.target.value)}
-                  className="bg-[#0b1017] border border-white/10 rounded-lg px-1.5 py-0.5 text-[10px] text-slate-200 focus:outline-none cursor-pointer"
-                >
-                  <option value="N">Sin Bore ($0)</option>
-                  <option value="DW:1">Driveway (+${rateConfig.bore_dw_bonus})</option>
-                  <option value="SW:1,DW:1">SW + DW (+${rateConfig.bore_dw_bonus})</option>
-                  <option value="SW:1">Sidewalk ($0)</option>
-                  <option value="RD:2">Road Bore ($0)</option>
-                  <option value="RD:1">Road Bore 1 ($0)</option>
-                </select>
-
-                {/* Teléfono del Cliente */}
-                <div className="flex items-center gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-1.5 py-0.5 max-w-[130px]" title="Teléfono del cliente para llamadas o SMS">
-                  <Phone className="w-3 h-3 text-cyan-400 shrink-0" />
-                  <input
-                    type="text"
-                    placeholder="Teléfono"
-                    value={o.phone || ''}
-                    onChange={(e) => updateOrderField(idx, 'phone', e.target.value)}
-                    className="w-full bg-transparent text-cyan-300 font-mono text-[10.5px] focus:outline-none placeholder-slate-600"
-                  />
                 </div>
 
                 {/* Badges de Campo: Solo Iconos de lo detectado con Modal Informativo al pulsar */}
