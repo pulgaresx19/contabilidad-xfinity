@@ -849,43 +849,48 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                 </div>
               </div>
 
-              {/* Fila 2: Ubicación Lineal (Dirección, Ciudad con color cian distintivo y ZIP) */}
-              <div className="flex items-center gap-1.5 bg-[#0b1017] border border-white/10 rounded-lg px-2 py-1 text-xs transition focus-within:border-cyan-500">
-                <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                
+              {/* Fila 2: Ubicación Lineal (Dirección, Ciudad con diseño ejecutivo y ZIP) */}
+              <div className="flex items-center gap-1.5 bg-[#0b1017] border border-white/10 rounded-xl p-1 text-xs transition focus-within:border-cyan-500/40">
                 {/* Dirección Postal */}
-                <input
-                  type="text"
-                  placeholder="Dirección completa"
-                  value={o.address}
-                  onChange={(e) => updateOrderField(idx, 'address', e.target.value)}
-                  className="bg-transparent text-white font-semibold focus:outline-none flex-1 min-w-[120px] placeholder-slate-600 truncate"
-                  title="Dirección completa"
-                />
+                <div className="flex items-center gap-1.5 flex-1 min-w-[110px] px-1.5 py-0.5">
+                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <input
+                    type="text"
+                    placeholder="Dirección completa"
+                    value={o.address}
+                    onChange={(e) => updateOrderField(idx, 'address', e.target.value)}
+                    className="bg-transparent text-slate-100 hover:text-white focus:text-white text-[11.5px] font-semibold focus:outline-none w-full placeholder-slate-600 truncate"
+                    title="Dirección completa"
+                  />
+                </div>
 
-                <span className="text-slate-600 font-mono text-xs shrink-0">,</span>
+                {/* Separador vertical fino */}
+                <div className="h-4 w-px bg-white/10 shrink-0" />
 
-                {/* Ciudad (Distintiva en cian brillante en mayúsculas) */}
-                <input
-                  type="text"
-                  placeholder="CIUDAD"
-                  value={o.city}
-                  onChange={(e) => updateOrderField(idx, 'city', e.target.value)}
-                  className="bg-transparent text-cyan-300 font-black uppercase text-[11px] focus:outline-none w-[75px] sm:w-[95px] shrink-0 text-center placeholder-slate-600 truncate"
-                  title="Ciudad (detectada por IA)"
-                />
+                {/* Cápsula de Ciudad y ZIP (Estilo Ejecutivo / Despacho) */}
+                <div className="flex items-center gap-1 bg-[#141d29] px-2 py-0.5 rounded-lg border border-white/5 shrink-0 shadow-inner">
+                  {/* Ciudad */}
+                  <input
+                    type="text"
+                    placeholder="CIUDAD"
+                    value={o.city}
+                    onChange={(e) => updateOrderField(idx, 'city', e.target.value)}
+                    className="bg-transparent text-slate-200 hover:text-white focus:text-white font-bold uppercase text-[10px] tracking-wider font-mono focus:outline-none w-[70px] sm:w-[90px] text-center placeholder-slate-600 truncate"
+                    title="Ciudad (detectada por IA)"
+                  />
 
-                <span className="text-slate-600 font-mono text-xs shrink-0">,</span>
+                  <span className="text-slate-500 font-mono text-[9px] select-none">•</span>
 
-                {/* Código Postal (ZIP) */}
-                <input
-                  type="text"
-                  placeholder="ZIP"
-                  value={o.zip_code}
-                  onChange={(e) => updateOrderField(idx, 'zip_code', e.target.value)}
-                  className="bg-transparent text-slate-400 font-mono text-[10.5px] focus:outline-none w-12 sm:w-14 shrink-0 text-right placeholder-slate-600"
-                  title="Código Postal (ZIP)"
-                />
+                  {/* Código Postal (ZIP) */}
+                  <input
+                    type="text"
+                    placeholder="ZIP"
+                    value={o.zip_code}
+                    onChange={(e) => updateOrderField(idx, 'zip_code', e.target.value)}
+                    className="bg-transparent text-slate-400 hover:text-slate-200 focus:text-white font-mono text-[10px] focus:outline-none w-11 sm:w-12 text-center placeholder-slate-600"
+                    title="Código Postal (ZIP)"
+                  />
+                </div>
               </div>
 
               {/* Fila 3: Perforación (Bore), Teléfono del Cliente y Tipo de Cable */}
