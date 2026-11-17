@@ -26,7 +26,7 @@ const getFallbackToken = () => {
   }
 };
 
-export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || getFallbackToken();
+export const MAPBOX_TOKEN = import.meta?.env?.VITE_MAPBOX_TOKEN || getFallbackToken();
 
 /**
  * Detects the US state abbreviation (IL, IN, MI) from address, city, and zip code.
