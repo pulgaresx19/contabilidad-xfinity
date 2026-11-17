@@ -2657,19 +2657,7 @@ export default function UberDriverView({
               onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
             >
               <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                {Boolean(selectedOrder.is_priority) && (
-                  <span
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/25 border border-rose-500/60 text-rose-200 text-[10px] font-black uppercase tracking-wider shadow-xs"
-                    title="Trabajo marcado en rojo en la hoja de despacho: necesario realizar"
-                  >
-                    <span>🔴 Prioritario</span>
-                  </span>
-                )}
-                <h2 className={`text-base sm:text-lg font-black truncate leading-tight transition ${
-                  selectedOrder.is_priority
-                    ? 'text-rose-200 bg-rose-500/20 border border-rose-500/40 px-2.5 py-0.5 rounded-xl group-hover:text-rose-100'
-                    : 'text-white group-hover:text-cyan-400'
-                }`}>
+                <h2 className="text-base sm:text-lg font-black truncate leading-tight text-white group-hover:text-cyan-400 transition">
                   {selectedOrder.address || 'Sin dirección asignada'}
                 </h2>
               </div>
@@ -3127,14 +3115,7 @@ export default function UberDriverView({
                               </span>
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  {Boolean(ord.is_priority) && (
-                                    <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-md bg-rose-500/25 border border-rose-500/50 text-rose-200 shrink-0">
-                                      🔴 Prioritario
-                                    </span>
-                                  )}
-                                  <span className={`text-xs font-bold truncate leading-tight ${
-                                    ord.is_priority ? 'text-rose-200 bg-rose-500/20 px-1.5 py-0.2 rounded-md border border-rose-500/35' : 'text-white'
-                                  }`}>
+                                  <span className="text-xs font-bold truncate leading-tight text-white">
                                     {ord.address}
                                   </span>
                                   <span className="text-[10px] text-slate-400 font-mono shrink-0">
@@ -3532,14 +3513,7 @@ export default function UberDriverView({
                           {/* Job Details */}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              {Boolean(ord.is_priority) && (
-                                <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-md bg-rose-500/25 border border-rose-500/50 text-rose-200 shrink-0">
-                                  🔴 Prioritario
-                                </span>
-                              )}
-                              <span className={`text-xs font-bold truncate leading-tight ${
-                                ord.is_priority ? 'text-rose-200 bg-rose-500/20 px-1.5 py-0.2 rounded-md border border-rose-500/35' : 'text-white'
-                              }`}>
+                              <span className="text-xs font-bold truncate leading-tight text-white">
                                 {ord.address}
                               </span>
                               <span className="text-[10px] sm:text-[10.5px] text-slate-400 font-mono shrink-0">

@@ -960,14 +960,6 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                     <span className="text-sm font-black text-cyan-400 font-mono">
                       #{order.job_id}
                     </span>
-                    {Boolean(order.is_priority) && (
-                      <span
-                        className="px-2 py-0.5 rounded-full bg-rose-500/25 border border-rose-500/60 text-rose-200 text-[10px] font-black uppercase tracking-wider"
-                        title="Trabajo marcado en rojo en la hoja de despacho: necesario realizar"
-                      >
-                        🔴 Prioritario
-                      </span>
-                    )}
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -1007,13 +999,9 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                 <div className="space-y-1">
                   <div className="flex items-start justify-between gap-1.5 text-xs text-white">
                     <div className="flex items-start gap-1.5 min-w-0">
-                      <MapPin className={`h-3.5 w-3.5 flex-shrink-0 mt-0.5 ${order.is_priority ? 'text-rose-400' : 'text-slate-400'}`} />
+                      <MapPin className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-slate-400" />
                       <div className="min-w-0">
-                        <p className={`font-bold truncate ${
-                          order.is_priority
-                            ? 'text-rose-100 bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 rounded-lg inline-block'
-                            : 'text-white'
-                        }`}>{order.address}</p>
+                        <p className="font-bold truncate text-white">{order.address}</p>
                         <p className="text-[10px] text-slate-400">{order.city} {order.zip_code}</p>
                       </div>
                     </div>
