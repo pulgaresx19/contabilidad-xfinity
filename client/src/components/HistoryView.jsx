@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar, CheckCircle2, Clock, Share2, Check, CheckCheck,
   Trash2, ExternalLink, Image as ImageIcon, X, DollarSign, 
-  Ruler, ChevronRight, Copy, Camera, AlertCircle, FileText, 
+  Ruler, ChevronRight, ChevronLeft, Copy, Camera, AlertCircle, FileText, 
   ShieldAlert, CheckCircle, Search, Filter, Sparkles, MapPin, Phone, ShieldCheck, AlertTriangle,
-  BarChart3, Sun, Pencil, Briefcase, Paperclip, ChevronDown
+  BarChart3, Sun, Pencil, Briefcase, Paperclip, ChevronDown, Eye
 } from 'lucide-react';
 import ShareReportModal from './ShareReportModal';
 import TodayView from './TodayView';
@@ -72,6 +72,36 @@ export default function HistoryView({
     });
     return Array.from(yearsSet).sort().reverse();
   }, [weeks, orders, currentYear]);
+
+  // Línea de tiempo ordenada de años: años históricos ascendentes y luego 'ALL'
+  const timelineYears = useMemo(() => {
+    const yearsSet = new Set([currentYear]);
+    weeks.forEach(w => {
+      if (w.startDate) yearsSet.add(w.startDate.split('-')[0]);
+      if (w.endDate) yearsSet.add(w.endDate.split('-')[0]);
+    });
+    orders.forEach(o => {
+      if (o.work_date) yearsSet.add(o.work_date.split('-')[0]);
+    });
+    const sortedYears = Array.from(yearsSet).filter(Boolean).sort();
+    return [...sortedYears, 'ALL'];
+  }, [weeks, orders, currentYear]);
+
+  const currentYearIndex = timelineYears.indexOf(selectedYear);
+  const canGoBackYear = currentYearIndex > 0;
+  const canGoForwardYear = currentYearIndex >= 0 && currentYearIndex < timelineYears.length - 1;
+
+  const handlePrevYear = () => {
+    if (canGoBackYear) {
+      setSelectedYear(timelineYears[currentYearIndex - 1]);
+    }
+  };
+
+  const handleNextYear = () => {
+    if (canGoForwardYear) {
+      setSelectedYear(timelineYears[currentYearIndex + 1]);
+    }
+  };
 
   // Semanas filtradas por año seleccionado
   const yearWeeks = useMemo(() => {
@@ -381,57 +411,92 @@ ${jobLines}
       {/* SUBTAB 2: LISTADO DE CIERRES SEMANALES */}
       {subTab === 'weeks' && (
         <div className="space-y-3">
-          {/* Barra de Filtro Anual */}
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-1.5 bg-[#131b26] px-2.5 py-1 rounded-xl border border-white/10 shadow-xs">
-              <Calendar className="h-3 w-3 text-cyan-400 shrink-0" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Año:</span>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-                className="bg-transparent text-xs font-black text-cyan-300 focus:outline-none cursor-pointer pr-1"
+          {/* Card Principal Cockpit: Selector de Año/Período + Balance Semanal Unificado */}
+          <div className="bg-[#0f1722]/95 border border-white/10 rounded-3xl p-4 space-y-3.5 shadow-xl backdrop-blur-xl">
+            {/* Selector de Período con flechas y estética idéntica a la Jornada */}
+            <div className="flex items-center justify-between px-1">
+              <button
+                type="button"
+                disabled={!canGoBackYear}
+                onClick={handlePrevYear}
+                className={`p-1 rounded-lg transition ${
+                  canGoBackYear 
+                    ? 'text-slate-400 hover:text-white hover:bg-white/5 cursor-pointer' 
+                    : 'text-slate-600 opacity-25 cursor-not-allowed'
+                }`}
+                title={canGoBackYear ? `Año anterior (${timelineYears[currentYearIndex - 1]})` : 'Sin años anteriores'}
               >
-                {availableYears.map(y => (
-                  <option key={y} value={y} className="bg-[#131b26] text-white">
-                    {y}
-                  </option>
-                ))}
-                <option value="ALL" className="bg-[#131b26] text-white">
-                  Todo el Historial
-                </option>
-              </select>
-            </div>
-            <span className="text-[10px] text-slate-400 font-medium font-mono">
-              {selectedYear === 'ALL' ? `${yearWeeks.length} semanas totales` : `Período ${selectedYear} (${yearWeeks.length} sem.)`}
-            </span>
-          </div>
+                <ChevronLeft className="h-4 w-4" />
+              </button>
 
-          {/* 1. Resumen Superior de Cobros (KPIs Estéticos Cockpit - En la parte superior) */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-[#131b26] border border-amber-500/30 rounded-2xl p-3 shadow-lg space-y-1">
-              <div className="flex items-center justify-between text-amber-400 text-[10px] font-bold uppercase tracking-wider">
-                <span>Pendiente</span>
-                <Clock className="h-3.5 w-3.5" />
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-white font-mono uppercase tracking-wider">
+                  {selectedYear === 'ALL' ? 'Todo el Historial' : `Año ${selectedYear}`}
+                </span>
+                <span className="text-[10.5px] text-cyan-400 font-mono font-medium">
+                  • {yearWeeks.length} sem.
+                </span>
+                {selectedYear !== currentYear && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedYear(currentYear)}
+                    className="text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-1.5 py-0.5 rounded-md font-bold hover:bg-cyan-900 cursor-pointer"
+                  >
+                    Ir a {currentYear}
+                  </button>
+                )}
               </div>
-              <div className={`${getMoneyFontSize(totalPendingWeeks)} font-black text-amber-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]`}>
-                {formatMoneyCompact(totalPendingWeeks)}
-              </div>
-              <p className="text-[10px] text-slate-400 truncate font-medium">
-                {pendingWeeksCount} semana{pendingWeeksCount !== 1 ? 's' : ''} pendiente{pendingWeeksCount !== 1 ? 's' : ''}
-              </p>
+
+              <button
+                type="button"
+                disabled={!canGoForwardYear}
+                onClick={handleNextYear}
+                className={`p-1 rounded-lg transition ${
+                  canGoForwardYear 
+                    ? 'text-slate-400 hover:text-white hover:bg-white/5 cursor-pointer' 
+                    : 'text-slate-600 opacity-25 cursor-not-allowed'
+                }`}
+                title={canGoForwardYear ? (timelineYears[currentYearIndex + 1] === 'ALL' ? 'Todo el Historial' : `Año ${timelineYears[currentYearIndex + 1]}`) : 'Fin del historial'}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
 
-            <div className="bg-[#131b26] border border-emerald-500/30 rounded-2xl p-3 shadow-lg space-y-1">
-              <div className="flex items-center justify-between text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
-                <span>Cobrado</span>
-                <ShieldCheck className="h-3.5 w-3.5" />
+            {/* Balance Cockpit Unificado: Pendiente vs Cobrado */}
+            <div className="grid grid-cols-2 gap-3 pt-0.5">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5 text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+                  <Clock className="h-3 w-3" />
+                  <span>Pendiente</span>
+                </div>
+                <div className={`${getMoneyFontSize(totalPendingWeeks)} font-black text-amber-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]`}>
+                  {formatMoneyCompact(totalPendingWeeks)}
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium">
+                  {pendingWeeksCount} semana{pendingWeeksCount !== 1 ? 's' : ''} por cobrar
+                </p>
               </div>
-              <div className={`${getMoneyFontSize(totalPaidWeeks)} font-black text-emerald-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]`}>
-                {formatMoneyCompact(totalPaidWeeks)}
+
+              <div className="space-y-0.5 text-right">
+                <div className="flex items-center justify-end gap-1.5 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                  <span>Cobrado</span>
+                  <ShieldCheck className="h-3 w-3" />
+                </div>
+                <div className={`${getMoneyFontSize(totalPaidWeeks)} font-black text-emerald-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]`}>
+                  {formatMoneyCompact(totalPaidWeeks)}
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium">
+                  {paidWeeksCount} semana{paidWeeksCount !== 1 ? 's' : ''} liquidada{paidWeeksCount !== 1 ? 's' : ''}
+                </p>
               </div>
-              <p className="text-[10px] text-slate-400 truncate font-medium">
-                {paidWeeksCount} semana{paidWeeksCount !== 1 ? 's' : ''} liquidada{paidWeeksCount !== 1 ? 's' : ''}
-              </p>
+            </div>
+
+            {/* Barra de Progreso Semanal (Cobrado vs Total) */}
+            <div className="w-full bg-[#0a0f18] h-2 rounded-full overflow-hidden border border-white/8">
+              <div 
+                className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-500 shadow-sm shadow-emerald-500/20"
+                style={{ width: `${(totalPendingWeeks + totalPaidWeeks) > 0 ? (totalPaidWeeks / (totalPendingWeeks + totalPaidWeeks)) * 100 : 0}%` }}
+              />
             </div>
           </div>
 
@@ -608,10 +673,11 @@ ${jobLines}
                                 e.stopPropagation();
                                 setSelectedReceiptModal({ photo: w.receipt_photo, week: w });
                               }}
-                              className="h-6 w-6 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 flex items-center justify-center transition active:scale-90 cursor-pointer shadow-xs"
+                              className="px-2 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 transition active:scale-90 cursor-pointer shadow-2xs"
                               title="Ver comprobante de liquidación / cheque"
                             >
                               <Paperclip className="h-3 w-3 stroke-[2.2]" />
+                              <span className="text-[10px] font-black uppercase">Recibo</span>
                             </button>
                           )}
                         </div>
@@ -888,15 +954,30 @@ ${jobLines}
                 </div>
               </div>
 
-              {/* Botón Cerrar */}
-              <button
-                type="button"
-                onClick={() => setSelectedWeekModal(null)}
-                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition shrink-0 ml-2"
-                title="Cerrar ventana"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2 ml-2 shrink-0">
+                {/* Botón Comprobante en Header */}
+                {selectedWeekModal.receipt_photo && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedReceiptModal({ photo: selectedWeekModal.receipt_photo, week: selectedWeekModal })}
+                    className="h-8 px-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 transition active:scale-95 shadow-xs cursor-pointer"
+                    title="Ver comprobante de pago o cheque de esta semana"
+                  >
+                    <Paperclip className="h-3.5 w-3.5 stroke-[2.2]" />
+                    <span className="text-[10px] font-black uppercase tracking-wider">Recibo</span>
+                  </button>
+                )}
+
+                {/* Botón Cerrar */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedWeekModal(null)}
+                  className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+                  title="Cerrar ventana"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* KPI Bar de 3 Columnas Cockpit */}
@@ -922,6 +1003,66 @@ ${jobLines}
                 </span>
               </div>
             </div>
+
+            {/* Banner Destacado para el Comprobante Semanal (Si existe foto o para adjuntarla) */}
+            {selectedWeekModal.receipt_photo ? (
+              <div 
+                onClick={() => setSelectedReceiptModal({ photo: selectedWeekModal.receipt_photo, week: selectedWeekModal })}
+                className="mx-4 mt-3 p-2.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/35 hover:border-emerald-500/60 flex items-center justify-between gap-2.5 cursor-pointer transition active:scale-[0.99] shadow-md select-none shrink-0"
+                title="Toca para ver el comprobante en pantalla completa"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/35 flex items-center justify-center text-emerald-400 shrink-0">
+                    <Paperclip className="h-4 w-4 stroke-[2.2]" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-xs font-black text-emerald-300 block truncate leading-tight">
+                      Comprobante de Pago Archivado
+                    </span>
+                    <span className="text-[10px] text-slate-400 block truncate">
+                      Cheque / constancia de cobro semanal • Toca para abrir
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500 text-slate-950 font-black text-[11px] shadow-sm shrink-0">
+                  <Eye className="h-3.5 w-3.5 stroke-[2.5]" />
+                  <span>Ver Recibo</span>
+                </div>
+              </div>
+            ) : selectedWeekModal.isPaid ? (
+              <div className="mx-4 mt-2.5 px-3 py-2 rounded-2xl bg-slate-900/60 border border-white/10 flex items-center justify-between shrink-0">
+                <span className="text-[10px] text-slate-400 font-medium">
+                  Semana cobrada sin foto de cheque
+                </span>
+                <label className="text-[10px] font-bold text-cyan-300 hover:text-white flex items-center gap-1 cursor-pointer bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 px-2 py-0.5 rounded-lg transition shadow-2xs">
+                  <Paperclip className="h-2.5 w-2.5" />
+                  <span>+ Subir Comprobante</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = async () => {
+                          const photoData = reader.result;
+                          await fetch(`/api/weeks/${encodeURIComponent(selectedWeekModal.key)}/receipt`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ receipt_photo: photoData })
+                          });
+                          setSelectedWeekModal(prev => ({ ...prev, receipt_photo: photoData }));
+                          if (onRefresh) await onRefresh();
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+            ) : null}
 
             {/* Cuerpo del Modal con Scroll */}
             <div className="p-3.5 overflow-y-auto space-y-3 flex-1 min-h-0 scrollbar-none">
