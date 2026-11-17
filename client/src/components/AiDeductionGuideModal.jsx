@@ -55,7 +55,7 @@ export default function AiDeductionGuideModal({ isOpen, onClose }) {
       onClick={onClose}
     >
       <div 
-        className="bg-[#101722]/95 backdrop-blur-xl border border-white/10 rounded-3xl w-full max-w-lg modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all transform animate-in zoom-in-95 max-h-[85dvh]"
+        className="bg-[#101722]/95 backdrop-blur-xl border border-white/10 rounded-3xl w-full max-w-sm sm:max-w-md modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all transform animate-in zoom-in-95 max-h-[85dvh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 1. Cabecera del Modal */}
@@ -84,9 +84,9 @@ export default function AiDeductionGuideModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* 2. Selector Horizontal de Tipos (Con Estética Cockpit y Scroll Suave) */}
+        {/* 2. Selector Horizontal de Tipos (Con Estética Cockpit y Padding Holgado) */}
         <div className="px-3 sm:px-4 py-2.5 bg-black/40 border-b border-white/5 shrink-0">
-          <div className="flex items-center justify-between pb-1.5 px-0.5">
+          <div className="flex items-center justify-between pb-1.5 px-1">
             <span className="text-[9.5px] uppercase font-black tracking-wider text-slate-400 font-mono">
               Selecciona un Tipo o Alerta:
             </span>
@@ -97,7 +97,7 @@ export default function AiDeductionGuideModal({ isOpen, onClose }) {
 
           <div 
             ref={selectorContainerRef}
-            className="cockpit-scroll-x flex items-center gap-1.5 overflow-x-auto pb-2 pt-0.5 select-none scroll-smooth"
+            className="cockpit-scroll-x flex items-center gap-2 overflow-x-auto px-1.5 pb-2 pt-1 select-none scroll-smooth"
           >
             {allDefinitions.map((item) => {
               const isSelected = item.key === selectedKey;
@@ -106,9 +106,9 @@ export default function AiDeductionGuideModal({ isOpen, onClose }) {
                   key={item.key}
                   type="button"
                   onClick={() => handleSelect(item.key)}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10.5px] font-bold shrink-0 transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold shrink-0 transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
                     isSelected
-                      ? `${item.colorClasses?.badge || 'bg-cyan-500/25 text-white border-cyan-400'} ring-1 ring-cyan-400/50 shadow-md scale-[1.02]`
+                      ? `${item.colorClasses?.badge || 'bg-cyan-500/25 text-white border-cyan-400'} ring-1 ring-cyan-400/60 shadow-lg scale-[1.02]`
                       : 'bg-[#141d28] hover:bg-[#1b2736] text-slate-400 hover:text-slate-200 border border-white/10'
                   }`}
                   title={`Ver detalle de ${item.title}`}
@@ -124,8 +124,9 @@ export default function AiDeductionGuideModal({ isOpen, onClose }) {
         {/* 3. Contenido Dinámico del Tipo Seleccionado */}
         <div className="p-4 sm:p-5 space-y-3 overflow-y-auto cockpit-scroll flex-1">
           
-          {/* Tarjeta de Encabezado del Tipo */}
-          <div className="rounded-2xl border border-white/10 bg-[#131b26] p-3.5 flex items-center justify-between gap-3 shadow-sm animate-fade-in">
+          {/* Tarjeta de Encabezado del Tipo Separada en Contenedores Limpios */}
+          <div className="rounded-2xl border border-white/10 bg-[#131b26] p-3.5 space-y-3 shadow-sm animate-fade-in text-left">
+            {/* Contenedor Superior: Icono, Título y Categoría */}
             <div className="flex items-center gap-3 min-w-0">
               <div className={`w-11 h-11 rounded-2xl border flex items-center justify-center text-2xl shrink-0 shadow-lg ${color.badge} ${color.glow}`}>
                 <span>{currentItem.icon}</span>
@@ -134,15 +135,18 @@ export default function AiDeductionGuideModal({ isOpen, onClose }) {
                 <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block font-mono">
                   {currentItem.category}
                 </span>
-                <h4 className="text-sm font-black text-white uppercase tracking-wide truncate">
+                <h4 className="text-sm sm:text-base font-black text-white uppercase tracking-wide truncate">
                   {currentItem.title}
                 </h4>
               </div>
             </div>
 
-            <div className="text-right shrink-0">
-              <span className="text-[8.5px] text-slate-500 uppercase block font-mono">Código Despacho</span>
-              <span className={`px-2.5 py-0.5 rounded-lg border text-[11px] font-mono font-bold tracking-tight inline-block ${color.badge}`}>
+            {/* Contenedor Inferior Independiente: Código Oficial en Despacho */}
+            <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-black/40 border border-white/5">
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
+                Código Oficial en Despacho:
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-lg border text-[11px] font-mono font-bold tracking-tight text-right ${color.badge}`}>
                 {currentItem.dispatchCode}
               </span>
             </div>

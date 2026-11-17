@@ -849,45 +849,52 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                 </div>
               </div>
 
-              {/* Fila 2: Dirección */}
-              <div className="relative">
-                <MapPin className="w-3 h-3 absolute left-2 top-2 pointer-events-none text-slate-500" />
+              {/* Fila 2: Ubicación Lineal (Dirección, Ciudad con color cian distintivo y ZIP) */}
+              <div className="flex items-center gap-1.5 bg-[#0b1017] border border-white/10 rounded-lg px-2 py-1 text-xs transition focus-within:border-cyan-500">
+                <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                
+                {/* Dirección Postal */}
                 <input
                   type="text"
                   placeholder="Dirección completa"
                   value={o.address}
                   onChange={(e) => updateOrderField(idx, 'address', e.target.value)}
-                  className="w-full rounded-lg pl-6 pr-2 py-1 text-xs placeholder-slate-500 font-semibold focus:outline-none transition border bg-[#0b1017] border-white/10 text-white focus:border-cyan-500"
+                  className="bg-transparent text-white font-semibold focus:outline-none flex-1 min-w-[120px] placeholder-slate-600 truncate"
+                  title="Dirección completa"
+                />
+
+                <span className="text-slate-600 font-mono text-xs shrink-0">,</span>
+
+                {/* Ciudad (Distintiva en cian brillante en mayúsculas) */}
+                <input
+                  type="text"
+                  placeholder="CIUDAD"
+                  value={o.city}
+                  onChange={(e) => updateOrderField(idx, 'city', e.target.value)}
+                  className="bg-transparent text-cyan-300 font-black uppercase text-[11px] focus:outline-none w-[75px] sm:w-[95px] shrink-0 text-center placeholder-slate-600 truncate"
+                  title="Ciudad (detectada por IA)"
+                />
+
+                <span className="text-slate-600 font-mono text-xs shrink-0">,</span>
+
+                {/* Código Postal (ZIP) */}
+                <input
+                  type="text"
+                  placeholder="ZIP"
+                  value={o.zip_code}
+                  onChange={(e) => updateOrderField(idx, 'zip_code', e.target.value)}
+                  className="bg-transparent text-slate-400 font-mono text-[10.5px] focus:outline-none w-12 sm:w-14 shrink-0 text-right placeholder-slate-600"
+                  title="Código Postal (ZIP)"
                 />
               </div>
 
-              {/* Fila 3: Ciudad, ZIP, Selector de Bore y Teléfono del Cliente */}
+              {/* Fila 3: Perforación (Bore), Teléfono del Cliente y Tipo de Cable */}
               <div className="flex items-center gap-1.5 pt-0.5">
-                {/* Ciudad y ZIP */}
-                <div className="flex items-center gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-2 py-0.5 flex-1 min-w-0" title="Ciudad y Código Postal (ZIP)">
-                  <input
-                    type="text"
-                    placeholder="Ciudad (ej. GOSHEN)"
-                    value={o.city || ''}
-                    onChange={(e) => updateOrderField(idx, 'city', e.target.value)}
-                    className="w-full bg-transparent text-[11px] text-white uppercase placeholder-slate-500 font-bold focus:outline-none min-w-0"
-                  />
-                  <span className="text-slate-600 font-mono text-[10.5px]">,</span>
-                  <input
-                    type="text"
-                    placeholder="ZIP"
-                    value={o.zip_code || ''}
-                    onChange={(e) => updateOrderField(idx, 'zip_code', e.target.value)}
-                    className="w-14 bg-transparent text-[10.5px] text-slate-400 font-mono focus:outline-none text-right shrink-0 placeholder-slate-600"
-                    title="Código Postal (ZIP)"
-                  />
-                </div>
-
                 {/* Bore Selector */}
                 <select
                   value={o.bore_type || 'N'}
                   onChange={(e) => updateOrderField(idx, 'bore_type', e.target.value)}
-                  className="bg-[#0b1017] border border-white/10 hover:border-cyan-500/40 rounded-lg px-1.5 py-0.5 text-[10px] text-slate-200 focus:outline-none cursor-pointer shrink-0 font-medium"
+                  className="bg-[#0b1017] border border-white/10 hover:border-cyan-500/40 rounded-lg px-2 py-0.5 text-[10px] text-slate-200 focus:outline-none cursor-pointer flex-1 min-w-0 font-medium"
                   title="Tipo de Perforación (Bore)"
                 >
                   <option value="N">Sin Bore ($0)</option>
@@ -899,7 +906,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                 </select>
 
                 {/* Teléfono del Cliente */}
-                <div className="flex items-center gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-1.5 py-0.5 w-[110px] sm:w-[125px] shrink-0" title="Teléfono del cliente para llamadas o SMS">
+                <div className="flex items-center gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-2 py-0.5 flex-1 min-w-[115px] max-w-[145px]" title="Teléfono del cliente">
                   <Phone className="w-3 h-3 text-cyan-400 shrink-0" />
                   <input
                     type="text"
@@ -908,27 +915,6 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                     onChange={(e) => updateOrderField(idx, 'phone', e.target.value)}
                     className="w-full bg-transparent text-cyan-300 font-mono text-[10.5px] focus:outline-none placeholder-slate-600"
                   />
-                </div>
-              </div>
-
-              {/* Fila 4: Metraje Drop, Cable e Iconos de Terreno */}
-              <div className="flex flex-wrap items-center gap-1.5 text-[10px] pt-0.5">
-                {/* Metraje Drop */}
-                <div className="flex items-center gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-1.5 py-0.5 shrink-0">
-                  <Ruler className="w-3 h-3 text-amber-400 shrink-0" />
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={o.drop_footage}
-                    onChange={(e) => updateOrderField(idx, 'drop_footage', e.target.value)}
-                    className="w-12 bg-transparent text-amber-300 font-mono font-bold focus:outline-none text-[10.5px]"
-                  />
-                  <span className="text-slate-500 font-mono">ft</span>
-                  {o.drop_footage > rateConfig.footage_base && (
-                    <span className="text-[9px] text-emerald-400 font-bold font-mono">
-                      (+${Math.floor((o.drop_footage - rateConfig.footage_base) / 100) * rateConfig.footage_extra_rate})
-                    </span>
-                  )}
                 </div>
 
                 {/* Cable Selector */}
@@ -948,9 +934,30 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Fila 4: Metraje Drop e Iconos de Notas / Alertas de Terreno */}
+              <div className="flex items-center gap-1.5 text-[10px] pt-0.5">
+                {/* Metraje Drop */}
+                <div className="flex items-center gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-1.5 py-0.5 shrink-0">
+                  <Ruler className="w-3 h-3 text-amber-400 shrink-0" />
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={o.drop_footage}
+                    onChange={(e) => updateOrderField(idx, 'drop_footage', e.target.value)}
+                    className="w-12 bg-transparent text-amber-300 font-mono font-bold focus:outline-none text-[10.5px]"
+                  />
+                  <span className="text-slate-500 font-mono">ft</span>
+                  {o.drop_footage > rateConfig.footage_base && (
+                    <span className="text-[9px] text-emerald-400 font-bold font-mono">
+                      (+${Math.floor((o.drop_footage - rateConfig.footage_base) / 100) * rateConfig.footage_extra_rate})
+                    </span>
+                  )}
+                </div>
 
                 {/* Badges de Campo: Solo Iconos de lo detectado con Modal Informativo al pulsar */}
-                <div className="flex items-center gap-1 flex-wrap">
+                <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
                   {getOrderFieldBadges(o).map((badge) => {
                     if (badge.type === 'priority') {
                       return (
