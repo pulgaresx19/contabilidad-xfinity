@@ -1271,6 +1271,15 @@ app.get('/api/weekly-summary', (req, res) => {
       w.orders.push(order);
     }
 
+    // Look up weekly receipts
+    let receiptsMap = {};
+    try {
+      const allR = db.prepare('SELECT week_key, receipt_photo FROM week_receipts').all();
+      for (const r of allR) {
+        if (r && r.week_key) receiptsMap[r.week_key] = r.receipt_photo;
+      }
+    } catch (e) {}
+
     // Determine week payment status and sort chronologically descending
     const weeks = Object.values(weeksMap).map(w => {
       const completedList = w.orders.filter(o => o.status === 'Completado');
@@ -1278,7 +1287,8 @@ app.get('/api/weekly-summary', (req, res) => {
       return {
         ...w,
         isPaid,
-        payment_status: isPaid ? 'Cobrado' : 'Pendiente'
+        payment_status: isPaid ? 'Cobrado' : 'Pendiente',
+        receipt_photo: receiptsMap[w.key] || null
       };
     }).sort((a, b) => b.startDate.localeCompare(a.startDate));
 
@@ -1326,7 +1336,7 @@ app.get('/api/weekly-summary', (req, res) => {
 app.post('/api/weeks/:key/status', (req, res) => {
   try {
     const { key } = req.params;
-    const { payment_status } = req.body; // 'Cobrado' | 'Pendiente'
+    const { payment_status, receipt_photo } = req.body; // 'Cobrado' | 'Pendiente'
     const newStatus = payment_status === 'Cobrado' ? 'Cobrado' : 'Pendiente';
 
     const cutoffSetting = getCutoffDaySetting();
@@ -1350,7 +1360,63 @@ app.post('/api/weeks/:key/status', (req, res) => {
       updateMany(orderIds, newStatus);
     }
 
+    // Save or update receipt photo if provided
+    if (receipt_photo) {
+      try {
+        db.prepare(`
+          INSERT INTO week_receipts (week_key, receipt_photo, updated_at)
+          VALUES (?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(week_key) DO UPDATE SET receipt_photo = excluded.receipt_photo, updated_at = CURRENT_TIMESTAMP
+        `).run(key, receipt_photo);
+      } catch (e) {}
+    }
+
     res.json({ success: true, updated: orderIds.length, payment_status: newStatus });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update or upload receipt photo for a week directly
+app.post('/api/weeks/:key/receipt', (req, res) => {
+  try {
+    const { key } = req.params;
+    const { receipt_photo, receipt_filename } = req.body;
+    db.prepare(`
+      INSERT INTO week_receipts (week_key, receipt_photo, receipt_filename, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(week_key) DO UPDATE SET 
+        receipt_photo = excluded.receipt_photo, 
+        receipt_filename = excluded.receipt_filename,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(key, receipt_photo, receipt_filename || null);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get dispatch sheet by date
+app.get('/api/dispatch-sheets/by-date/:date', (req, res) => {
+  try {
+    const sheet = db.prepare('SELECT * FROM dispatch_sheets WHERE sheet_date = ? ORDER BY id DESC LIMIT 1').get(req.params.date);
+    res.json(sheet || null);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save dispatch sheet photo directly
+app.post('/api/dispatch-sheets', (req, res) => {
+  try {
+    const { sheet_date, filename, original_name, photo_data, extracted_text, orders_count } = req.body;
+    const dateVal = sheet_date || new Date().toISOString().split('T')[0];
+    const stmt = db.prepare(`
+      INSERT INTO dispatch_sheets (sheet_date, filename, original_name, photo_data, extracted_text, orders_count)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(dateVal, filename || 'sheet.jpg', original_name || 'sheet.jpg', photo_data || null, extracted_text || '', orders_count || 0);
+    res.json({ success: true, id: result.lastInsertRowid });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

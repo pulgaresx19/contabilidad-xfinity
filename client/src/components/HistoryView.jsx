@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar, CheckCircle2, Clock, Share2, Check, CheckCheck,
   Trash2, ExternalLink, Image as ImageIcon, X, DollarSign, 
   Ruler, ChevronRight, Copy, Camera, AlertCircle, FileText, 
   ShieldAlert, CheckCircle, Search, Filter, Sparkles, MapPin, Phone, ShieldCheck, AlertTriangle,
-  BarChart3, Sun, Pencil, Briefcase
+  BarChart3, Sun, Pencil, Briefcase, Paperclip, ChevronDown
 } from 'lucide-react';
 import ShareReportModal from './ShareReportModal';
 import TodayView from './TodayView';
@@ -50,19 +50,47 @@ export default function HistoryView({
   const [weekStatusFilter, setWeekStatusFilter] = useState('ALL'); // 'ALL' | 'Pendiente' | 'Cobrado'
   const [weekSearch, setWeekSearch] = useState('');
 
+  // Filtro de Año y Estados de Comprobante Semanal
+  const currentYear = new Date().getFullYear().toString();
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [confirmPaymentWeek, setConfirmPaymentWeek] = useState(null);
+  const [receiptPhotoPreview, setReceiptPhotoPreview] = useState(null);
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [selectedReceiptModal, setSelectedReceiptModal] = useState(null);
+
   const weeks = summaryData?.weeks || [];
-  const totalPaidWeeks = weeks.filter(w => w.isPaid).reduce((sum, w) => sum + (w.totalEarnings || 0), 0);
-  const totalPendingWeeks = weeks.filter(w => !w.isPaid).reduce((sum, w) => sum + (w.totalEarnings || 0), 0);
-  const paidWeeksCount = weeks.filter(w => w.isPaid).length;
-  const pendingWeeksCount = weeks.filter(w => !w.isPaid).length;
+
+  // Años disponibles detectados en las semanas y órdenes
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set([currentYear]);
+    weeks.forEach(w => {
+      if (w.startDate) yearsSet.add(w.startDate.split('-')[0]);
+      if (w.endDate) yearsSet.add(w.endDate.split('-')[0]);
+    });
+    orders.forEach(o => {
+      if (o.work_date) yearsSet.add(o.work_date.split('-')[0]);
+    });
+    return Array.from(yearsSet).sort().reverse();
+  }, [weeks, orders, currentYear]);
+
+  // Semanas filtradas por año seleccionado
+  const yearWeeks = useMemo(() => {
+    if (selectedYear === 'ALL') return weeks;
+    return weeks.filter(w => (w.startDate && w.startDate.startsWith(selectedYear)) || (w.endDate && w.endDate.startsWith(selectedYear)));
+  }, [weeks, selectedYear]);
+
+  const totalPaidWeeks = yearWeeks.filter(w => w.isPaid).reduce((sum, w) => sum + (w.totalEarnings || 0), 0);
+  const totalPendingWeeks = yearWeeks.filter(w => !w.isPaid).reduce((sum, w) => sum + (w.totalEarnings || 0), 0);
+  const paidWeeksCount = yearWeeks.filter(w => w.isPaid).length;
+  const pendingWeeksCount = yearWeeks.filter(w => !w.isPaid).length;
 
   const MONTH_NAMES_ES = [
     'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
     'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
   ];
 
-  // Filtered weeks based on weekStatusFilter and weekSearch
-  const filteredWeeks = weeks.filter((w) => {
+  // Filtered weeks based on weekStatusFilter, weekSearch, AND selectedYear
+  const filteredWeeks = yearWeeks.filter((w) => {
     // 1. Status filter
     if (weekStatusFilter === 'Pendiente' && w.isPaid) return false;
     if (weekStatusFilter === 'Cobrado' && !w.isPaid) return false;
@@ -107,24 +135,35 @@ export default function HistoryView({
     return true;
   });
 
-  // Active Cutoff Day & Global Balance Metrics
+  // Active Cutoff Day & Year-Filtered Global Balance Metrics
   const activeCutoff = String(summaryData?.cutoffDay ?? summaryData?.summary?.cutoffDay ?? '0');
-  const summary = summaryData?.summary || {};
-  const totalAllEarnings = summary.totalAllEarnings !== undefined 
-    ? summary.totalAllEarnings 
-    : orders.filter(o => o.status === 'Completado').reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
-  const totalPaid = summary.totalPaid !== undefined 
-    ? summary.totalPaid 
-    : orders.filter(o => o.status === 'Completado' && o.payment_status === 'Cobrado').reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
-  const totalPending = summary.totalPending !== undefined 
-    ? summary.totalPending 
-    : orders.filter(o => o.status === 'Completado' && o.payment_status !== 'Cobrado').reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
-  const totalFeetAll = summary.totalFeetAll !== undefined 
-    ? summary.totalFeetAll 
-    : orders.filter(o => o.status !== 'No Realizado').reduce((sum, o) => sum + (parseFloat(o.drop_footage) || 0), 0);
-  const completedOrdersCount = summary.totalCompletedCount !== undefined 
-    ? summary.totalCompletedCount 
-    : orders.filter(o => o.status === 'Completado').length;
+  
+  const yearOrders = useMemo(() => {
+    if (selectedYear === 'ALL') return orders;
+    return orders.filter(o => o.work_date && o.work_date.startsWith(selectedYear));
+  }, [orders, selectedYear]);
+
+  const totalAllEarnings = yearOrders.filter(o => o.status === 'Completado').reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
+  const totalPaid = yearOrders.filter(o => o.status === 'Completado' && o.payment_status === 'Cobrado').reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
+  const totalPending = yearOrders.filter(o => o.status === 'Completado' && o.payment_status !== 'Cobrado').reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
+  const totalFeetAll = yearOrders.filter(o => o.status !== 'No Realizado').reduce((sum, o) => sum + (parseFloat(o.drop_footage) || 0), 0);
+  const completedOrdersCount = yearOrders.filter(o => o.status === 'Completado').length;
+
+  // Formatting helpers for clean cockpit numbers
+  const formatMoneyCompact = (amount) => {
+    if (amount === undefined || amount === null || isNaN(amount)) return '$0.00';
+    const num = Number(amount);
+    if (num >= 1000000) return `$${(num / 1000000).toFixed(2)}M`;
+    if (num >= 10000) return `$${Math.round(num).toLocaleString('en-US')}`;
+    return `$${num.toFixed(2)}`;
+  };
+
+  const getMoneyFontSize = (amount) => {
+    const num = Number(amount) || 0;
+    if (num >= 100000) return 'text-lg sm:text-xl';
+    if (num >= 10000) return 'text-xl sm:text-2xl';
+    return 'text-xl sm:text-2xl';
+  };
 
   // Keep selectedWeekModal updated if summaryData refreshes
   useEffect(() => {
@@ -160,15 +199,18 @@ export default function HistoryView({
     return true;
   });
 
-  // Toggle or set payment status for a week
+  // Initiate or toggle payment status for a week
   const handleTogglePayment = async (w, targetStatus, e) => {
     if (e) e.stopPropagation();
 
-    const isMarkingPaid = targetStatus === 'Cobrado';
-    const msg = isMarkingPaid
-      ? `¿Confirmar que ya cobraste la Semana ${w.displayLabel || w.key} ($${w.totalEarnings.toFixed(2)})?`
-      : `¿Revertir la Semana ${w.displayLabel || w.key} a PENDIENTE por cobrar?`;
+    if (targetStatus === 'Cobrado') {
+      // Abre el modal de confirmación con comprobante opcional
+      setConfirmPaymentWeek(w);
+      setReceiptPhotoPreview(w.receipt_photo || null);
+      return;
+    }
 
+    const msg = `¿Revertir la Semana ${w.displayLabel || w.key} a PENDIENTE por cobrar?`;
     if (!confirm(msg)) return;
 
     setUpdatingWeekKey(w.key);
@@ -176,7 +218,7 @@ export default function HistoryView({
       const res = await fetch(`/api/weeks/${encodeURIComponent(w.key)}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payment_status: targetStatus })
+        body: JSON.stringify({ payment_status: 'Pendiente' })
       });
 
       if (res.ok) {
@@ -188,6 +230,36 @@ export default function HistoryView({
     } catch (err) {
       alert('Error de red: ' + err.message);
     } finally {
+      setUpdatingWeekKey(null);
+    }
+  };
+
+  const handleConfirmPaymentWithReceipt = async () => {
+    if (!confirmPaymentWeek) return;
+    setSavingPayment(true);
+    setUpdatingWeekKey(confirmPaymentWeek.key);
+    try {
+      const res = await fetch(`/api/weeks/${encodeURIComponent(confirmPaymentWeek.key)}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payment_status: 'Cobrado',
+          receipt_photo: receiptPhotoPreview || null
+        })
+      });
+
+      if (res.ok) {
+        setConfirmPaymentWeek(null);
+        setReceiptPhotoPreview(null);
+        if (onRefresh) await onRefresh();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert('Error: ' + (errData.error || 'No se pudo actualizar'));
+      }
+    } catch (err) {
+      alert('Error de red: ' + err.message);
+    } finally {
+      setSavingPayment(false);
       setUpdatingWeekKey(null);
     }
   };
@@ -305,6 +377,31 @@ ${jobLines}
       {/* SUBTAB 2: LISTADO DE CIERRES SEMANALES */}
       {subTab === 'weeks' && (
         <div className="space-y-3">
+          {/* Barra de Filtro Anual */}
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-1.5 bg-[#131b26] px-2.5 py-1 rounded-xl border border-white/10 shadow-xs">
+              <Calendar className="h-3 w-3 text-cyan-400 shrink-0" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Año:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="bg-transparent text-xs font-black text-cyan-300 focus:outline-none cursor-pointer pr-1"
+              >
+                {availableYears.map(y => (
+                  <option key={y} value={y} className="bg-[#131b26] text-white">
+                    {y}
+                  </option>
+                ))}
+                <option value="ALL" className="bg-[#131b26] text-white">
+                  Todo el Historial
+                </option>
+              </select>
+            </div>
+            <span className="text-[10px] text-slate-400 font-medium font-mono">
+              {selectedYear === 'ALL' ? `${yearWeeks.length} semanas totales` : `Período ${selectedYear} (${yearWeeks.length} sem.)`}
+            </span>
+          </div>
+
           {/* 1. Resumen Superior de Cobros (KPIs Estéticos Cockpit - En la parte superior) */}
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-[#131b26] border border-amber-500/30 rounded-2xl p-3 shadow-lg space-y-1">
@@ -312,8 +409,8 @@ ${jobLines}
                 <span>Pendiente</span>
                 <Clock className="h-3.5 w-3.5" />
               </div>
-              <div className="text-xl sm:text-2xl font-black text-amber-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]">
-                ${totalPendingWeeks.toFixed(2)}
+              <div className={`${getMoneyFontSize(totalPendingWeeks)} font-black text-amber-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(251,191,36,0.25)]`}>
+                {formatMoneyCompact(totalPendingWeeks)}
               </div>
               <p className="text-[10px] text-slate-400 truncate font-medium">
                 {pendingWeeksCount} semana{pendingWeeksCount !== 1 ? 's' : ''} pendiente{pendingWeeksCount !== 1 ? 's' : ''}
@@ -325,8 +422,8 @@ ${jobLines}
                 <span>Cobrado</span>
                 <ShieldCheck className="h-3.5 w-3.5" />
               </div>
-              <div className="text-xl sm:text-2xl font-black text-emerald-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]">
-                ${totalPaidWeeks.toFixed(2)}
+              <div className={`${getMoneyFontSize(totalPaidWeeks)} font-black text-emerald-400 font-mono leading-none drop-shadow-[0_0_8px_rgba(52,211,153,0.35)]`}>
+                {formatMoneyCompact(totalPaidWeeks)}
               </div>
               <p className="text-[10px] text-slate-400 truncate font-medium">
                 {paidWeeksCount} semana{paidWeeksCount !== 1 ? 's' : ''} liquidada{paidWeeksCount !== 1 ? 's' : ''}
@@ -489,16 +586,31 @@ ${jobLines}
 
                     <div className="flex items-center gap-2">
                       {w.isPaid ? (
-                        <button
-                          type="button"
-                          disabled={isUpdating}
-                          onClick={(e) => handleTogglePayment(w, 'Pendiente', e)}
-                          className="px-2.5 py-1 bg-emerald-500/15 hover:bg-rose-500/15 text-emerald-400 hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30 rounded-xl text-[10px] font-black flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-xs"
-                          title="Toca para cambiar a Pendiente si hubo algún error"
-                        >
-                          <CheckCircle className="h-3 w-3" />
-                          <span>Cobrado ✓</span>
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={isUpdating}
+                            onClick={(e) => handleTogglePayment(w, 'Pendiente', e)}
+                            className="px-2.5 py-1 bg-emerald-500/15 hover:bg-rose-500/15 text-emerald-400 hover:text-rose-400 border border-emerald-500/30 hover:border-rose-500/30 rounded-xl text-[10px] font-black flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-xs"
+                            title="Toca para cambiar a Pendiente si hubo algún error"
+                          >
+                            <CheckCircle className="h-3 w-3" />
+                            <span>Cobrado ✓</span>
+                          </button>
+                          {w.receipt_photo && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedReceiptModal({ photo: w.receipt_photo, week: w });
+                              }}
+                              className="h-6 w-6 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 flex items-center justify-center transition active:scale-90 cursor-pointer shadow-xs"
+                              title="Ver comprobante de liquidación / cheque"
+                            >
+                              <Paperclip className="h-3 w-3 stroke-[2.2]" />
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         <button
                           type="button"
@@ -535,12 +647,26 @@ ${jobLines}
                   <DollarSign className="w-3.5 h-3.5" />
                 </div>
                 <span className="text-xs font-black text-white uppercase tracking-wider">
-                  Balance de Contabilidad General
+                  Balance de Contabilidad
                 </span>
               </div>
-              <span className="text-[10px] text-cyan-400 font-mono font-bold bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-lg">
-                Histórico
-              </span>
+              <div className="flex items-center gap-1.5 bg-[#131b26] px-2 py-0.5 rounded-xl border border-white/10 shadow-xs">
+                <Calendar className="h-3 w-3 text-cyan-400 shrink-0" />
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="bg-transparent text-xs font-black text-cyan-300 focus:outline-none cursor-pointer pr-1"
+                >
+                  {availableYears.map(y => (
+                    <option key={y} value={y} className="bg-[#131b26] text-white">
+                      Año {y}
+                    </option>
+                  ))}
+                  <option value="ALL" className="bg-[#131b26] text-white">
+                    Histórico Total
+                  </option>
+                </select>
+              </div>
             </div>
 
             {/* 2 Big Cards: Pendiente por Cobrar & Total Cobrado */}
@@ -550,8 +676,8 @@ ${jobLines}
                   <span>Pendiente</span>
                   <Clock className="h-3.5 w-3.5" />
                 </div>
-                <div className="text-xl sm:text-2xl font-black text-amber-300 font-mono leading-none pt-0.5 drop-shadow-[0_0_8px_rgba(251,191,36,0.2)]">
-                  ${totalPending.toFixed(2)}
+                <div className={`${getMoneyFontSize(totalPending)} font-black text-amber-300 font-mono leading-none pt-0.5 drop-shadow-[0_0_8px_rgba(251,191,36,0.2)]`}>
+                  {formatMoneyCompact(totalPending)}
                 </div>
                 <p className="text-[9.5px] text-slate-400 leading-tight">
                   Aún por liquidar
@@ -563,8 +689,8 @@ ${jobLines}
                   <span>Cobrado</span>
                   <ShieldCheck className="h-3.5 w-3.5" />
                 </div>
-                <div className="text-xl sm:text-2xl font-black text-emerald-400 font-mono leading-none pt-0.5 drop-shadow-[0_0_8px_rgba(52,211,153,0.2)]">
-                  ${totalPaid.toFixed(2)}
+                <div className={`${getMoneyFontSize(totalPaid)} font-black text-emerald-400 font-mono leading-none pt-0.5 drop-shadow-[0_0_8px_rgba(52,211,153,0.2)]`}>
+                  {formatMoneyCompact(totalPaid)}
                 </div>
                 <p className="text-[9.5px] text-slate-400 leading-tight">
                   Liquidado y confirmado
@@ -579,10 +705,10 @@ ${jobLines}
                   <div className="p-1 bg-cyan-500/15 text-cyan-400 rounded-lg border border-cyan-500/30">
                     <DollarSign className="h-3.5 w-3.5" />
                   </div>
-                  <span className="font-bold text-[11px]">Producción Total Histórica</span>
+                  <span className="font-bold text-[11px]">{selectedYear === 'ALL' ? 'Producción Total Histórica' : `Producción Año ${selectedYear}`}</span>
                 </div>
                 <span className="font-black text-white font-mono text-sm">
-                  ${totalAllEarnings.toFixed(2)}
+                  {formatMoneyCompact(totalAllEarnings)}
                 </span>
               </div>
 
@@ -804,10 +930,23 @@ ${jobLines}
                     <span className="text-cyan-400 font-mono">({selectedWeekModal.orders.length})</span>
                   </span>
                   {selectedWeekModal.isPaid ? (
-                    <span className="text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-black flex items-center gap-1 shrink-0">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Cobrado
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-black flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Cobrado
+                      </span>
+                      {selectedWeekModal.receipt_photo && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedReceiptModal({ photo: selectedWeekModal.receipt_photo, week: selectedWeekModal })}
+                          className="text-[10px] text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 hover:bg-cyan-500/25 transition cursor-pointer"
+                          title="Ver foto del cheque / comprobante de liquidación"
+                        >
+                          <Paperclip className="h-3 w-3 stroke-[2.2]" />
+                          <span>Comprobante</span>
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <span className="text-[10px] text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-black flex items-center gap-1 shrink-0">
                       <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
@@ -924,6 +1063,178 @@ ${jobLines}
             >
               <X className="h-4 w-4" />
               <span>Cerrar Foto</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CONFIRMAR COBRO SEMANAL CON COMPROBANTE OPCIONAL */}
+      {confirmPaymentWeek && (
+        <div
+          className="fixed inset-0 z-[85] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => !savingPayment && setConfirmPaymentWeek(null)}
+        >
+          <div
+            className="bg-[#131b26] border border-white/10 rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-500/15 text-emerald-400 rounded-xl border border-emerald-500/30">
+                  <DollarSign className="h-5 w-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">
+                    Confirmar Cobro
+                  </h3>
+                  <p className="text-[10.5px] text-slate-400 font-medium">
+                    Semana {confirmPaymentWeek.displayLabel || confirmPaymentWeek.key}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={savingPayment}
+                onClick={() => setConfirmPaymentWeek(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Monto de la semana */}
+            <div className="bg-[#0f1722] p-3 rounded-2xl border border-white/5 flex items-center justify-between">
+              <span className="text-xs text-slate-300 font-semibold">Total a Liquidar</span>
+              <span className="text-xl font-black text-emerald-400 font-mono">
+                ${confirmPaymentWeek.totalEarnings.toFixed(2)}
+              </span>
+            </div>
+
+            {/* Comprobante Opcional (Foto / Recibo / Cheque) */}
+            <div className="space-y-1.5">
+              <label className="text-[10.5px] font-bold text-slate-300 uppercase tracking-wider block">
+                Comprobante / Cheque <span className="text-slate-500 font-normal lowercase">(opcional)</span>
+              </label>
+
+              {receiptPhotoPreview ? (
+                <div className="relative rounded-2xl overflow-hidden border border-emerald-500/30 bg-[#0f1722] p-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <img
+                      src={receiptPhotoPreview}
+                      alt="Comprobante"
+                      className="h-12 w-12 object-cover rounded-xl border border-white/10 shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                        <Check className="h-3 w-3 stroke-[3]" /> Comprobante listo
+                      </span>
+                      <span className="text-[10px] text-slate-400 block truncate">
+                        Se guardará con la semana
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReceiptPhotoPreview(null)}
+                    className="p-1 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+                    title="Quitar foto"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group">
+                  <Camera className="h-5 w-5 text-cyan-400 group-hover:scale-110 transition" />
+                  <span className="text-xs font-bold text-slate-200">Tomar o subir foto</span>
+                  <span className="text-[9.5px] text-slate-400">Cheque, recibo o colilla de pago</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) {
+                        const r = new FileReader();
+                        r.onload = () => setReceiptPhotoPreview(r.result);
+                        r.readAsDataURL(f);
+                      }
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* Botones de Acción */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                disabled={savingPayment}
+                onClick={() => setConfirmPaymentWeek(null)}
+                className="py-2.5 px-3 bg-white/10 hover:bg-white/15 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={savingPayment}
+                onClick={handleConfirmPaymentWithReceipt}
+                className="py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/25 transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Check className="h-4 w-4 stroke-[3]" />
+                <span>{savingPayment ? 'Guardando...' : 'Confirmar Cobro'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL FULLSCREEN: VISOR DE COMPROBANTE DE PAGO */}
+      {selectedReceiptModal && (
+        <div
+          onClick={() => setSelectedReceiptModal(null)}
+          className="fixed inset-0 z-[90] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-4 animate-fade-in select-none"
+          style={{
+            paddingTop: 'max(env(safe-area-inset-top, 0px) + 12px, 1rem)',
+            paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
+          }}
+        >
+          <div className="w-full flex items-center justify-between px-3 py-1 shrink-0 z-50">
+            <div className="flex items-center gap-2 text-white">
+              <Paperclip className="h-4 w-4 text-emerald-400" />
+              <span className="text-xs font-black tracking-wide">
+                Comprobante de Pago • Semana {selectedReceiptModal.week?.displayLabel || selectedReceiptModal.week?.key}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedReceiptModal(null)}
+              className="p-2 rounded-full bg-slate-900/90 text-white hover:text-cyan-400 border border-white/20 shadow-2xl transition active:scale-90 cursor-pointer"
+              title="Cerrar comprobante"
+            >
+              <X className="h-4 w-4 stroke-[2.5]" />
+            </button>
+          </div>
+
+          <div
+            className="flex-1 min-h-0 w-full flex items-center justify-center p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={selectedReceiptModal.photo}
+              alt="Comprobante de Pago"
+              className="max-h-[75dvh] max-w-[95vw] sm:max-w-xl w-auto h-auto rounded-2xl object-contain border border-white/10 shadow-2xl"
+            />
+          </div>
+
+          <div className="shrink-0 pt-2 pb-1" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setSelectedReceiptModal(null)}
+              className="px-6 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5"
+            >
+              <X className="h-3.5 w-3.5" />
+              <span>Cerrar</span>
             </button>
           </div>
         </div>

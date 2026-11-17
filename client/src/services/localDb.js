@@ -1,7 +1,7 @@
 import { initialSeedData } from '../data/seedData';
 
 const DB_NAME = 'ContabilidadXfinityDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise = null;
 
@@ -43,6 +43,11 @@ export function getDb() {
         // 5. settings store
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'key' });
+        }
+
+        // 6. week_receipts store
+        if (!db.objectStoreNames.contains('week_receipts')) {
+          db.createObjectStore('week_receipts', { keyPath: 'week_key' });
         }
       };
 
@@ -739,6 +744,23 @@ export async function getWeeklySummary() {
     w.orders.push(order);
   }
 
+  // Receipts lookup map
+  let receiptsMap = {};
+  try {
+    if (db.objectStoreNames.contains('week_receipts')) {
+      const rTx = db.transaction('week_receipts', 'readonly');
+      const rStore = rTx.objectStore('week_receipts');
+      const allR = await new Promise((res) => {
+        const req = rStore.getAll();
+        req.onsuccess = () => res(req.result || []);
+        req.onerror = () => res([]);
+      });
+      for (const r of allR) {
+        if (r && r.week_key) receiptsMap[r.week_key] = r.receipt_photo;
+      }
+    }
+  } catch (e) {}
+
   const weeks = Object.values(weeksMap)
     .map((w) => {
       const completedList = w.orders.filter((o) => o.status === 'Completado');
@@ -746,7 +768,8 @@ export async function getWeeklySummary() {
       return {
         ...w,
         isPaid,
-        payment_status: isPaid ? 'Cobrado' : 'Pendiente'
+        payment_status: isPaid ? 'Cobrado' : 'Pendiente',
+        receipt_photo: receiptsMap[w.key] || null
       };
     })
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
@@ -789,7 +812,7 @@ export async function getWeeklySummary() {
   };
 }
 
-export async function updateWeekStatus(weekKey, paymentStatus) {
+export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = null) {
   const db = await getDb();
   const summary = await getWeeklySummary();
   const targetWeek = summary.weeks.find((w) => w.key === weekKey);
@@ -807,9 +830,63 @@ export async function updateWeekStatus(weekKey, paymentStatus) {
     store.put(order);
   }
 
+  // Save receipt photo if provided
+  if (receiptPhoto && db.objectStoreNames.contains('week_receipts')) {
+    try {
+      const rTx = db.transaction('week_receipts', 'readwrite');
+      const rStore = rTx.objectStore('week_receipts');
+      rStore.put({
+        week_key: weekKey,
+        receipt_photo: receiptPhoto,
+        updated_at: new Date().toISOString()
+      });
+    } catch (e) {}
+  }
+
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve({ success: true, updatedCount: completedOrders.length });
     tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function saveWeekReceipt(weekKey, receiptData) {
+  const db = await getDb();
+  if (!db.objectStoreNames.contains('week_receipts')) return { success: false };
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction('week_receipts', 'readwrite');
+      const store = tx.objectStore('week_receipts');
+      store.put({
+        week_key: weekKey,
+        receipt_photo: receiptData.receipt_photo || receiptData,
+        receipt_filename: receiptData.receipt_filename || null,
+        updated_at: new Date().toISOString()
+      });
+      tx.oncomplete = () => resolve({ success: true });
+      tx.onerror = () => reject(tx.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+export async function getSheetByDate(sheetDate) {
+  if (!sheetDate) return null;
+  const db = await getDb();
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction('dispatch_sheets', 'readonly');
+      const store = tx.objectStore('dispatch_sheets');
+      const idx = store.index('sheet_date');
+      const req = idx.getAll(sheetDate);
+      req.onsuccess = () => {
+        const list = req.result || [];
+        resolve(list.length > 0 ? list[list.length - 1] : null);
+      };
+      req.onerror = () => resolve(null);
+    } catch (e) {
+      resolve(null);
+    }
   });
 }
 

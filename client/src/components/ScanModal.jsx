@@ -20,6 +20,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
   // Photo & scan state
   const [previewUrl, setPreviewUrl] = useState(null);
   const previewUrlRef = useRef(null);
+  const [scannedFile, setScannedFile] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState('idle'); // 'idle' | 'scanning' | 'success' | 'error'
   const [extractedOrders, setExtractedOrders] = useState([]);
@@ -43,6 +44,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
   const resetScanState = useCallback(() => {
     replacePreviewUrl(null);
+    setScannedFile(null);
     setScanning(false);
     setScanStatus('idle');
     setSaving(false);
@@ -121,6 +123,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
     e.target.value = '';
 
+    setScannedFile(file);
     replacePreviewUrl(URL.createObjectURL(file));
     setScanning(true);
     setScanStatus('scanning');
@@ -350,6 +353,30 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
       if (res.ok && savedCount > 0) {
         const targetDate = normalizeDateStr(ordersToSave[0]?.work_date || sheetDate) || sheetDate;
+
+        // Auto-guardar la foto original de la hoja de despacho vinculada a este día
+        if (scannedFile) {
+          try {
+            const reader = new FileReader();
+            reader.onload = async () => {
+              const base64 = reader.result;
+              await fetch('/api/dispatch-sheets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sheet_date: targetDate,
+                  filename: `sheet-${Date.now()}.jpg`,
+                  original_name: scannedFile.name || 'sheet.jpg',
+                  photo_data: base64,
+                  orders_count: savedCount,
+                  extracted_text: rawAiText || ''
+                })
+              }).catch(() => {});
+            };
+            reader.readAsDataURL(scannedFile);
+          } catch (e) {}
+        }
+
         if (onOrdersSaved) {
           await onOrdersSaved(targetDate);
         }

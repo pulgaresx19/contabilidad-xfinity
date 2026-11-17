@@ -267,7 +267,16 @@ export function initApiAdapter() {
         if (weekStatusMatch && method === 'POST') {
           const weekKey = decodeURIComponent(weekStatusMatch[1]);
           const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
-          const result = await localDb.updateWeekStatus(weekKey, body.payment_status);
+          const result = await localDb.updateWeekStatus(weekKey, body.payment_status, body.receipt_photo);
+          return jsonResponse(result);
+        }
+
+        // --- WEEK RECEIPT UPDATE ---
+        const weekReceiptMatch = cleanUrl.match(/^\/api\/weeks\/(.+)\/receipt$/);
+        if (weekReceiptMatch && method === 'POST') {
+          const weekKey = decodeURIComponent(weekReceiptMatch[1]);
+          const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
+          const result = await localDb.saveWeekReceipt(weekKey, body);
           return jsonResponse(result);
         }
 
@@ -477,7 +486,18 @@ export function initApiAdapter() {
           if (method === 'GET') {
             const sheets = await localDb.getDispatchSheets();
             return jsonResponse(sheets);
+          } else if (method === 'POST') {
+            const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
+            const result = await localDb.createDispatchSheet(body);
+            return jsonResponse({ success: true, ...result });
           }
+        }
+
+        const sheetByDateMatch = cleanUrl.match(/^\/api\/dispatch-sheets\/by-date\/(.+)$/);
+        if (sheetByDateMatch && method === 'GET') {
+          const sDate = decodeURIComponent(sheetByDateMatch[1]);
+          const sheet = await localDb.getSheetByDate(sDate);
+          return jsonResponse(sheet || null);
         }
 
         const sheetDeleteMatch = cleanUrl.match(/^\/api\/dispatch-sheets\/(\d+)$/);

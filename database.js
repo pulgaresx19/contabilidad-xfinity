@@ -79,6 +79,14 @@ function initDb() {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS week_receipts (
+      week_key TEXT PRIMARY KEY,
+      receipt_photo TEXT,
+      receipt_filename TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_monthly_expenses_month ON monthly_expenses(month_key);
 
   `);
@@ -107,6 +115,9 @@ function initDb() {
   } catch (e) {}
   try {
     db.exec("ALTER TABLE work_orders ADD COLUMN route_order INTEGER DEFAULT 0");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE dispatch_sheets ADD COLUMN photo_data TEXT");
   } catch (e) {}
 
   // Cache for geocoding coordinates so we never re-request the same address

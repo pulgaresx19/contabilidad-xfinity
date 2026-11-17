@@ -3,7 +3,8 @@ import {
   Camera, Check, CheckCheck, X, Phone, MessageSquare, MapPin, Share2, Clock, Copy,
   CheckCircle2, AlertCircle, Plus, Sparkles, AlertTriangle, Shield,
   SlidersHorizontal, Edit3, Minus, DollarSign, Calendar, ChevronLeft, ChevronRight, Pencil, Info,
-  Image as ImageIcon, Map, List, Navigation, Trash2, ExternalLink, RotateCcw
+  Image as ImageIcon, Map, List, Navigation, Trash2, ExternalLink, RotateCcw,
+  FileText, FilePlus
 } from 'lucide-react';
 import AddJobModal from './AddJobModal';
 import EditJobModal from './EditJobModal';
@@ -116,6 +117,57 @@ export default function TodayView({
   const [adjustAmount, setAdjustAmount] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
   const [savingAdjust, setSavingAdjust] = useState(false);
+
+  // Dispatch Sheet Photo State for the active day
+  const [daySheetPhoto, setDaySheetPhoto] = useState(null);
+  const [selectedSheetModal, setSelectedSheetModal] = useState(null);
+  const [uploadingSheet, setUploadingSheet] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch(`/api/dispatch-sheets/by-date/${encodeURIComponent(activeDate)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(sheet => {
+        if (isMounted) setDaySheetPhoto(sheet);
+      })
+      .catch(() => {
+        if (isMounted) setDaySheetPhoto(null);
+      });
+    return () => { isMounted = false; };
+  }, [activeDate]);
+
+  const handleUploadDaySheet = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingSheet(true);
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result;
+        const res = await fetch('/api/dispatch-sheets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sheet_date: activeDate,
+            filename: `sheet-${Date.now()}.jpg`,
+            original_name: file.name || 'sheet.jpg',
+            photo_data: base64,
+            orders_count: dayOrders.length
+          })
+        });
+        if (res.ok) {
+          const updated = await fetch(`/api/dispatch-sheets/by-date/${encodeURIComponent(activeDate)}`).then(r => r.json());
+          setDaySheetPhoto(updated);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      alert('Error subiendo hoja: ' + err.message);
+    } finally {
+      setUploadingSheet(false);
+      e.target.value = '';
+    }
+  };
 
   // 1. FILTER ORDERS EXCLUSIVELY FOR THE ACTIVE DAY & SORT BY ROUTE_ORDER
   const dayOrders = useMemo(() => {
@@ -718,10 +770,37 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   <button
                     type="button"
                     onClick={() => setActiveDate(todayReal)}
-                    className="text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-1.5 py-0.2 rounded-md font-bold hover:bg-cyan-900"
+                    className="text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-1.5 py-0.2 rounded-md font-bold hover:bg-cyan-900 cursor-pointer"
                   >
                     Ir a Hoy
                   </button>
+                )}
+
+                {/* Micro-icono minimalista y curioso para la Hoja de Despacho Diaria */}
+                {daySheetPhoto ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSheetModal(daySheetPhoto)}
+                    className="h-6 w-6 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer ml-1"
+                    title="Ver hoja de despacho original del día"
+                  >
+                    <FileText className="h-3.5 w-3.5 stroke-[2.2]" />
+                  </button>
+                ) : (
+                  <label
+                    className="h-6 w-6 rounded-lg bg-slate-800/60 hover:bg-slate-700/60 text-slate-400 hover:text-slate-200 border border-white/5 flex items-center justify-center transition cursor-pointer active:scale-95 ml-1"
+                    title="Adjuntar foto de la hoja de despacho del día (opcional)"
+                  >
+                    <FilePlus className="h-3 w-3 stroke-[2]" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handleUploadDaySheet}
+                      disabled={uploadingSheet}
+                    />
+                  </label>
                 )}
               </div>
 
@@ -2095,6 +2174,71 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             >
               <X className="h-4 w-4" />
               <span>Cerrar Foto</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL FULLSCREEN: HOJA DE DESPACHO DEL DÍA */}
+      {selectedSheetModal && (
+        <div
+          onClick={() => setSelectedSheetModal(null)}
+          className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-4 animate-fade-in select-none"
+          style={{
+            paddingTop: 'max(env(safe-area-inset-top, 0px) + 12px, 1rem)',
+            paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
+          }}
+        >
+          <div className="w-full flex items-center justify-between px-3 py-1 shrink-0 z-50">
+            <div className="flex items-center gap-2 text-white">
+              <FileText className="h-4 w-4 text-cyan-400" />
+              <span className="text-xs font-black tracking-wide">
+                Hoja de Despacho • {formatDateFriendly(activeDate)}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedSheetModal(null)}
+              className="p-2 rounded-full bg-slate-900/90 text-white hover:text-cyan-400 border border-white/20 shadow-2xl transition active:scale-90 cursor-pointer"
+              title="Cerrar hoja"
+            >
+              <X className="h-4 w-4 stroke-[2.5]" />
+            </button>
+          </div>
+
+          <div
+            className="flex-1 min-h-0 w-full flex items-center justify-center p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={selectedSheetModal.photo_data || (selectedSheetModal.filename?.startsWith('/') ? selectedSheetModal.filename : `/uploads/${selectedSheetModal.filename}`)}
+              alt="Hoja de Despacho del Día"
+              className="max-h-[75dvh] max-w-[95vw] sm:max-w-xl w-auto h-auto rounded-2xl object-contain border border-white/10 shadow-2xl"
+            />
+          </div>
+
+          <div className="shrink-0 pt-2 pb-1 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+            <label
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5"
+            >
+              <FilePlus className="h-3.5 w-3.5" />
+              <span>Cambiar Hoja</span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleUploadDaySheet}
+                disabled={uploadingSheet}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => setSelectedSheetModal(null)}
+              className="px-6 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5"
+            >
+              <X className="h-3.5 w-3.5" />
+              <span>Cerrar</span>
             </button>
           </div>
         </div>
