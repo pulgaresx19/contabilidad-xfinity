@@ -4,7 +4,7 @@ import {
   CheckCircle2, AlertCircle, Plus, Sparkles, AlertTriangle, Shield,
   SlidersHorizontal, Edit3, Minus, DollarSign, Calendar, ChevronLeft, ChevronRight, Pencil, Info,
   Image as ImageIcon, Map, List, Navigation, Trash2, ExternalLink, RotateCcw,
-  FileText, FilePlus
+  FileText
 } from 'lucide-react';
 import AddJobModal from './AddJobModal';
 import EditJobModal from './EditJobModal';
@@ -119,10 +119,9 @@ export default function TodayView({
   const [adjustReason, setAdjustReason] = useState('');
   const [savingAdjust, setSavingAdjust] = useState(false);
 
-  // Dispatch Sheet Photo State for the active day
+  // Dispatch Sheet Photo State for the active day (solo lectura y zoom interactivo)
   const [daySheetPhoto, setDaySheetPhoto] = useState(null);
   const [selectedSheetModal, setSelectedSheetModal] = useState(null);
-  const [uploadingSheet, setUploadingSheet] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -136,39 +135,6 @@ export default function TodayView({
       });
     return () => { isMounted = false; };
   }, [activeDate]);
-
-  const handleUploadDaySheet = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      setUploadingSheet(true);
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = reader.result;
-        const res = await fetch('/api/dispatch-sheets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sheet_date: activeDate,
-            filename: `sheet-${Date.now()}.jpg`,
-            original_name: file.name || 'sheet.jpg',
-            photo_data: base64,
-            orders_count: dayOrders.length
-          })
-        });
-        if (res.ok) {
-          const updated = await fetch(`/api/dispatch-sheets/by-date/${encodeURIComponent(activeDate)}`).then(r => r.json());
-          setDaySheetPhoto(updated);
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      alert('Error subiendo hoja: ' + err.message);
-    } finally {
-      setUploadingSheet(false);
-      e.target.value = '';
-    }
-  };
 
   // 1. FILTER ORDERS EXCLUSIVELY FOR THE ACTIVE DAY & SORT BY ROUTE_ORDER
   const dayOrders = useMemo(() => {
@@ -795,31 +761,23 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">
                     {isViewingToday ? 'Jornada de Hoy' : 'Producción del Día'}
                   </span>
-                  {/* Micro-icono hoja de despacho del día (exactamente del mismo tamaño) */}
+                  {/* Micro-icono hoja de despacho del día (solo lectura con zoom interactivo) */}
                   {daySheetPhoto ? (
                     <button
                       type="button"
                       onClick={() => setSelectedSheetModal(daySheetPhoto)}
                       className="h-4.5 w-4.5 rounded-md bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/35 flex items-center justify-center transition active:scale-95 shadow-2xs cursor-pointer shrink-0"
-                      title="Ver hoja de despacho original del día"
+                      title="Ver hoja de despacho original del día (acercar / mover)"
                     >
                       <FileText className="h-2.5 w-2.5 stroke-[2.2]" />
                     </button>
                   ) : (
-                    <label
-                      className="h-4.5 w-4.5 rounded-md bg-slate-800/60 hover:bg-slate-700/60 text-slate-400 hover:text-slate-200 border border-white/10 flex items-center justify-center transition cursor-pointer active:scale-95 shrink-0"
-                      title="Adjuntar foto de la hoja de despacho del día (opcional)"
+                    <div
+                      className="h-4.5 w-4.5 rounded-md bg-slate-800/40 text-slate-600 border border-white/5 flex items-center justify-center shrink-0 cursor-default"
+                      title="Sin hoja de despacho escaneada para esta jornada"
                     >
-                      <FilePlus className="h-2.5 w-2.5 stroke-[2]" />
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        className="hidden"
-                        onChange={handleUploadDaySheet}
-                        disabled={uploadingSheet}
-                      />
-                    </label>
+                      <FileText className="h-2.5 w-2.5 stroke-[1.8] opacity-40" />
+                    </div>
                   )}
                 </div>
                 <h2 className="text-3xl font-black text-white font-mono mt-0.5 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">
@@ -2187,28 +2145,14 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
           title={`Hoja de Despacho • ${formatDateFriendly(activeDate)}`}
           onClose={() => setSelectedSheetModal(null)}
           extraFooterActions={
-            <>
-              <label className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5">
-                <FilePlus className="h-3.5 w-3.5" />
-                <span>Cambiar Hoja</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={handleUploadDaySheet}
-                  disabled={uploadingSheet}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => setSelectedSheetModal(null)}
-                className="px-6 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5"
-              >
-                <X className="h-3.5 w-3.5" />
-                <span>Cerrar</span>
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => setSelectedSheetModal(null)}
+              className="px-6 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5"
+            >
+              <X className="h-3.5 w-3.5" />
+              <span>Cerrar</span>
+            </button>
           }
         />
       )}

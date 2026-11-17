@@ -6,6 +6,8 @@ import {
 import { getLocalDateStr, normalizeDateStr } from '../utils/dateUtils';
 import { interactWithAuraCore } from '../services/auraService';
 import { cleanRawNotes } from '../utils/remarkUtils';
+import { compressImage } from '../services/imageUtils';
+import ZoomableImageViewer from './ZoomableImageViewer';
 
 export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech }) {
   const [sheetDate, setSheetDate] = useState(() => getLocalDateStr());
@@ -354,12 +356,12 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
       if (res.ok && savedCount > 0) {
         const targetDate = normalizeDateStr(ordersToSave[0]?.work_date || sheetDate) || sheetDate;
 
-        // Auto-guardar la foto original de la hoja de despacho vinculada a este día
+        // Auto-guardar la foto de la hoja de despacho vinculada a este día (optimizada al estándar de la IA 2048px / 85%)
         if (scannedFile) {
           try {
-            const reader = new FileReader();
-            reader.onload = async () => {
-              const base64 = reader.result;
+            const compressed = await compressImage(scannedFile, 2048, 2048, 0.85).catch(() => null);
+            const photoData = compressed?.dataUrl;
+            if (photoData) {
               await fetch('/api/dispatch-sheets', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -367,13 +369,29 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                   sheet_date: targetDate,
                   filename: `sheet-${Date.now()}.jpg`,
                   original_name: scannedFile.name || 'sheet.jpg',
-                  photo_data: base64,
+                  photo_data: photoData,
                   orders_count: savedCount,
                   extracted_text: rawAiText || ''
                 })
               }).catch(() => {});
-            };
-            reader.readAsDataURL(scannedFile);
+            } else {
+              const reader = new FileReader();
+              reader.onload = async () => {
+                await fetch('/api/dispatch-sheets', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    sheet_date: targetDate,
+                    filename: `sheet-${Date.now()}.jpg`,
+                    original_name: scannedFile.name || 'sheet.jpg',
+                    photo_data: reader.result,
+                    orders_count: savedCount,
+                    extracted_text: rawAiText || ''
+                  })
+                }).catch(() => {});
+              };
+              reader.readAsDataURL(scannedFile);
+            }
           } catch (e) {}
         }
 
@@ -676,28 +694,14 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
         </div>
       </div>
 
-      {/* Modal Pantalla Completa para la Hoja de Despacho */}
+      {/* Modal Pantalla Completa para la Hoja de Despacho (con zoom y desplazamiento interactivo) */}
       {showFullPhoto && previewUrl && (
-        <div
-          className="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center p-3 animate-fade-in"
-          onClick={() => setShowFullPhoto(false)}
-        >
-          <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-            <button
-              type="button"
-              onClick={() => setShowFullPhoto(false)}
-              className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 flex items-center gap-1.5 shadow-lg"
-            >
-              <X className="w-4 h-4" />
-              <span>Cerrar</span>
-            </button>
-          </div>
-          <img
-            src={previewUrl}
-            alt="Hoja Completa"
-            className="max-w-full max-h-[88vh] object-contain rounded-xl border border-white/10 shadow-2xl"
-          />
-        </div>
+        <ZoomableImageViewer
+          src={previewUrl}
+          alt="Hoja de Despacho Completa"
+          title={`Hoja de Despacho • ${sheetDate}`}
+          onClose={() => setShowFullPhoto(false)}
+        />
       )}
     </div>
   );
