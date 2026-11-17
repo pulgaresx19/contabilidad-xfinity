@@ -10,6 +10,8 @@ import ShareReportModal from './ShareReportModal';
 import TodayView from './TodayView';
 import MonthlyView from './MonthlyView';
 import EditJobModal from './EditJobModal';
+import HistoricalOrderCard from './HistoricalOrderCard';
+import { getOrderRemark } from '../utils/remarkUtils';
 
 const CUTOFF_LABELS = {
   '0': 'Domingo (Lunes a Domingo)',
@@ -146,6 +148,9 @@ export default function HistoryView({
         (o.phone && o.phone.includes(q)) ||
         (o.work_date && o.work_date.includes(q)) ||
         (o.cable_type && o.cable_type.toLowerCase().includes(q)) ||
+        (o.raw_notes && o.raw_notes.toLowerCase().includes(q)) ||
+        (o.obstacles && o.obstacles.toLowerCase().includes(q)) ||
+        (o.premise_access && o.premise_access.toLowerCase().includes(q)) ||
         (cleanCable && cleanQ && cleanCable.includes(cleanQ));
 
       if (!matchesSearch) return false;
@@ -232,13 +237,16 @@ ${jobLines}
       )
     );
 
+    const remark = getOrderRemark(order);
+
     const text = `📋 *COMPROBANTE DE TRABAJO - XFINITY*
 🔢 *Work Order #:* ${order.job_id}
 📅 *Fecha Ejecución:* ${order.work_date}
 📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
 📏 *Pies / Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
 🚗 *Driveway:* ${hasDriveway ? 'Sí' : 'No'}
-📸 *Fotos de Evidencia:* ${order.photos_count || 0} archivada(s)
+📝 *Observaciones / Acceso:* ${remark || '🟢 Acceso libre'}
+📸 *Fotos de Evidencia:* ${order.photos_count || (order.photos ? order.photos.length : 0)} archivada(s)
 ✅ *Estado:* ${order.status}`;
 
     navigator.clipboard.writeText(text);
@@ -685,203 +693,18 @@ ${jobLines}
             </div>
           ) : (
             <div className="space-y-2.5">
-              {filteredAllOrders.map((order, idx) => {
-                const isComp = order.status === 'Completado';
-                const isCanc = order.status === 'No Realizado';
-                const hasBore = Boolean(order.bore_type && (order.bore_type.includes('DW') || order.bore_type.toLowerCase().includes('driveway') || order.bore_type === 'Y'));
-                const photos = order.photos || [];
-                const photosCount = order.photos_count !== undefined ? order.photos_count : photos.length;
-
-                return (
-                  <div
-                    key={order.id}
-                    className="bg-[#131b26] border border-white/10 hover:border-cyan-500/35 rounded-2xl p-3 sm:p-3.5 space-y-2 text-xs shadow-md transition group"
-                  >
-                    {/* Fila 1: Parada / Dirección + Ciudad | Tarifa + Estado */}
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span className={`w-6 h-6 rounded-full font-black text-xs flex items-center justify-center font-mono shrink-0 shadow-sm ${
-                          isComp
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                            : isCanc
-                            ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
-                            : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                        }`}>
-                          {isComp ? '✓' : isCanc ? '✕' : (idx + 1)}
-                        </span>
-
-                        <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
-                          <span className="text-xs font-bold text-white truncate leading-tight">
-                            {order.address}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                            {order.city || 'Skokie'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="font-mono font-black text-emerald-400 text-xs sm:text-sm drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">
-                          ${order.rate_calculated || 100}
-                        </span>
-                        <span className={`text-[8.5px] uppercase font-bold px-2 py-0.5 rounded-full border shrink-0 ${
-                          isComp ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                          : isCanc ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                          : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                        }`}>
-                          {order.status || 'Pendiente'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Fila 2: Secuencia Lineal (#Orden • Fecha • Metraje • Cable • DW) + Bonos */}
-                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-slate-400">
-                      <span className="text-cyan-300 font-semibold">#{order.job_id}</span>
-                      {order.work_date && (
-                        <>
-                          <span>•</span>
-                          <span className="text-slate-400">{order.work_date}</span>
-                        </>
-                      )}
-                      <span>•</span>
-                      <span className="text-amber-300 font-bold">{order.drop_footage || 0} ft</span>
-                      <span>•</span>
-                      <span className="text-slate-300">{order.cable_type || 'RG-6'}</span>
-                      {hasBore && (
-                        <>
-                          <span>•</span>
-                          <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md shrink-0">
-                            DW
-                          </span>
-                        </>
-                      )}
-                      {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
-                        <span className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-bold">
-                          +${Math.floor((order.drop_footage - 300) / 100) * 25} Metraje
-                        </span>
-                      )}
-                      {Number(order.manual_adjustment) > 0 && (
-                        <span className="bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
-                          <Sparkles className="h-2.5 w-2.5" />
-                          <span>+${order.manual_adjustment} Bono</span>
-                        </span>
-                      )}
-                      {Number(order.manual_adjustment) < 0 && (
-                        <span className="bg-amber-500/15 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
-                          <span>-${Math.abs(order.manual_adjustment)} Desc.</span>
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Fila 3: Si Cancelado, Motivo de Cancelación */}
-                    {isCanc && (
-                      <div 
-                        onClick={() => onOpenPhotos && onOpenPhotos(order)}
-                        className="bg-rose-950/25 border border-rose-500/25 p-2 rounded-xl text-xs text-rose-200 flex items-start gap-1.5 cursor-pointer hover:bg-rose-950/40 transition active:scale-[0.99]"
-                        title="Toca para ver la constancia y fotos del obstáculo"
-                      >
-                        <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0 mt-0.5" />
-                        <div className="min-w-0">
-                          <span className="text-[9px] uppercase font-bold text-rose-400 block tracking-wider">
-                            Motivo No Realizado:
-                          </span>
-                          <p className="font-semibold text-xs leading-tight truncate">
-                            {order.cancel_reason || 'Sin motivo detallado'}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Fila 4: Miniaturas de Fotos (si existen) */}
-                    {photos.length > 0 && (
-                      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none pt-0.5">
-                        {photos.map((p, pIdx) => (
-                          <div
-                            key={p.id || pIdx}
-                            onClick={() => setSelectedPhoto(p.photo_data || `/uploads/${p.filename}`)}
-                            className="h-11 w-14 rounded-lg overflow-hidden bg-black/40 border border-white/10 flex-shrink-0 cursor-pointer relative group hover:border-cyan-400 transition"
-                            title="Toca para ver foto completa"
-                          >
-                            <img 
-                              src={p.photo_data || `/uploads/${p.filename}`} 
-                              alt={p.category || `Foto ${pIdx + 1}`} 
-                              className="w-full h-full object-cover group-hover:scale-105 transition" 
-                            />
-                            <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                              <ExternalLink className="h-3 w-3 text-white" />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Fila 5: Barra de Acciones Rápidas (Fotos, Editar, Copiar, Reportar) - Grid 4 Columnas */}
-                    <div className="pt-2 border-t border-white/8 grid grid-cols-4 gap-1 sm:gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => onOpenPhotos ? onOpenPhotos(order) : (photos[0] && setSelectedPhoto(photos[0].photo_data || `/uploads/${photos[0].filename}`))}
-                        className="w-full text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center justify-center gap-1 bg-[#182332] px-1 py-1 rounded-lg border border-white/10 transition active:scale-95 cursor-pointer"
-                        title="Ver o agregar fotos de evidencia"
-                      >
-                        <Camera className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{photosCount} Fotos</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setEditingOrder(order)}
-                        className="w-full text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-1 py-1 rounded-lg flex items-center justify-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
-                        title="Editar orden"
-                      >
-                        <Pencil className="h-3 w-3 text-cyan-400 shrink-0" />
-                        <span className="truncate">Editar</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => copySingleJobClaim(order)}
-                        className="w-full text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-1 py-1 rounded-lg flex items-center justify-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
-                        title="Copiar comprobante al portapapeles"
-                      >
-                        {copiedJobId === order.id ? (
-                          <>
-                            <Check className="h-3 w-3 text-emerald-400 shrink-0" />
-                            <span className="text-emerald-400 font-bold truncate">¡Copiado!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3 w-3 text-cyan-400 shrink-0" />
-                            <span className="truncate">Copiar</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setReportOrder(order)}
-                        className={`w-full text-[10px] border px-1 py-1 rounded-lg flex items-center justify-center gap-1 font-bold transition active:scale-95 shadow-xs cursor-pointer ${
-                          order.whatsapp_shared
-                            ? 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30 hover:bg-emerald-500/25'
-                            : 'text-cyan-300 bg-cyan-500/15 border-cyan-500/30 hover:bg-cyan-500/25'
-                        }`}
-                        title="Reportar trabajo por WhatsApp"
-                      >
-                        {order.whatsapp_shared ? (
-                          <>
-                            <CheckCheck className="h-3 w-3 text-emerald-400 shrink-0" />
-                            <span className="truncate">Reportado</span>
-                          </>
-                        ) : (
-                          <>
-                            <Share2 className="h-3 w-3 text-cyan-400 shrink-0" />
-                            <span className="truncate">Reportar</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+              {filteredAllOrders.map((order, idx) => (
+                <HistoricalOrderCard
+                  key={order.id}
+                  order={order}
+                  idx={idx}
+                  onOpenPhotos={onOpenPhotos}
+                  onEditOrder={setEditingOrder}
+                  onCopyClaim={copySingleJobClaim}
+                  onSelectPhoto={setSelectedPhoto}
+                  isCopied={copiedJobId === order.id}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -992,203 +815,18 @@ ${jobLines}
                   )}
                 </div>
 
-                {selectedWeekModal.orders.map((order, idx) => {
-                  const isComp = order.status === 'Completado';
-                  const isCanc = order.status === 'No Realizado';
-                  const hasBore = Boolean(order.bore_type && (order.bore_type.includes('DW') || order.bore_type.toLowerCase().includes('driveway') || order.bore_type === 'Y'));
-                  const photos = order.photos || [];
-                  const photosCount = order.photos_count !== undefined ? order.photos_count : photos.length;
-
-                  return (
-                    <div
-                      key={order.id}
-                      className="bg-[#141c28] border border-white/10 hover:border-cyan-500/35 rounded-2xl p-3 sm:p-3.5 space-y-2 text-xs shadow-md transition group"
-                    >
-                      {/* Fila 1: Parada / Dirección + Ciudad | Tarifa + Estado */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className={`w-6 h-6 rounded-full font-black text-xs flex items-center justify-center font-mono shrink-0 shadow-sm ${
-                            isComp
-                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                              : isCanc
-                              ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
-                              : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                          }`}>
-                            {isComp ? '✓' : isCanc ? '✕' : (idx + 1)}
-                          </span>
-
-                          <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
-                            <span className="text-xs font-bold text-white truncate leading-tight">
-                              {order.address}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                              {order.city || 'Skokie'}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="font-mono font-black text-emerald-400 text-xs sm:text-sm drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">
-                            ${order.rate_calculated || 100}
-                          </span>
-                          <span className={`text-[8.5px] uppercase font-bold px-2 py-0.5 rounded-full border shrink-0 ${
-                            isComp ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                            : isCanc ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                            : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                          }`}>
-                            {order.status || 'Pendiente'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Fila 2: Secuencia Lineal (#Orden • Fecha • Metraje • Cable • DW) + Bonos */}
-                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-slate-400">
-                        <span className="text-cyan-300 font-semibold">#{order.job_id}</span>
-                        {order.work_date && (
-                          <>
-                            <span>•</span>
-                            <span className="text-slate-400">{order.work_date}</span>
-                          </>
-                        )}
-                        <span>•</span>
-                        <span className="text-amber-300 font-bold">{order.drop_footage || 0} ft</span>
-                        <span>•</span>
-                        <span className="text-slate-300">{order.cable_type || 'RG-6'}</span>
-                        {hasBore && (
-                          <>
-                            <span>•</span>
-                            <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md shrink-0">
-                              DW
-                            </span>
-                          </>
-                        )}
-                        {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
-                          <span className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-bold">
-                            +${Math.floor((order.drop_footage - 300) / 100) * 25} Metraje
-                          </span>
-                        )}
-                        {Number(order.manual_adjustment) > 0 && (
-                          <span className="bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
-                            <Sparkles className="h-2.5 w-2.5" />
-                            <span>+${order.manual_adjustment} Bono</span>
-                          </span>
-                        )}
-                        {Number(order.manual_adjustment) < 0 && (
-                          <span className="bg-amber-500/15 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
-                            <span>-${Math.abs(order.manual_adjustment)} Desc.</span>
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Fila 3: Si Cancelado, Motivo de Cancelación */}
-                      {isCanc && (
-                        <div 
-                          onClick={() => onOpenPhotos && onOpenPhotos(order)}
-                          className="bg-rose-950/25 border border-rose-500/25 p-2 rounded-xl text-xs text-rose-200 flex items-start gap-1.5 cursor-pointer hover:bg-rose-950/40 transition active:scale-[0.99]"
-                          title="Toca para ver la constancia y fotos del obstáculo"
-                        >
-                          <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0 mt-0.5" />
-                          <div className="min-w-0">
-                            <span className="text-[9px] uppercase font-bold text-rose-400 block tracking-wider">
-                              Motivo No Realizado:
-                            </span>
-                            <p className="font-semibold text-xs leading-tight truncate">
-                              {order.cancel_reason || 'Sin motivo detallado'}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Fila 4: Miniaturas de Fotos (si existen) */}
-                      {photos.length > 0 && (
-                        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none pt-0.5">
-                          {photos.map((p, pIdx) => (
-                            <div
-                              key={p.id || pIdx}
-                              onClick={() => setSelectedPhoto(p.photo_data || `/uploads/${p.filename}`)}
-                              className="h-11 w-14 rounded-lg overflow-hidden bg-black/40 border border-white/10 flex-shrink-0 cursor-pointer relative group hover:border-cyan-400 transition"
-                              title="Toca para ver foto completa"
-                            >
-                              <img 
-                                src={p.photo_data || `/uploads/${p.filename}`} 
-                                alt={p.category || `Foto ${pIdx + 1}`} 
-                                className="w-full h-full object-cover group-hover:scale-105 transition" 
-                              />
-                              <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                                <ExternalLink className="h-3 w-3 text-white" />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Fila 5: Barra de Acciones Rápidas (Fotos, Editar, Copiar, Reportar) - Grid 4 Columnas */}
-                      <div className="pt-2 border-t border-white/8 grid grid-cols-4 gap-1 sm:gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => onOpenPhotos ? onOpenPhotos(order) : (photos[0] && setSelectedPhoto(photos[0].photo_data || `/uploads/${photos[0].filename}`))}
-                          className="w-full text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center justify-center gap-1 bg-[#182332] px-1 py-1 rounded-lg border border-white/10 transition active:scale-95 cursor-pointer"
-                          title="Ver o agregar fotos de evidencia"
-                        >
-                          <Camera className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{photosCount} Fotos</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setEditingOrder(order)}
-                          className="w-full text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-1 py-1 rounded-lg flex items-center justify-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
-                          title="Editar orden"
-                        >
-                          <Pencil className="h-3 w-3 text-cyan-400 shrink-0" />
-                          <span className="truncate">Editar</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => copySingleJobClaim(order)}
-                          className="w-full text-[10px] text-slate-200 hover:text-white bg-[#182332] hover:bg-[#243140] border border-white/10 px-1 py-1 rounded-lg flex items-center justify-center gap-1 transition active:scale-95 shadow-xs cursor-pointer"
-                          title="Copiar comprobante al portapapeles"
-                        >
-                          {copiedJobId === order.id ? (
-                            <>
-                              <Check className="h-3 w-3 text-emerald-400 shrink-0" />
-                              <span className="text-emerald-400 font-bold truncate">¡Copiado!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="h-3 w-3 text-cyan-400 shrink-0" />
-                              <span className="truncate">Copiar</span>
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setReportOrder(order)}
-                          className={`w-full text-[10px] border px-1 py-1 rounded-lg flex items-center justify-center gap-1 font-bold transition active:scale-95 shadow-xs cursor-pointer ${
-                            order.whatsapp_shared
-                              ? 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30 hover:bg-emerald-500/25'
-                              : 'text-cyan-300 bg-cyan-500/15 border-cyan-500/30 hover:bg-cyan-500/25'
-                          }`}
-                          title="Reportar trabajo por WhatsApp"
-                        >
-                          {order.whatsapp_shared ? (
-                            <>
-                              <CheckCheck className="h-3 w-3 text-emerald-400 shrink-0" />
-                              <span className="truncate">Reportado</span>
-                            </>
-                          ) : (
-                            <>
-                              <Share2 className="h-3 w-3 text-cyan-400 shrink-0" />
-                              <span className="truncate">Reportar</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+                {selectedWeekModal.orders.map((order, idx) => (
+                  <HistoricalOrderCard
+                    key={order.id}
+                    order={order}
+                    idx={idx}
+                    onOpenPhotos={onOpenPhotos}
+                    onEditOrder={setEditingOrder}
+                    onCopyClaim={copySingleJobClaim}
+                    onSelectPhoto={setSelectedPhoto}
+                    isCopied={copiedJobId === order.id}
+                  />
+                ))}
               </div>
             </div>
 
