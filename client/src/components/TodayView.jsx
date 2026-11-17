@@ -162,15 +162,27 @@ export default function TodayView({
     return true;
   });
 
-  // Base calculation without manual adjustment
+  // Base calculation without manual adjustment (uses configured tariff settings with safe fallback)
   const getOrderBaseCalculation = (order) => {
-    if (!order) return { base: 100, dwBonus: 0, footageBonus: 0, autoSubtotal: 100 };
-    let base = 100;
-    let dwBonus = (order.bore_type && order.bore_type.includes('DW')) ? 30 : 0;
+    let baseRate = 100;
+    let dwRate = 30;
+    let footageBase = 300;
+    let footageExtraRate = 25;
+    try {
+      const cached = JSON.parse(localStorage.getItem('xfinity_cached_settings') || '{}');
+      if (cached.base_rate !== undefined) baseRate = parseFloat(cached.base_rate) || 100;
+      if (cached.bore_dw_bonus !== undefined) dwRate = parseFloat(cached.bore_dw_bonus) || 30;
+      if (cached.footage_base !== undefined) footageBase = parseFloat(cached.footage_base) || 300;
+      if (cached.footage_extra_rate !== undefined) footageExtraRate = parseFloat(cached.footage_extra_rate) || 25;
+    } catch (_) {}
+
+    if (!order) return { base: baseRate, dwBonus: 0, footageBonus: 0, autoSubtotal: baseRate };
+    let base = baseRate;
+    let dwBonus = (order.bore_type && order.bore_type.includes('DW')) ? dwRate : 0;
     let footageBonus = 0;
-    if (order.drop_footage > 300) {
-      const extraBlocks = Math.floor((order.drop_footage - 300) / 100);
-      if (extraBlocks > 0) footageBonus = extraBlocks * 25;
+    if (order.drop_footage > footageBase) {
+      const extraBlocks = Math.floor((order.drop_footage - footageBase) / 100);
+      if (extraBlocks > 0) footageBonus = extraBlocks * footageExtraRate;
     }
     const autoSubtotal = base + dwBonus + footageBonus;
     return { base, dwBonus, footageBonus, autoSubtotal };

@@ -138,9 +138,10 @@ export async function checkAuraCoreHealth() {
 
 export function buildLocalOrdersSummary(orders = [], summaryData = null) {
   const list = Array.isArray(orders) ? orders : [];
-  const totalRate = list.reduce((s, o) => s + (Number(o.rate_calculated) || 0), 0);
-  const completedCount = list.filter((o) => o.status === 'Completada').length;
-  const pendingCount = list.filter((o) => o.status !== 'Completada').length;
+  const completedList = list.filter((o) => o.status === 'Completado' || o.status === 'Completada');
+  const totalRate = completedList.reduce((s, o) => s + (Number(o.rate_calculated) || 0), 0);
+  const completedCount = completedList.length;
+  const pendingCount = list.filter((o) => o.status === 'Pendiente').length;
 
   return {
     stats: {

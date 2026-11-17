@@ -28,6 +28,8 @@ export default function HistoricalOrderCard({
   );
 
   const photos = order.photos || [];
+  const workPhotos = photos.filter((p) => p.category !== 'Constancia No Realizado');
+  const displayPhotos = workPhotos.length > 0 ? workPhotos : photos;
   const cancelCount = Number(order.cancel_photos_count) || 0;
   const workCount = Number(order.work_photos_count) || 0;
   const totalCount = Number(order.photos_count) || (photos ? photos.length : 0);
@@ -67,14 +69,18 @@ export default function HistoricalOrderCard({
 
         {/* Medallón de Tarifa Profesional */}
         <div 
-          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border shadow-sm select-none shrink-0 ${
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onEditOrder) onEditOrder(order);
+          }}
+          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border shadow-sm select-none shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition ${
             isCancelled
               ? 'bg-slate-900/60 text-slate-500 border-white/5 line-through'
               : isCompleted
               ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-emerald-500/10'
               : 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-amber-500/10'
           }`}
-          title={`Tarifa del trabajo: $${order.rate_calculated || 100} USD`}
+          title={`Tarifa del trabajo: $${order.rate_calculated || 100} USD (Toca para editar)`}
         >
           <span className={`h-3.5 w-3.5 rounded-full flex items-center justify-center text-[9px] font-black ${
             isCancelled ? 'bg-slate-800 text-slate-500' : 'bg-emerald-500 text-slate-950'
@@ -218,10 +224,10 @@ export default function HistoricalOrderCard({
             </div>
           )}
         </div>
-      ) : photos.length > 0 ? (
+      ) : displayPhotos.length > 0 ? (
         /* Trabajo Realizado: Tira horizontal de fotos con ícono circular estampado con el número de ítem */
         <div className="h-12 sm:h-14 w-full flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none shrink-0">
-          {photos.map((p, pIdx) => {
+          {displayPhotos.map((p, pIdx) => {
             const src = p.photo_data || (p.filename ? `/uploads/${p.filename}` : '');
             return (
               <div

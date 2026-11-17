@@ -1,20 +1,24 @@
 import * as XLSX from 'xlsx';
-import { getOrders, getWeeklySummary, getSettings } from './localDb';
+import { getOrders, getWeeklySummary, getSettings, getExpenses } from './localDb';
+import { formatAdjustmentReason } from '../utils/adjustmentUtils';
 
 export async function exportOrdersToExcel(filename = null) {
   let orders = [];
   let summary = null;
   let settings = {};
+  let expenses = [];
 
   try {
-    const [ordRes, sumRes, setRes] = await Promise.all([
+    const [ordRes, sumRes, setRes, expRes] = await Promise.all([
       fetch('/api/orders'),
       fetch('/api/weekly-summary'),
-      fetch('/api/settings')
+      fetch('/api/settings'),
+      fetch('/api/expenses')
     ]);
     if (ordRes.ok) orders = await ordRes.json();
     if (sumRes.ok) summary = await sumRes.json();
     if (setRes.ok) settings = await setRes.json();
+    if (expRes.ok) expenses = await expRes.json();
   } catch (err) {
     console.warn('Backend fetch for Excel export failed, falling back to localDb:', err);
   }
@@ -29,6 +33,9 @@ export async function exportOrdersToExcel(filename = null) {
   if (!settings || Object.keys(settings).length === 0) {
     settings = await getSettings();
   }
+  if (!expenses || expenses.length === 0) {
+    expenses = await getExpenses();
+  }
 
   // 1. Prepare Orders Sheet Data
   const rows = orders.map((o) => {
@@ -38,15 +45,16 @@ export async function exportOrdersToExcel(filename = null) {
       'Técnico': o.tech_id || settings.tech_default || 'Javier (P0G1)',
       'Dirección': o.address,
       'Ciudad': o.city || '',
+      'Código Postal': o.zip_code || '',
       'Teléfono': o.phone || '',
       'Metraje (ft)': o.drop_footage || 0,
       'Tipo de Cable': o.cable_type || 'RG-6',
       'Perforación (Bore)': o.bore_type || 'N',
       'Línea Temporal (Temp)': o.is_temp ? 'SÍ' : 'NO',
       'Obstáculos': o.obstacles || 'N',
-      'Tarifa Calculada ($)': (o.rate_calculated || 0).toFixed(2),
-      'Ajuste Supervisor ($)': (o.manual_adjustment || 0).toFixed(2),
-      'Motivo Ajuste': o.adjustment_reason || '',
+      'Tarifa Calculada ($)': (Number(o.rate_calculated) || 0).toFixed(2),
+      'Ajuste Supervisor ($)': (Number(o.manual_adjustment) || 0).toFixed(2),
+      'Motivo Ajuste': formatAdjustmentReason(o.adjustment_reason) || '',
       'Estado del Trabajo': o.status || 'Pendiente',
       'Motivo Cancelación': o.cancel_reason || '',
       'Estado de Cobro': o.payment_status || 'Pendiente',
@@ -55,33 +63,66 @@ export async function exportOrdersToExcel(filename = null) {
     };
   });
 
-  // 2. Prepare Summary Sheet Data
-  const kpis = summary.summary;
+  // 2. Prepare Weekly Closures Sheet Data
+  const weeksList = Array.isArray(summary?.weeks) ? summary.weeks : [];
+  const weekRows = weeksList.map((w) => ({
+    'Semana': w.displayLabel || w.key,
+    'Fecha Inicio': w.startDate,
+    'Fecha Cierre': w.endDate,
+    'Órdenes Totales': w.totalJobs || 0,
+    'Completados': w.completedCount || 0,
+    'Pendientes': w.pendingJobsCount || 0,
+    'No Realizados': w.cancelledCount || 0,
+    'Metraje Instalado (ft)': Math.round(w.totalFootage || 0),
+    'Total Producido ($)': (Number(w.totalEarnings) || 0).toFixed(2),
+    'Estado de Cobro': w.isPaid ? 'COBRADO' : 'PENDIENTE',
+    'Comprobante Adjunto': (w.receipt_photo || w.receipt_filename) ? 'SÍ' : 'NO'
+  }));
+
+  // 3. Prepare Monthly Expenses Sheet Data
+  const totalExpensesAll = (expenses || []).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const expenseRows = (expenses || []).map((e) => ({
+    'Fecha Gasto': e.expense_date || '',
+    'Mes Contable': e.month_key || (e.expense_date ? e.expense_date.slice(0, 7) : ''),
+    'Categoría': e.category || 'Combustible',
+    'Descripción': e.description || '',
+    'Monto ($ USD)': (Number(e.amount) || 0).toFixed(2),
+    'Ticket Adjunto': (e.receipt_photo || e.receipt_data) ? 'SÍ' : 'NO'
+  }));
+
+  // 4. Prepare Summary Sheet Data
+  const kpis = summary?.summary || {};
+  const totalPaid = Number(kpis.totalPaid) || 0;
+  const netAfterExpenses = totalPaid - totalExpensesAll;
+
   const summaryRows = [
     { 'Métrica Contable': 'Técnico Responsable', 'Valor': settings.tech_default || 'Javier (P0G1)' },
     { 'Métrica Contable': 'Fecha de Exportación', 'Valor': new Date().toLocaleDateString() },
-    { 'Métrica Contable': 'Tarifa Base Configurada', 'Valor': `$${settings.base_rate || '100.00'}` },
-    { 'Métrica Contable': 'Bono Driveway Bore (DW)', 'Valor': `+$${settings.bore_dw_bonus || '30.00'}` },
-    { 'Métrica Contable': 'Trabajos Totales Registrados', 'Valor': kpis.totalOrdersCount },
-    { 'Métrica Contable': 'Trabajos Completados', 'Valor': kpis.totalCompletedCount },
-    { 'Métrica Contable': 'Metraje Total Instalado', 'Valor': `${kpis.totalFeetAll.toLocaleString()} ft` },
-    { 'Métrica Contable': 'Producción Total ($)', 'Valor': `$${(kpis.totalAllEarnings || 0).toFixed(2)}` },
-    { 'Métrica Contable': 'Total Cobrado ($)', 'Valor': `$${(kpis.totalPaid || 0).toFixed(2)}` },
-    { 'Métrica Contable': 'Total Pendiente por Cobrar ($)', 'Valor': `$${(kpis.totalPending || 0).toFixed(2)}` }
+    { 'Métrica Contable': 'Tarifa Base Configurada', 'Valor': `$${Number(settings.base_rate || 100).toFixed(2)}` },
+    { 'Métrica Contable': 'Bono Driveway Bore (DW)', 'Valor': `+$${Number(settings.bore_dw_bonus || 30).toFixed(2)}` },
+    { 'Métrica Contable': `Bono Metraje Largo (>${settings.footage_base || 300} ft)`, 'Valor': `+$${Number(settings.footage_extra_rate || 25).toFixed(2)} c/100ft` },
+    { 'Métrica Contable': 'Trabajos Totales Registrados', 'Valor': kpis.totalOrdersCount || 0 },
+    { 'Métrica Contable': 'Trabajos Completados', 'Valor': kpis.totalCompletedCount || 0 },
+    { 'Métrica Contable': 'Metraje Total Instalado', 'Valor': `${(Number(kpis.totalFeetAll) || 0).toLocaleString()} ft` },
+    { 'Métrica Contable': 'Producción Total ($)', 'Valor': `$${(Number(kpis.totalAllEarnings) || 0).toFixed(2)}` },
+    { 'Métrica Contable': 'Total Cobrado ($)', 'Valor': `$${totalPaid.toFixed(2)}` },
+    { 'Métrica Contable': 'Total Pendiente por Cobrar ($)', 'Valor': `$${(Number(kpis.totalPending) || 0).toFixed(2)}` },
+    { 'Métrica Contable': 'Total Gastos Registrados ($)', 'Valor': `-$${totalExpensesAll.toFixed(2)}` },
+    { 'Métrica Contable': 'Ganancia Neta Real (Cobrado - Gastos)', 'Valor': `$${netAfterExpenses.toFixed(2)}` }
   ];
 
-  // 3. Create Workbook
+  // 5. Create Workbook
   const wb = XLSX.utils.book_new();
 
   // Create Works Sheet
   const wsOrders = XLSX.utils.json_to_sheet(rows);
-  // Auto-fit column widths
-  const colWidths = [
+  wsOrders['!cols'] = [
     { wch: 10 }, // Job ID
     { wch: 12 }, // Fecha
     { wch: 16 }, // Técnico
     { wch: 28 }, // Dirección
     { wch: 14 }, // Ciudad
+    { wch: 12 }, // Código Postal
     { wch: 14 }, // Teléfono
     { wch: 12 }, // Metraje
     { wch: 12 }, // Tipo Cable
@@ -90,22 +131,36 @@ export async function exportOrdersToExcel(filename = null) {
     { wch: 14 }, // Obstáculos
     { wch: 16 }, // Tarifa
     { wch: 16 }, // Ajuste
-    { wch: 20 }, // Motivo Ajuste
+    { wch: 26 }, // Motivo Ajuste
     { wch: 16 }, // Estado Trabajo
-    { wch: 20 }, // Motivo Cancelación
+    { wch: 22 }, // Motivo Cancelación
     { wch: 16 }, // Estado Cobro
     { wch: 16 }, // Reportado WhatsApp
     { wch: 30 }  // Notas
   ];
-  wsOrders['!cols'] = colWidths;
 
   const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
-  wsSummary['!cols'] = [{ wch: 30 }, { wch: 24 }];
+  wsSummary['!cols'] = [{ wch: 36 }, { wch: 24 }];
 
   XLSX.utils.book_append_sheet(wb, wsOrders, 'Trabajos');
+  if (weekRows.length > 0) {
+    const wsWeeks = XLSX.utils.json_to_sheet(weekRows);
+    wsWeeks['!cols'] = [
+      { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 15 }, { wch: 14 },
+      { wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 18 }, { wch: 16 }, { wch: 18 }
+    ];
+    XLSX.utils.book_append_sheet(wb, wsWeeks, 'Cierres Semanales');
+  }
+  if (expenseRows.length > 0) {
+    const wsExpenses = XLSX.utils.json_to_sheet(expenseRows);
+    wsExpenses['!cols'] = [
+      { wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 28 }, { wch: 16 }, { wch: 16 }
+    ];
+    XLSX.utils.book_append_sheet(wb, wsExpenses, 'Gastos Mensuales');
+  }
   XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen Contable');
 
-  // 4. Trigger download
+  // 6. Trigger download
   const dateStr = new Date().toISOString().split('T')[0];
   const finalName = filename || `Contabilidad_Xfinity_${dateStr}.xlsx`;
   XLSX.writeFile(wb, finalName);

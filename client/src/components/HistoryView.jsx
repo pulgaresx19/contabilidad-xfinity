@@ -224,7 +224,7 @@ export default function HistoryView({
   const totalAllEarnings = yearOrders.filter(o => o.status === 'Completado').reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
   const totalPaid = yearOrders.filter(o => o.status === 'Completado' && o.payment_status === 'Cobrado').reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
   const totalPending = yearOrders.filter(o => o.status === 'Completado' && o.payment_status !== 'Cobrado').reduce((sum, o) => sum + (parseFloat(o.rate_calculated) || 0), 0);
-  const totalFeetAll = yearOrders.filter(o => o.status !== 'No Realizado').reduce((sum, o) => sum + (parseFloat(o.drop_footage) || 0), 0);
+  const totalFeetAll = yearOrders.filter(o => o.status === 'Completado').reduce((sum, o) => sum + (parseFloat(o.drop_footage) || 0), 0);
   const completedOrdersCount = yearOrders.filter(o => o.status === 'Completado').length;
 
   // Formatting helpers for clean cockpit numbers
@@ -251,8 +251,8 @@ export default function HistoryView({
     }
   }, [summaryData]);
 
-  // Filtered list of all historical orders with smart cable search (RG6 / RG11)
-  const filteredAllOrders = orders.filter((o) => {
+  // Filtered list of historical orders for the selected year with smart cable search (RG6 / RG11)
+  const filteredAllOrders = yearOrders.filter((o) => {
     const q = orderSearch.toLowerCase().trim();
     if (q) {
       const cleanQ = q.replace(/[^a-z0-9]/g, '');
@@ -314,12 +314,6 @@ export default function HistoryView({
       });
 
       if (res.ok) {
-        try {
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('receipt_' + w.key);
-            localStorage.removeItem('receipt_fn_' + w.key);
-          }
-        } catch (e) {}
         if (selectedWeekModal && selectedWeekModal.key === w.key) {
           setSelectedWeekModal(null);
         }
@@ -462,7 +456,7 @@ ${jobLines}
   };
 
   return (
-    <div className="space-y-4 max-w-md sm:max-w-lg mx-auto w-full pb-8">
+    <div className="space-y-4 max-w-md sm:max-w-lg mx-auto w-full pb-20">
       {/* 1. SELECTOR SUPERIOR DE 4 SUBPESTAÑAS (COCKPIT HIGH-TECH STYLE) */}
       <div className="bg-[#0f1722]/95 backdrop-blur-xl border border-white/10 p-1.5 rounded-2xl grid grid-cols-4 gap-1.5 shadow-xl">
         {[
@@ -657,7 +651,7 @@ ${jobLines}
                   : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent font-medium'
               }`}
             >
-              Todos ({weeks.length})
+              Todos ({yearWeeks.length})
             </button>
             <button
               type="button"
@@ -903,7 +897,7 @@ ${jobLines}
                   <span className="font-bold text-[11px]">Trabajos Completados</span>
                 </div>
                 <span className="font-black text-cyan-300 font-mono text-sm">
-                  {completedOrdersCount} de {orders.length}
+                  {completedOrdersCount} de {yearOrders.length}
                 </span>
               </div>
             </div>
@@ -942,7 +936,7 @@ ${jobLines}
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              Todos ({orders.length})
+              Todos ({yearOrders.length})
             </button>
             <button
               type="button"
@@ -953,7 +947,7 @@ ${jobLines}
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              Pendientes ({orders.filter(o => o.status === 'Pendiente').length})
+              Pendientes ({yearOrders.filter(o => o.status === 'Pendiente').length})
             </button>
             <button
               type="button"
@@ -964,7 +958,7 @@ ${jobLines}
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              Hechos ({orders.filter(o => o.status === 'Completado').length})
+              Hechos ({yearOrders.filter(o => o.status === 'Completado').length})
             </button>
             <button
               type="button"
@@ -975,7 +969,7 @@ ${jobLines}
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              Cancelados ({orders.filter(o => o.status === 'No Realizado').length})
+              Cancelados ({yearOrders.filter(o => o.status === 'No Realizado').length})
             </button>
           </div>
 
@@ -1037,13 +1031,13 @@ ${jobLines}
             >
               
               {/* Header del Modal */}
-              <div className="px-4 sm:px-5 py-3 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white dark:bg-slate-900/70 shrink-0">
+              <div className="px-4 sm:px-5 py-3 border-b border-white/10 flex items-center justify-between bg-slate-900/80 shrink-0">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white font-bold shrink-0">
                     <FileText className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider font-mono truncate">
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono truncate">
                       Semana {selectedWeekModal.displayLabel || selectedWeekModal.key}
                     </h3>
                     <p className="text-[11px] text-cyan-400/90 font-mono font-medium flex items-center gap-1.5 truncate">
@@ -1117,7 +1111,7 @@ ${jobLines}
                   <button
                     type="button"
                     onClick={() => setSelectedWeekModal(null)}
-                    className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+                    className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer"
                     title="Cerrar ventana"
                   >
                     <X className="w-4 h-4" />

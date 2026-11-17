@@ -1248,6 +1248,7 @@ app.get('/api/weekly-summary', (req, res) => {
       w.totalJobs++;
       if (order.status === 'Completado') {
         w.completedCount++;
+        w.totalFootage += (order.drop_footage || 0);
         const val = order.rate_calculated || 0;
         w.totalEarnings += val;
         if (order.payment_status === 'Cobrado') {
@@ -1261,9 +1262,6 @@ app.get('/api/weekly-summary', (req, res) => {
         w.pendingJobsCount++;
       }
 
-      if (order.status !== 'No Realizado') {
-        w.totalFootage += (order.drop_footage || 0);
-      }
       if (order.cable_type === 'RG-11') w.rg11Count++;
       if (order.cable_type === 'RG-6') w.rg6Count++;
       if (order.bore_type && order.bore_type !== 'N') w.boresCount++;
@@ -1288,8 +1286,10 @@ app.get('/api/weekly-summary', (req, res) => {
 
     // Determine week payment status and sort chronologically descending
     const weeks = Object.values(weeksMap).map(w => {
+      const completedOrders = w.orders.filter(o => o.status === 'Completado');
       const activeOrders = w.orders.filter(o => o.status !== 'No Realizado' && o.status !== 'Cancelado');
-      const isPaid = activeOrders.length > 0 && activeOrders.every(o => o.payment_status === 'Cobrado');
+      const payableOrders = completedOrders.length > 0 ? completedOrders : activeOrders;
+      const isPaid = payableOrders.length > 0 && payableOrders.every(o => o.payment_status === 'Cobrado');
       const rec = receiptsMap[w.key] || {};
       return {
         ...w,
@@ -1311,6 +1311,7 @@ app.get('/api/weekly-summary', (req, res) => {
     for (const o of allOrders) {
       if (o.status === 'Completado') {
         totalCompletedCount++;
+        totalFeetAll += o.drop_footage || 0;
         const val = o.rate_calculated || 0;
         totalAllEarnings += val;
         if (o.payment_status === 'Cobrado') {
@@ -1318,9 +1319,6 @@ app.get('/api/weekly-summary', (req, res) => {
         } else {
           totalPending += val;
         }
-      }
-      if (o.status !== 'No Realizado') {
-        totalFeetAll += o.drop_footage || 0;
       }
     }
 
@@ -1359,15 +1357,19 @@ app.post('/api/weeks/:key/status', (req, res) => {
       }
     }
 
-    if (activeOrders.length > 0) {
-      const stmt = db.prepare('UPDATE work_orders SET status = ?, payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    const completedOrders = activeOrders.filter(o => o.status === 'Completado');
+    const targetOrders = newStatus === 'Cobrado'
+      ? (completedOrders.length > 0 ? completedOrders : activeOrders)
+      : activeOrders;
+
+    if (targetOrders.length > 0) {
+      const stmt = db.prepare('UPDATE work_orders SET payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
       const updateMany = db.transaction((orders, st) => {
         for (const o of orders) {
-          const finalStatus = (st === 'Cobrado' && o.status !== 'Completado') ? 'Completado' : o.status;
-          stmt.run(finalStatus, st, o.id);
+          stmt.run(st, o.id);
         }
       });
-      updateMany(activeOrders, newStatus);
+      updateMany(targetOrders, newStatus);
     }
 
     // Save or update receipt photo/file if provided
@@ -1552,6 +1554,7 @@ app.get('/api/monthly-summary', (req, res) => {
       w.totalJobs++;
       if (order.status === 'Completado') {
         w.completedCount++;
+        w.totalFootage += (order.drop_footage || 0);
         const val = order.rate_calculated || 0;
         w.totalEarnings += val;
         if (order.payment_status === 'Cobrado') {
@@ -1565,9 +1568,6 @@ app.get('/api/monthly-summary', (req, res) => {
         w.pendingJobsCount++;
       }
 
-      if (order.status !== 'No Realizado') {
-        w.totalFootage += (order.drop_footage || 0);
-      }
       if (order.cable_type === 'RG-11') w.rg11Count++;
       if (order.cable_type === 'RG-6') w.rg6Count++;
       if (order.bore_type && order.bore_type !== 'N') w.boresCount++;
@@ -1575,25 +1575,54 @@ app.get('/api/monthly-summary', (req, res) => {
       w.orders.push(order);
     }
 
-    // Look up weekly receipts
+    // Look up weekly receipts (including filename and AI audit summary)
     let receiptsMap = {};
     try {
-      const allR = db.prepare('SELECT week_key, receipt_photo FROM week_receipts').all();
+      const allR = db.prepare('SELECT week_key, receipt_photo, receipt_filename, audit_summary FROM week_receipts').all();
       for (const r of allR) {
-        if (r && r.week_key) receiptsMap[r.week_key] = r.receipt_photo;
+        if (r && r.week_key) {
+          receiptsMap[r.week_key] = {
+            photo: r.receipt_photo,
+            filename: r.receipt_filename,
+            audit: r.audit_summary
+          };
+        }
       }
     } catch (e) {}
 
     const allWeeks = Object.values(weeksMap).map(w => {
       const completedList = w.orders.filter(o => o.status === 'Completado');
-      const isPaid = completedList.length > 0 && completedList.every(o => o.payment_status === 'Cobrado');
+      const activeList = w.orders.filter(o => o.status !== 'No Realizado' && o.status !== 'Cancelado');
+      const payableList = completedList.length > 0 ? completedList : activeList;
+      const isPaid = payableList.length > 0 && payableList.every(o => o.payment_status === 'Cobrado');
+      const rec = receiptsMap[w.key] || {};
       return {
         ...w,
         isPaid,
         payment_status: isPaid ? 'Cobrado' : 'Pendiente',
-        receipt_photo: receiptsMap[w.key] || null
+        receipt_photo: rec.photo || null,
+        receipt_filename: rec.filename || null,
+        audit_summary: rec.audit || null
       };
     }).sort((a, b) => b.startDate.localeCompare(a.startDate));
+
+    // Assign each week to a single canonical month so straddling weeks are NEVER double-counted across two months
+    const getCanonicalWeekMonth = (w) => {
+      const startMonth = (w.startDate || '').substring(0, 7);
+      const endMonth = (w.endDate || '').substring(0, 7);
+      if (startMonth === endMonth) return endMonth;
+      const hasOrdersInEndMonth = (w.orders || []).some(o => {
+        const od = parseDateParts(o.work_date);
+        const om = `${od.getFullYear()}-${String(od.getMonth() + 1).padStart(2, '0')}`;
+        return om === endMonth;
+      });
+      return hasOrdersInEndMonth ? endMonth : startMonth;
+    };
+
+    allWeeks.forEach(w => {
+      const cMonth = getCanonicalWeekMonth(w);
+      if (cMonth) monthsSet.add(cMonth);
+    });
 
     // Get months from expenses
     const expenseMonths = db.prepare('SELECT DISTINCT month_key FROM monthly_expenses').all();
@@ -1608,20 +1637,7 @@ app.get('/api/monthly-summary', (req, res) => {
       targetMonth = currentMonthKey;
     }
 
-    // Filter weeks that completed in this month (endDate in targetMonth) OR has orders in targetMonth
-    const monthWeeks = allWeeks.filter(w => {
-      const endMonth = w.endDate.substring(0, 7);
-      if (endMonth === targetMonth) return true;
-      const startMonth = w.startDate.substring(0, 7);
-      if (startMonth === targetMonth) {
-        return w.orders.some(o => {
-          const od = parseDateParts(o.work_date);
-          const om = `${od.getFullYear()}-${String(od.getMonth() + 1).padStart(2, '0')}`;
-          return om === targetMonth;
-        });
-      }
-      return false;
-    });
+    const monthWeeks = allWeeks.filter(w => getCanonicalWeekMonth(w) === targetMonth);
 
     let totalMonthEarnings = 0;
     let totalMonthPaid = 0;
@@ -1815,6 +1831,10 @@ app.get('/api/backup/export', (req, res) => {
     const photos = db.prepare('SELECT * FROM job_photos ORDER BY id ASC').all();
     const expenses = db.prepare('SELECT * FROM monthly_expenses ORDER BY expense_date ASC, id ASC').all();
     const sheets = db.prepare('SELECT * FROM dispatch_sheets ORDER BY id ASC').all();
+    let week_receipts = [];
+    try {
+      week_receipts = db.prepare('SELECT * FROM week_receipts').all();
+    } catch (e) {}
 
     const backup = {
       version: 1,
@@ -1825,13 +1845,15 @@ app.get('/api/backup/export', (req, res) => {
         photos: photos.length,
         expenses: expenses.length,
         sheets: sheets.length,
-        settings: settings.length
+        settings: settings.length,
+        week_receipts: week_receipts.length
       },
       settings,
       orders,
       photos,
       expenses,
-      sheets
+      sheets,
+      week_receipts
     };
 
     res.set('Content-Disposition', `attachment; filename="Respaldo_Contabilidad_Xfinity_${new Date().toISOString().split('T')[0]}.json"`);
@@ -1982,6 +2004,28 @@ app.post('/api/backup/restore', (req, res) => {
           );
         }
       }
+
+      // 5. Week Receipts (Comprobantes de Cierre Semanal y PDFs)
+      if (Array.isArray(data.week_receipts) && data.week_receipts.length > 0) {
+        try {
+          db.prepare('DELETE FROM week_receipts').run();
+          const stmtReceipt = db.prepare(`
+            INSERT OR REPLACE INTO week_receipts (week_key, receipt_photo, receipt_filename, audit_summary, updated_at)
+            VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+          `);
+          for (const r of data.week_receipts) {
+            if (r && r.week_key) {
+              stmtReceipt.run(
+                r.week_key,
+                r.receipt_photo || null,
+                r.receipt_filename || null,
+                r.audit_summary ? (typeof r.audit_summary === 'string' ? r.audit_summary : JSON.stringify(r.audit_summary)) : null,
+                r.updated_at || null
+              );
+            }
+          }
+        } catch (e) {}
+      }
     });
 
     restoreTransaction(payload);
@@ -1999,6 +2043,7 @@ app.post('/api/backup/clear', (req, res) => {
       db.prepare('DELETE FROM work_orders').run();
       db.prepare('DELETE FROM monthly_expenses').run();
       db.prepare('DELETE FROM dispatch_sheets').run();
+      try { db.prepare('DELETE FROM week_receipts').run(); } catch (e) {}
     });
     clearTransaction();
     res.json({ success: true });

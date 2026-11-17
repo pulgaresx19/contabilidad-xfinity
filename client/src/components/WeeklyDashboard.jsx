@@ -71,36 +71,35 @@ ${jobList}`;
           </div>
         </div>
 
-        {/* KPI 2: En Fondo de Retención (3 Semanas) */}
-        <div className="bg-slate-900 border border-blue-900/40 rounded-2xl p-5 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl"></div>
-          <div className="flex items-center justify-between text-blue-300 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">En Fondo (3 Semanas)</span>
-            <div className="p-2 bg-blue-500/10 rounded-xl text-blue-400">
+        {/* KPI 2: Pendiente por Cobrar */}
+        <div className="bg-slate-900 border border-amber-900/40 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between text-amber-300 mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider">Pendiente por Cobro</span>
+            <div className="p-2 bg-amber-500/10 rounded-xl text-amber-400">
               <Clock className="h-5 w-5" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-blue-400 font-mono">
-            ${summary.totalInHoldback.toFixed(2)}
+          <div className="text-2xl font-extrabold text-amber-400 font-mono">
+            ${Number(summary?.totalPending || 0).toFixed(2)}
           </div>
           <div className="text-xs text-slate-400 mt-1">
-            Dinero retenido en ciclo de espera
+            Semanas pendientes de liquidar
           </div>
         </div>
 
-        {/* KPI 3: Listo para Cobro Esta Semana */}
-        <div className="bg-slate-900 border border-amber-900/40 rounded-2xl p-5 shadow-sm">
-          <div className="flex items-center justify-between text-amber-300 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Listo para Cobro</span>
-            <div className="p-2 bg-amber-500/10 rounded-xl text-amber-400">
-              <DollarSign className="h-5 w-5" />
+        {/* KPI 3: Metraje Total */}
+        <div className="bg-slate-900 border border-blue-900/40 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between text-blue-300 mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider">Metraje Instalado</span>
+            <div className="p-2 bg-blue-500/10 rounded-xl text-blue-400">
+              <Ruler className="h-5 w-5" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-amber-400 font-mono">
-            ${summary.totalReadyForPayout.toFixed(2)}
+          <div className="text-2xl font-extrabold text-blue-400 font-mono">
+            {Number(summary?.totalFeetAll || 0).toLocaleString()} ft
           </div>
           <div className="text-xs text-slate-400 mt-1">
-            Cumplió las 3 semanas de retención
+            Total de pies en órdenes completadas
           </div>
         </div>
 
@@ -113,7 +112,7 @@ ${jobList}`;
             </div>
           </div>
           <div className="text-2xl font-extrabold text-emerald-400 font-mono">
-            ${summary.totalPaid.toFixed(2)}
+            ${Number(summary?.totalPaid || 0).toFixed(2)}
           </div>
           <div className="text-xs text-slate-400 mt-1">
             Pagos conciliados y liquidados
@@ -232,19 +231,14 @@ ${jobList}`;
                 {/* Status breakdown for this week */}
                 <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
                   <span className="text-slate-400">Estado de órdenes en esta semana:</span>
-                  {w.statusCount['En Fondo (3 Sem)'] > 0 && (
-                    <span className="bg-blue-500/10 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-md">
-                      {w.statusCount['En Fondo (3 Sem)']} en fondo
-                    </span>
-                  )}
-                  {w.statusCount['Listo para Cobro'] > 0 && (
-                    <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-md">
-                      {w.statusCount['Listo para Cobro']} listas para cobro
-                    </span>
-                  )}
-                  {w.statusCount['Cobrado'] > 0 && (
+                  {(w.completedCount || 0) > 0 && (
                     <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md">
-                      {w.statusCount['Cobrado']} cobradas
+                      {w.completedCount} completadas
+                    </span>
+                  )}
+                  {(w.pendingJobsCount || 0) > 0 && (
+                    <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                      {w.pendingJobsCount} pendientes
                     </span>
                   )}
                 </div>

@@ -726,6 +726,7 @@ export async function getWeeklySummary(backendReceipts = {}) {
     w.totalJobs++;
     if (order.status === 'Completado') {
       w.completedCount++;
+      w.totalFootage += order.drop_footage || 0;
       const val = order.rate_calculated || 0;
       w.totalEarnings += val;
       if (order.payment_status === 'Cobrado') {
@@ -739,9 +740,6 @@ export async function getWeeklySummary(backendReceipts = {}) {
       w.pendingJobsCount++;
     }
 
-    if (order.status !== 'No Realizado') {
-      w.totalFootage += order.drop_footage || 0;
-    }
     if (order.cable_type === 'RG-11') w.rg11Count++;
     if (order.cable_type === 'RG-6') w.rg6Count++;
     if (order.bore_type && order.bore_type !== 'N') w.boresCount++;
@@ -818,8 +816,10 @@ export async function getWeeklySummary(backendReceipts = {}) {
 
   const weeks = Object.values(weeksMap)
     .map((w) => {
+      const completedOrders = w.orders.filter((o) => o.status === 'Completado');
       const activeOrders = w.orders.filter((o) => o.status !== 'No Realizado' && o.status !== 'Cancelado');
-      const isPaid = activeOrders.length > 0 && activeOrders.every((o) => o.payment_status === 'Cobrado');
+      const payableOrders = completedOrders.length > 0 ? completedOrders : activeOrders;
+      const isPaid = payableOrders.length > 0 && payableOrders.every((o) => o.payment_status === 'Cobrado');
       const meta = receiptsMetaMap[w.key] || {};
       return {
         ...w,
@@ -842,6 +842,7 @@ export async function getWeeklySummary(backendReceipts = {}) {
   for (const o of allOrders) {
     if (o.status === 'Completado') {
       totalCompletedCount++;
+      totalFeetAll += o.drop_footage || 0;
       const val = o.rate_calculated || 0;
       totalAllEarnings += val;
       if (o.payment_status === 'Cobrado') {
@@ -849,9 +850,6 @@ export async function getWeeklySummary(backendReceipts = {}) {
       } else {
         totalPending += val;
       }
-    }
-    if (o.status !== 'No Realizado') {
-      totalFeetAll += o.drop_footage || 0;
     }
   }
 
@@ -877,30 +875,30 @@ export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = nu
   if (!targetWeek) return { success: false, message: 'Week not found' };
 
   const targetStatus = paymentStatus === 'Cobrado' ? 'Cobrado' : 'Pendiente';
-  const targetOrders = targetWeek.orders.filter(
+  const completedOrders = targetWeek.orders.filter((o) => o.status === 'Completado');
+  const activeOrders = targetWeek.orders.filter(
     (o) => o.status !== 'No Realizado' && o.status !== 'Cancelado'
   );
+  // Solo marcar como Cobrado las órdenes ya Completadas (evita convertir órdenes Pendientes sin fotos en Completadas)
+  const targetOrders = targetStatus === 'Cobrado'
+    ? (completedOrders.length > 0 ? completedOrders : activeOrders)
+    : activeOrders;
 
   const tx = db.transaction('work_orders', 'readwrite');
   const store = tx.objectStore('work_orders');
 
   for (const order of targetOrders) {
-    if (targetStatus === 'Cobrado' && order.status !== 'Completado') {
-      order.status = 'Completado';
-    }
     order.payment_status = targetStatus;
     order.updated_at = new Date().toISOString();
     store.put(order);
   }
 
-  // Save or clear receipt in IndexedDB week_receipts store
+  // Save or update receipt in IndexedDB week_receipts store (preserve existing receipt even if reverted to Pendiente)
   try {
     if (db.objectStoreNames.contains('week_receipts')) {
       const rTx = db.transaction('week_receipts', 'readwrite');
       const rStore = rTx.objectStore('week_receipts');
-      if (targetStatus === 'Pendiente') {
-        rStore.delete(weekKey);
-      } else if (receiptPhoto || receiptFilename || auditSummary) {
+      if (receiptPhoto || receiptFilename || auditSummary) {
         rStore.put({
           week_key: weekKey,
           receipt_photo: receiptPhoto || targetWeek.receipt_photo || null,
@@ -983,10 +981,18 @@ export async function getMonthlySummary(monthParam) {
   const weeklySummary = await getWeeklySummary();
   const allWeeks = weeklySummary.weeks;
 
-  // Filter weeks belonging to selectedMonth (where startDate or endDate falls in that month)
-  const monthWeeks = allWeeks.filter((w) => {
-    return w.startDate.startsWith(selectedMonth) || w.endDate.startsWith(selectedMonth);
-  });
+  // Assign each week to a single canonical month so straddling weeks are NEVER double-counted across two months
+  const getCanonicalWeekMonth = (w) => {
+    const startMonth = (w.startDate || '').substring(0, 7);
+    const endMonth = (w.endDate || '').substring(0, 7);
+    if (startMonth === endMonth) return endMonth;
+    const hasOrdersInEndMonth = (w.orders || []).some((o) =>
+      normalizeDateStr(o.work_date).startsWith(endMonth)
+    );
+    return hasOrdersInEndMonth ? endMonth : startMonth;
+  };
+
+  const monthWeeks = allWeeks.filter((w) => getCanonicalWeekMonth(w) === selectedMonth);
 
   let totalMonthEarnings = 0;
   let totalMonthPaid = 0;
@@ -1020,8 +1026,8 @@ export async function getMonthlySummary(monthParam) {
   const monthsSet = new Set();
   monthsSet.add(currentMonthKey);
   allWeeks.forEach((w) => {
-    monthsSet.add(w.startDate.substring(0, 7));
-    monthsSet.add(w.endDate.substring(0, 7));
+    const cMonth = getCanonicalWeekMonth(w);
+    if (cMonth) monthsSet.add(cMonth);
   });
   const allExpenses = await getExpenses();
   allExpenses.forEach((e) => {

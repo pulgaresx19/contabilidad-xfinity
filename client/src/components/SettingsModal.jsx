@@ -95,6 +95,9 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
       if (res.ok) {
         setSaved(true);
         if (onSettingsSaved) onSettingsSaved(settings);
+        try {
+          window.dispatchEvent(new CustomEvent('xfinity-settings-updated', { detail: settings }));
+        } catch (_) {}
         setTimeout(() => {
           setSaved(false);
           onClose();
@@ -123,17 +126,17 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
         className="bg-[#101722] border border-white/10 rounded-3xl w-full max-w-sm sm:max-w-md h-[80dvh] sm:h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all my-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header Unificado (Estilo Cockpit idéntico a Evidencias y Compartir) */}
-        <div className="px-4 sm:px-5 py-3 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white dark:bg-slate-900/70 shrink-0">
+        {/* Header Unificado (Estilo Cockpit Dark uniforme) */}
+        <div className="px-4 sm:px-5 py-3 border-b border-white/10 flex items-center justify-between bg-slate-900/80 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 shrink-0 shadow-md shadow-cyan-500/20">
               <Settings className="h-4 w-4 stroke-[2.5]" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm font-black text-slate-900 dark:text-white truncate">
+              <h3 className="text-sm font-black text-white truncate">
                 Ajustes & Semanario
               </h3>
-              <p className="text-[10.5px] text-slate-600 dark:text-slate-400 font-semibold truncate">
+              <p className="text-[10.5px] text-slate-400 font-semibold truncate">
                 Tarifas y día de corte semanal de tu compañía
               </p>
             </div>
@@ -142,7 +145,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition cursor-pointer"
+            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
             title="Cerrar ajustes"
           >
             <X className="h-4 w-4" />
@@ -153,8 +156,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
         <div className="p-3.5 sm:p-4 space-y-3 overflow-y-auto flex-1 min-h-0 scrollbar-none">
           {/* 1. TECNICO / IDENTIFICADOR (ARRIBA DE TODO) */}
           <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-1.5 shadow-sm">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-              <ShieldCheck className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
+            <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <ShieldCheck className="h-4 w-4 text-emerald-400" />
               <span>Nombre de Técnico / Identificador</span>
             </label>
             <input
@@ -163,18 +166,18 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
               value={settings.tech_default || ''}
               onChange={(e) => setSettings({ ...settings, tech_default: e.target.value })}
               placeholder="ej. Javier (P0G1)"
-              className="w-full bg-[#0f1722] border border-white/10 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 dark:text-white font-mono focus:outline-none focus:border-cyan-500 transition shadow-inner"
+              className="w-full bg-[#0f1722] border border-white/10 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white font-mono focus:outline-none focus:border-cyan-500 transition shadow-inner"
             />
           </div>
 
           {/* 2. APARIENCIA / TEMA DE LA APLICACIÓN */}
           <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                <Sun className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+              <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                <Sun className="h-4 w-4 text-amber-400" />
                 <span>Tema de la Aplicación</span>
               </span>
-              <span className="text-[10px] text-cyan-600 dark:text-cyan-400 font-bold bg-cyan-50 dark:bg-cyan-950/60 px-2 py-0.5 rounded-full border border-cyan-200 dark:border-cyan-800/40">
+              <span className="text-[10px] text-cyan-400 font-bold bg-cyan-950/60 px-2 py-0.5 rounded-full border border-cyan-800/40">
                 {themeMode === 'light' ? 'Claro' : themeMode === 'dark' ? 'Oscuro' : 'Automático'}
               </span>
             </div>
@@ -185,8 +188,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
                 onClick={() => setThemeMode('light')}
                 className={`py-2 px-2 rounded-xl flex items-center justify-center gap-1.5 border text-xs font-bold transition select-none cursor-pointer ${
                   themeMode === 'light'
-                    ? 'bg-amber-400/20 text-amber-600 dark:text-amber-400 border-amber-500/40 shadow-sm'
-                    : 'bg-[#0f1722] border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-white/20'
+                    ? 'bg-amber-400/20 text-amber-300 border-amber-500/40 shadow-sm'
+                    : 'bg-[#0f1722] border-white/10 text-slate-400 hover:text-white hover:border-white/20'
                 }`}
               >
                 <Sun className="h-3.5 w-3.5" />
@@ -198,8 +201,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
                 onClick={() => setThemeMode('dark')}
                 className={`py-2 px-2 rounded-xl flex items-center justify-center gap-1.5 border text-xs font-bold transition select-none cursor-pointer ${
                   themeMode === 'dark'
-                    ? 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border-cyan-500/40 shadow-sm'
-                    : 'bg-[#0f1722] border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-white/20'
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm'
+                    : 'bg-[#0f1722] border-white/10 text-slate-400 hover:text-white hover:border-white/20'
                 }`}
               >
                 <Moon className="h-3.5 w-3.5" />
@@ -211,8 +214,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
                 onClick={() => setThemeMode('system')}
                 className={`py-2 px-2 rounded-xl flex items-center justify-center gap-1.5 border text-xs font-bold transition select-none cursor-pointer ${
                   themeMode === 'system'
-                    ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-500/40 shadow-sm'
-                    : 'bg-[#0f1722] border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-white/20'
+                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-sm'
+                    : 'bg-[#0f1722] border-white/10 text-slate-400 hover:text-white hover:border-white/20'
                 }`}
               >
                 <Monitor className="h-3.5 w-3.5" />
@@ -224,67 +227,67 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
           {/* 3. TARIFAS DE PAGO (BASE, BORE DW Y METRAJE LARGO) */}
           <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-3 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
                 <DollarSign className="h-4 w-4" />
                 <span>Tarifas por Trabajo</span>
               </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">2 Conceptos</span>
+              <span className="text-[10px] text-slate-400 font-mono">3 Conceptos</span>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
               {/* Tarifa Base */}
               <div className="space-y-1">
-                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                <label className="block text-[11px] font-semibold text-slate-300">
                   Tarifa Base por Trabajo
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2 text-xs text-slate-400 dark:text-slate-500 font-mono">$</span>
+                  <span className="absolute left-3 top-2 text-xs text-slate-400 font-mono">$</span>
                   <input
                     type="number"
                     step="1"
                     required
                     value={settings.base_rate || ''}
                     onChange={(e) => setSettings({ ...settings, base_rate: e.target.value })}
-                    className="w-full bg-[#0f1722] border border-white/10 rounded-xl pl-6 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 font-black font-mono focus:outline-none focus:border-cyan-500 transition shadow-inner"
+                    className="w-full bg-[#0f1722] border border-white/10 rounded-xl pl-6 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm text-emerald-400 font-black font-mono focus:outline-none focus:border-cyan-500 transition shadow-inner"
                   />
                 </div>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 block leading-tight">Por cada orden completada</span>
+                <span className="text-[10px] text-slate-400 block leading-tight">Por cada orden completada</span>
               </div>
 
               {/* Bono Driveway Bore */}
               <div className="space-y-1">
-                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                <label className="block text-[11px] font-semibold text-slate-300">
                   Bono Driveway Bore (DW)
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2 text-xs text-slate-400 dark:text-slate-500 font-mono">+$</span>
+                  <span className="absolute left-3 top-2 text-xs text-slate-400 font-mono">+$</span>
                   <input
                     type="number"
                     step="1"
                     required
                     value={settings.bore_dw_bonus || ''}
                     onChange={(e) => setSettings({ ...settings, bore_dw_bonus: e.target.value })}
-                    className="w-full bg-[#0f1722] border border-white/10 rounded-xl pl-7 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm text-cyan-600 dark:text-cyan-400 font-black font-mono focus:outline-none focus:border-cyan-500 transition shadow-inner"
+                    className="w-full bg-[#0f1722] border border-white/10 rounded-xl pl-7 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm text-cyan-400 font-black font-mono focus:outline-none focus:border-cyan-500 transition shadow-inner"
                   />
                 </div>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 block leading-tight">Extra si requiere perforación</span>
+                <span className="text-[10px] text-slate-400 block leading-tight">Extra si requiere perforación</span>
               </div>
             </div>
 
             {/* Bono por Metraje Largo (>300 ft) */}
-            <div className="pt-2.5 border-t border-slate-200 dark:border-white/10 space-y-2">
+            <div className="pt-2.5 border-t border-white/10 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                <span className="text-[11px] font-bold text-slate-200 whitespace-nowrap">
                   Bono por metraje largo
                 </span>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 font-bold whitespace-nowrap shrink-0">
+                <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800 font-bold whitespace-nowrap shrink-0">
                   +${settings.footage_extra_rate || '25'} cada 100 ft
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5 font-medium">Metraje Base Incluido:</label>
+                  <label className="text-[10px] text-slate-400 block mb-0.5 font-medium">Metraje Base Incluido:</label>
                   <div className="relative">
                     <input
                       type="number"
@@ -292,28 +295,28 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
                       required
                       value={settings.footage_base || '300'}
                       onChange={(e) => setSettings({ ...settings, footage_base: e.target.value })}
-                      className="w-full bg-[#0f1722] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-amber-600 dark:text-amber-300 font-bold font-mono focus:outline-none focus:border-cyan-500 shadow-inner"
+                      className="w-full bg-[#0f1722] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold font-mono focus:outline-none focus:border-cyan-500 shadow-inner"
                     />
-                    <span className="absolute right-2.5 top-1.5 text-[10px] text-slate-400 dark:text-slate-500">ft</span>
+                    <span className="absolute right-2.5 top-1.5 text-[10px] text-slate-400">ft</span>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5 font-medium">Bono cada 100 ft Extra:</label>
+                  <label className="text-[10px] text-slate-400 block mb-0.5 font-medium">Bono cada 100 ft Extra:</label>
                   <div className="relative">
-                    <span className="absolute left-2.5 top-1.5 text-[10px] text-slate-400 dark:text-slate-500 font-mono">+$</span>
+                    <span className="absolute left-2.5 top-1.5 text-[10px] text-slate-400 font-mono">+$</span>
                     <input
                       type="number"
                       step="5"
                       required
                       value={settings.footage_extra_rate || '25.00'}
                       onChange={(e) => setSettings({ ...settings, footage_extra_rate: e.target.value })}
-                      className="w-full bg-[#0f1722] border border-white/10 rounded-xl pl-6 pr-3 py-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-bold font-mono focus:outline-none focus:border-cyan-500 shadow-inner"
+                      className="w-full bg-[#0f1722] border border-white/10 rounded-xl pl-6 pr-3 py-1.5 text-xs text-emerald-400 font-bold font-mono focus:outline-none focus:border-cyan-500 shadow-inner"
                     />
                   </div>
                 </div>
               </div>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+              <p className="text-[10px] text-slate-400 leading-tight">
                 Al pasar de {settings.footage_base || '300'} ft, se pagan +${settings.footage_extra_rate || '25'} automáticamente por cada 100 ft extra.
               </p>
             </div>
@@ -322,11 +325,11 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
           {/* 4. DÍA DE CIERRE SEMANAL (SEMANARIO LINEAL) */}
           <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-3 shadow-sm">
             <div>
-              <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Calendar className="h-4 w-4" />
                 <span>Semanario & Día de Cierre</span>
               </span>
-              <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 leading-snug">
+              <p className="text-[11px] text-slate-300 mt-1 leading-snug">
                 Selecciona el día de la semana en que corta tu compañía. Ese día se tomará lógicamente como el fin de cada cierre semanal:
               </p>
             </div>
@@ -343,11 +346,11 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
                     className={`py-2.5 px-1 rounded-xl text-xs font-black transition flex flex-col items-center justify-center gap-0.5 border select-none cursor-pointer ${
                       isSelected
                         ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md shadow-amber-400/25 scale-105 z-10'
-                        : 'bg-[#0f1722] border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-white/20 active:scale-95'
+                        : 'bg-[#0f1722] border-white/10 text-slate-400 hover:text-white hover:border-white/20 active:scale-95'
                     }`}
                   >
                     <span>{d.short}</span>
-                    <span className={`text-[8px] font-bold uppercase ${isSelected ? 'text-slate-950/90' : 'text-slate-400 dark:text-slate-500'}`}>
+                    <span className={`text-[8px] font-bold uppercase ${isSelected ? 'text-slate-950/90' : 'text-slate-500'}`}>
                       {isSelected ? 'Cierre' : 'Día'}
                     </span>
                   </button>
@@ -358,18 +361,18 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             {/* Previsualización del Ciclo Seleccionado */}
             <div className="p-3 bg-[#0f1722] border border-white/10 rounded-xl text-xs flex items-center justify-between shadow-xs">
               <div className="space-y-0.5">
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold block">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">
                   Cierre de Semana Configurado:
                 </span>
-                <p className="text-sm font-black text-amber-600 dark:text-amber-300 font-mono">
+                <p className="text-sm font-black text-amber-300 font-mono">
                   {currentOption.full}
                 </p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                <p className="text-[10px] text-slate-400 font-mono">
                   Período: {currentOption.cycle}
                 </p>
               </div>
 
-              <div className="p-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-500/20">
+              <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
                 <Check className="h-4 w-4 stroke-[3]" />
               </div>
             </div>

@@ -101,13 +101,15 @@ export function initApiAdapter() {
         if (cleanUrl === '/api/settings') {
           if (method === 'GET') {
             const settings = await localDb.getSettings();
+            try { localStorage.setItem('xfinity_cached_settings', JSON.stringify(settings)); } catch (_) {}
             return jsonResponse(settings);
           } else if (method === 'POST') {
             const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
             const updated = await localDb.updateSettings(body);
+            try { localStorage.setItem('xfinity_cached_settings', JSON.stringify(updated)); } catch (_) {}
             try {
-              if (window.originalFetch) {
-                await window.originalFetch('/api/settings', {
+              if (originalFetch) {
+                await originalFetch('/api/settings', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(body)
@@ -378,11 +380,12 @@ export function initApiAdapter() {
               if (bData && bData.weeks) {
                 for (const w of bData.weeks) {
                   if (w.key && w.receipt_photo) {
-                    backendReceipts[w.key] = w.receipt_photo;
-                    await localDb.saveWeekReceipt(w.key, {
+                    backendReceipts[w.key] = {
                       receipt_photo: w.receipt_photo,
-                      receipt_filename: w.receipt_filename || null
-                    });
+                      receipt_filename: w.receipt_filename || null,
+                      audit_summary: w.audit_summary || null
+                    };
+                    await localDb.saveWeekReceipt(w.key, backendReceipts[w.key]);
                   }
                 }
               }
@@ -392,8 +395,11 @@ export function initApiAdapter() {
           const summary = await localDb.getMonthlySummary(monthParam);
           if (summary && summary.weeks) {
             summary.weeks.forEach(w => {
-              if (!w.receipt_photo && backendReceipts[w.key]) {
-                w.receipt_photo = backendReceipts[w.key];
+              const bRec = backendReceipts[w.key];
+              if (bRec) {
+                if (!w.receipt_photo && bRec.receipt_photo) w.receipt_photo = bRec.receipt_photo;
+                if (!w.receipt_filename && bRec.receipt_filename) w.receipt_filename = bRec.receipt_filename;
+                if (!w.audit_summary && bRec.audit_summary) w.audit_summary = bRec.audit_summary;
               }
             });
           }
