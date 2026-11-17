@@ -357,7 +357,7 @@ export function initApiAdapter() {
           return jsonResponse(result);
         }
 
-        // --- WEEK RECEIPT UPDATE ---
+        // --- WEEK RECEIPT UPDATE & DELETE ---
         const weekReceiptMatch = cleanUrl.match(/^\/api\/weeks\/(.+)\/receipt$/);
         if (weekReceiptMatch && method === 'POST') {
           const weekKey = decodeURIComponent(weekReceiptMatch[1]);
@@ -367,6 +367,14 @@ export function initApiAdapter() {
             await originalFetch(input, init);
           } catch (e) {}
           return jsonResponse(result);
+        }
+        if (weekReceiptMatch && method === 'DELETE') {
+          const weekKey = decodeURIComponent(weekReceiptMatch[1]);
+          await localDb.deleteWeekReceipt(weekKey);
+          try {
+            await originalFetch(input, init);
+          } catch (e) {}
+          return jsonResponse({ success: true });
         }
 
         // --- MONTHLY SUMMARY ---

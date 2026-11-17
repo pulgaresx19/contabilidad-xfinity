@@ -76,8 +76,8 @@ export default function HistoryView({
   const allWeeklyReceipts = useMemo(() => {
     return weeks
       .map(w => {
-        const photo = w.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null);
-        const filename = w.receipt_filename || (typeof window !== 'undefined' ? localStorage.getItem('receipt_fn_' + w.key) : null);
+        const photo = w.receipt_photo;
+        const filename = w.receipt_filename;
         if (!photo && !filename) return null;
         const isPdf = Boolean(
           photo?.startsWith('data:application/pdf') ||
@@ -284,10 +284,10 @@ export default function HistoryView({
     if (targetStatus === 'Cobrado') {
       // Abre el modal de confirmación con comprobante opcional (foto o PDF)
       setConfirmPaymentWeek(w);
-      const existingReceipt = w.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null);
-      const existingFilename = w.receipt_filename || (typeof window !== 'undefined' ? localStorage.getItem('receipt_fn_' + w.key) : null);
-      setReceiptPhotoPreview(existingReceipt || null);
-      setReceiptFileName(existingFilename || '');
+      const existingReceipt = w.receipt_photo || null;
+      const existingFilename = w.receipt_filename || '';
+      setReceiptPhotoPreview(existingReceipt);
+      setReceiptFileName(existingFilename);
       setReceiptIsPdf(Boolean(
         existingReceipt?.startsWith('data:application/pdf') ||
         existingReceipt?.endsWith('.pdf') ||
@@ -329,6 +329,40 @@ export default function HistoryView({
     }
   };
 
+  // Eliminar permanentemente la constancia o comprobante de una semana
+  const handleDeleteReceipt = async (weekKey, e) => {
+    if (e) e.stopPropagation();
+    const key = weekKey || confirmPaymentWeek?.key;
+    if (!key) return;
+
+    if (!confirm(`¿Eliminar permanentemente este comprobante / reporte de la Semana ${key}?`)) return;
+
+    try {
+      await fetch(`/api/weeks/${encodeURIComponent(key)}/receipt`, {
+        method: 'DELETE'
+      });
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('receipt_' + key);
+        localStorage.removeItem('receipt_fn_' + key);
+      }
+      if (confirmPaymentWeek && confirmPaymentWeek.key === key) {
+        setReceiptPhotoPreview(null);
+        setReceiptFileName('');
+        setReceiptIsPdf(false);
+        setReconciliationResult(null);
+      }
+      if (selectedPdfModal && selectedPdfModal.week?.key === key) {
+        setSelectedPdfModal(null);
+      }
+      if (selectedReceiptModal && selectedReceiptModal.week?.key === key) {
+        setSelectedReceiptModal(null);
+      }
+      if (onRefresh) await onRefresh();
+    } catch (err) {
+      alert('Error al eliminar comprobante: ' + err.message);
+    }
+  };
+
   const handleConfirmPaymentWithReceipt = async () => {
     if (!confirmPaymentWeek) return;
     setSavingPayment(true);
@@ -340,12 +374,16 @@ export default function HistoryView({
         body: JSON.stringify({
           payment_status: 'Cobrado',
           receipt_photo: receiptPhotoPreview || null,
-          receipt_filename: receiptFileName || null,
-          audit_summary: reconciliationResult || null
+          receipt_filename: receiptPhotoPreview ? (receiptFileName || null) : null,
+          audit_summary: receiptPhotoPreview ? (reconciliationResult || null) : null
         })
       });
 
       if (res.ok) {
+        if (!receiptPhotoPreview && typeof window !== 'undefined') {
+          localStorage.removeItem('receipt_' + confirmPaymentWeek.key);
+          localStorage.removeItem('receipt_fn_' + confirmPaymentWeek.key);
+        }
         setConfirmPaymentWeek(null);
         setReceiptPhotoPreview(null);
         setReceiptFileName('');
@@ -1283,27 +1321,27 @@ ${jobLines}
             </div>
 
             {/* Comprobante Opcional (Foto / Recibo / Reporte PDF) */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-[10.5px] font-bold text-slate-300 uppercase tracking-wider block">
-                Comprobante / Reporte <span className="text-slate-500 font-normal lowercase">(opcional)</span>
+                Comprobante / Reporte Semanal <span className="text-slate-500 font-normal lowercase">(opcional)</span>
               </label>
 
               {receiptPhotoPreview ? (
-                <div className={`relative rounded-2xl overflow-hidden border p-2.5 flex items-center justify-between ${
+                <div className={`relative rounded-2xl overflow-hidden border p-3 flex items-center justify-between shadow-lg ${
                   receiptIsPdf
-                    ? 'border-rose-500/35 bg-[#0f1722]'
-                    : 'border-emerald-500/35 bg-[#0f1722]'
+                    ? 'border-rose-500/40 bg-gradient-to-r from-rose-950/30 to-[#0f1722]'
+                    : 'border-emerald-500/40 bg-gradient-to-r from-emerald-950/20 to-[#0f1722]'
                 }`}>
                   <div className="flex items-center gap-2.5 min-w-0">
                     {receiptIsPdf ? (
-                      <div className="h-11 w-11 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
+                      <div className="h-11 w-11 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center shrink-0 shadow-inner">
                         <FileText className="h-5 w-5 stroke-[2.2]" />
                       </div>
                     ) : (
                       <img
                         src={receiptPhotoPreview}
                         alt="Comprobante"
-                        className="h-11 w-11 object-cover rounded-xl border border-white/10 shrink-0"
+                        className="h-11 w-11 object-cover rounded-xl border border-white/10 shrink-0 shadow-inner"
                       />
                     )}
                     <div className="min-w-0">
@@ -1311,93 +1349,58 @@ ${jobLines}
                         receiptIsPdf ? 'text-rose-300' : 'text-emerald-400'
                       }`}>
                         <Check className="h-3 w-3 stroke-[3] text-emerald-400 shrink-0" />
-                        <span className="truncate">{receiptFileName || (receiptIsPdf ? 'Reporte.pdf' : 'Foto comprobante')}</span>
+                        <span className="truncate">{receiptFileName || (receiptIsPdf ? 'Reporte_Nomina.pdf' : 'Foto comprobante')}</span>
                       </span>
-                      <span className="text-[10px] text-slate-400 block truncate">
-                        {receiptIsPdf ? 'Documento PDF listo para auditar' : 'Foto estampada con fecha'}
+                      <span className="text-[10px] text-slate-400 block truncate font-medium">
+                        {receiptIsPdf ? 'Documento PDF listo para auditar con IA' : 'Foto estampada con fecha'}
                       </span>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReceiptPhotoPreview(null);
-                      setReceiptFileName('');
-                      setReceiptIsPdf(false);
-                      setReconciliationResult(null);
-                    }}
-                    className="p-1 text-slate-400 hover:text-rose-400 transition cursor-pointer shrink-0"
-                    title="Quitar archivo"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirmPaymentWeek?.key) {
+                          handleDeleteReceipt(confirmPaymentWeek.key);
+                        } else {
+                          setReceiptPhotoPreview(null);
+                          setReceiptFileName('');
+                          setReceiptIsPdf(false);
+                          setReconciliationResult(null);
+                        }
+                      }}
+                      className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-200 border border-rose-500/30 transition cursor-pointer"
+                      title="Eliminar este comprobante"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-1.5">
-                  {/* Opción 1: Cámara */}
-                  <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-2.5 flex flex-col items-center justify-center gap-1 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group text-center select-none active:scale-95">
-                    <Camera className="h-4 w-4 text-cyan-400 group-hover:scale-110 transition" />
-                    <span className="text-[11px] font-bold text-slate-200">Cámara</span>
-                    <span className="text-[8.5px] text-slate-400">Tomar foto</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0];
-                        if (f) {
-                          setReceiptFileName(f.name || 'foto.jpg');
-                          setReceiptIsPdf(false);
-                          setReconciliationResult(null);
-                          try {
-                            const stamped = await stampReceiptPhoto(f, { week: confirmPaymentWeek });
-                            setReceiptPhotoPreview(stamped);
-                          } catch (err) {
-                            const r = new FileReader();
-                            r.onload = () => setReceiptPhotoPreview(r.result);
-                            r.readAsDataURL(f);
-                          }
-                        }
-                        e.target.value = '';
-                      }}
-                    />
-                  </label>
-
-                  {/* Opción 2: Galería */}
-                  <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-2.5 flex flex-col items-center justify-center gap-1 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group text-center select-none active:scale-95">
-                    <ImageIcon className="h-4 w-4 text-cyan-400 group-hover:scale-110 transition" />
-                    <span className="text-[11px] font-bold text-slate-200">Galería</span>
-                    <span className="text-[8.5px] text-slate-400">Fotos</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0];
-                        if (f) {
-                          setReceiptFileName(f.name || 'foto.jpg');
-                          setReceiptIsPdf(false);
-                          setReconciliationResult(null);
-                          try {
-                            const stamped = await stampReceiptPhoto(f, { week: confirmPaymentWeek });
-                            setReceiptPhotoPreview(stamped);
-                          } catch (err) {
-                            const r = new FileReader();
-                            r.onload = () => setReceiptPhotoPreview(r.result);
-                            r.readAsDataURL(f);
-                          }
-                        }
-                        e.target.value = '';
-                      }}
-                    />
-                  </label>
-
-                  {/* Opción 3: Reporte PDF */}
-                  <label className="border border-dashed border-rose-500/30 hover:border-rose-400/70 rounded-2xl p-2.5 flex flex-col items-center justify-center gap-1 cursor-pointer bg-rose-500/5 hover:bg-rose-500/10 transition text-slate-300 hover:text-white group text-center select-none active:scale-95">
-                    <FileText className="h-4 w-4 text-rose-400 group-hover:scale-110 transition" />
-                    <span className="text-[11px] font-bold text-rose-300">Reporte PDF</span>
-                    <span className="text-[8.5px] text-slate-400">Subir PDF</span>
+                <div className="space-y-2">
+                  {/* Opción Principal Destacada: Subir Reporte PDF (Daily Tech Summary / Nómina) */}
+                  <label className="border-2 border-dashed border-rose-500/40 hover:border-rose-400 rounded-2xl p-3 flex items-center justify-between cursor-pointer bg-gradient-to-r from-rose-500/10 via-[#131b26] to-[#101722] hover:bg-rose-500/15 transition text-slate-200 group select-none shadow-md active:scale-[0.99]">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 group-hover:scale-110 transition shrink-0">
+                        <FileText className="w-5 h-5 stroke-[2.2]" />
+                      </div>
+                      <div className="min-w-0 text-left">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-rose-300 uppercase tracking-wide">
+                            Subir Reporte PDF
+                          </span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase">
+                            Principal
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 block truncate">
+                          Daily Tech Summary / Nómina semanal para auditar con IA
+                        </span>
+                      </div>
+                    </div>
+                    <div className="shrink-0 px-2.5 py-1 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10.5px] font-bold group-hover:bg-rose-500/30 transition">
+                      Elegir PDF
+                    </div>
                     <input
                       type="file"
                       accept="application/pdf,.pdf"
@@ -1416,6 +1419,72 @@ ${jobLines}
                       }}
                     />
                   </label>
+
+                  {/* Opciones secundarias: Galería y Cámara */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Galería */}
+                    <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-2.5 flex items-center justify-center gap-2 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group select-none active:scale-95 text-center">
+                      <ImageIcon className="h-4 w-4 text-cyan-400 group-hover:scale-110 transition shrink-0" />
+                      <div className="text-left min-w-0">
+                        <span className="text-[11px] font-bold text-slate-200 block truncate">Galería</span>
+                        <span className="text-[8.5px] text-slate-400 block truncate">Elegir foto</span>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (f) {
+                            setReceiptFileName(f.name || 'foto.jpg');
+                            setReceiptIsPdf(false);
+                            setReconciliationResult(null);
+                            try {
+                              const stamped = await stampReceiptPhoto(f, { week: confirmPaymentWeek });
+                              setReceiptPhotoPreview(stamped);
+                            } catch (err) {
+                              const r = new FileReader();
+                              r.onload = () => setReceiptPhotoPreview(r.result);
+                              r.readAsDataURL(f);
+                            }
+                          }
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+
+                    {/* Cámara */}
+                    <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-2.5 flex items-center justify-center gap-2 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group select-none active:scale-95 text-center">
+                      <Camera className="h-4 w-4 text-cyan-400 group-hover:scale-110 transition shrink-0" />
+                      <div className="text-left min-w-0">
+                        <span className="text-[11px] font-bold text-slate-200 block truncate">Cámara</span>
+                        <span className="text-[8.5px] text-slate-400 block truncate">Tomar foto</span>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (f) {
+                            setReceiptFileName(f.name || 'foto.jpg');
+                            setReceiptIsPdf(false);
+                            setReconciliationResult(null);
+                            try {
+                              const stamped = await stampReceiptPhoto(f, { week: confirmPaymentWeek });
+                              setReceiptPhotoPreview(stamped);
+                            } catch (err) {
+                              const r = new FileReader();
+                              r.onload = () => setReceiptPhotoPreview(r.result);
+                              r.readAsDataURL(f);
+                            }
+                          }
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
               )}
             </div>
@@ -1531,14 +1600,29 @@ ${jobLines}
           title={`Comprobante • Semana ${selectedReceiptModal.week?.displayLabel || selectedReceiptModal.week?.key}`}
           onClose={() => setSelectedReceiptModal(null)}
           extraFooterActions={
-            <button
-              type="button"
-              onClick={() => setSelectedReceiptModal(null)}
-              className="px-6 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5"
-            >
-              <X className="h-3.5 w-3.5" />
-              <span>Cerrar</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedReceiptModal.week?.key) {
+                    handleDeleteReceipt(selectedReceiptModal.week.key);
+                  }
+                }}
+                className="px-4 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5"
+                title="Eliminar comprobante permanentemente"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Eliminar</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedReceiptModal(null)}
+                className="px-6 py-2 bg-[#16202c] hover:bg-[#1e2b3b] text-white border border-white/15 rounded-xl text-xs font-bold transition shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5"
+              >
+                <X className="h-3.5 w-3.5" />
+                <span>Cerrar</span>
+              </button>
+            </div>
           }
         />
       )}
@@ -1583,6 +1667,18 @@ ${jobLines}
                 >
                   <Download className="w-4 h-4" />
                 </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedPdfModal.week?.key) {
+                      handleDeleteReceipt(selectedPdfModal.week.key);
+                    }
+                  }}
+                  className="w-8 h-8 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 hover:text-rose-200 transition shrink-0 cursor-pointer"
+                  title="Eliminar Reporte PDF permanentemente"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
                 <button
                   type="button"
                   onClick={() => setSelectedPdfModal(null)}
@@ -1712,7 +1808,7 @@ ${jobLines}
                             setSelectedReceiptModal({ photo: r.photo, week: r });
                           }
                         }}
-                        className="bg-[#131b26] border border-white/10 hover:border-cyan-500/40 rounded-2xl p-2 cursor-pointer transition select-none group shadow-md hover:shadow-cyan-500/10 space-y-1.5 active:scale-95"
+                        className="relative bg-[#131b26] border border-white/10 hover:border-cyan-500/40 rounded-2xl p-2 cursor-pointer transition select-none group shadow-md hover:shadow-cyan-500/10 space-y-1.5 active:scale-95"
                         title={`Ver comprobante de Semana ${r.displayLabel || r.key} (${r.startDate} al ${r.endDate})`}
                       >
                         <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-black/60 border border-white/5 flex items-center justify-center">
@@ -1738,6 +1834,17 @@ ${jobLines}
                               PDF
                             </div>
                           )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteReceipt(r.key, e);
+                            }}
+                            className="absolute top-1.5 left-1.5 w-7 h-7 rounded-lg bg-black/80 hover:bg-rose-600/90 text-slate-300 hover:text-white border border-white/10 flex items-center justify-center transition active:scale-90 z-10 cursor-pointer"
+                            title="Eliminar comprobante permanentemente"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                         <div className="px-1">
                           <p className="text-xs font-black text-white truncate font-mono">

@@ -903,19 +903,21 @@ export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = nu
     store.put(order);
   }
 
-  // Save or update receipt in IndexedDB week_receipts store (preserve existing receipt even if reverted to Pendiente)
+  // Save, update or clear receipt in IndexedDB week_receipts store
   try {
     if (db.objectStoreNames.contains('week_receipts')) {
       const rTx = db.transaction('week_receipts', 'readwrite');
       const rStore = rTx.objectStore('week_receipts');
-      if (receiptPhoto || receiptFilename || auditSummary) {
+      if (receiptPhoto) {
         rStore.put({
           week_key: weekKey,
-          receipt_photo: receiptPhoto || targetWeek.receipt_photo || null,
-          receipt_filename: receiptFilename || targetWeek.receipt_filename || null,
-          audit_summary: auditSummary ? (typeof auditSummary === 'string' ? auditSummary : JSON.stringify(auditSummary)) : (targetWeek.audit_summary || null),
+          receipt_photo: receiptPhoto,
+          receipt_filename: receiptFilename || null,
+          audit_summary: auditSummary ? (typeof auditSummary === 'string' ? auditSummary : JSON.stringify(auditSummary)) : null,
           updated_at: new Date().toISOString()
         });
+      } else if (receiptPhoto === null) {
+        rStore.delete(weekKey);
       }
     }
   } catch (e) {
@@ -925,6 +927,22 @@ export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = nu
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve({ success: true, updatedCount: targetOrders.length });
     tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function deleteWeekReceipt(weekKey) {
+  const db = await getDb();
+  if (!db.objectStoreNames.contains('week_receipts')) return { success: true };
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction('week_receipts', 'readwrite');
+      const store = tx.objectStore('week_receipts');
+      store.delete(weekKey);
+      tx.oncomplete = () => resolve({ success: true });
+      tx.onerror = () => reject(tx.error);
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 

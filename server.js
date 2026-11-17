@@ -1489,19 +1489,24 @@ app.post('/api/weeks/:key/status', (req, res) => {
       updateMany(targetOrders, newStatus);
     }
 
-    // Save or update receipt photo/file if provided
-    if (receipt_photo || receipt_filename || audit_summary) {
+    // Save, update or clear receipt photo/file
+    if (receipt_photo !== undefined) {
       try {
-        const auditText = audit_summary ? (typeof audit_summary === 'string' ? audit_summary : JSON.stringify(audit_summary)) : null;
-        db.prepare(`
-          INSERT INTO week_receipts (week_key, receipt_photo, receipt_filename, audit_summary, updated_at)
-          VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-          ON CONFLICT(week_key) DO UPDATE SET 
-            receipt_photo = COALESCE(excluded.receipt_photo, week_receipts.receipt_photo),
-            receipt_filename = COALESCE(excluded.receipt_filename, week_receipts.receipt_filename),
-            audit_summary = COALESCE(excluded.audit_summary, week_receipts.audit_summary),
-            updated_at = CURRENT_TIMESTAMP
-        `).run(key, receipt_photo || null, receipt_filename || null, auditText);
+        if (receipt_photo) {
+          const auditText = audit_summary ? (typeof audit_summary === 'string' ? audit_summary : JSON.stringify(audit_summary)) : null;
+          db.prepare(`
+            INSERT INTO week_receipts (week_key, receipt_photo, receipt_filename, audit_summary, updated_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(week_key) DO UPDATE SET 
+              receipt_photo = excluded.receipt_photo,
+              receipt_filename = excluded.receipt_filename,
+              audit_summary = excluded.audit_summary,
+              updated_at = CURRENT_TIMESTAMP
+          `).run(key, receipt_photo, receipt_filename || null, auditText);
+        } else {
+          // If explicitly null or empty, delete receipt record for this week
+          db.prepare('DELETE FROM week_receipts WHERE week_key = ?').run(key);
+        }
       } catch (e) {}
     }
 
@@ -1576,15 +1581,32 @@ app.post('/api/weeks/:key/reconcile', async (req, res) => {
 app.post('/api/weeks/:key/receipt', (req, res) => {
   try {
     const { key } = req.params;
-    const { receipt_photo, receipt_filename } = req.body;
-    db.prepare(`
-      INSERT INTO week_receipts (week_key, receipt_photo, receipt_filename, updated_at)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(week_key) DO UPDATE SET 
-        receipt_photo = excluded.receipt_photo, 
-        receipt_filename = excluded.receipt_filename,
-        updated_at = CURRENT_TIMESTAMP
-    `).run(key, receipt_photo, receipt_filename || null);
+    const { receipt_photo, receipt_filename, audit_summary } = req.body;
+    if (receipt_photo) {
+      const auditText = audit_summary ? (typeof audit_summary === 'string' ? audit_summary : JSON.stringify(audit_summary)) : null;
+      db.prepare(`
+        INSERT INTO week_receipts (week_key, receipt_photo, receipt_filename, audit_summary, updated_at)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(week_key) DO UPDATE SET 
+          receipt_photo = excluded.receipt_photo, 
+          receipt_filename = excluded.receipt_filename,
+          audit_summary = excluded.audit_summary,
+          updated_at = CURRENT_TIMESTAMP
+      `).run(key, receipt_photo, receipt_filename || null, auditText);
+    } else {
+      db.prepare('DELETE FROM week_receipts WHERE week_key = ?').run(key);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete receipt and audit record for a week
+app.delete('/api/weeks/:key/receipt', (req, res) => {
+  try {
+    const { key } = req.params;
+    db.prepare('DELETE FROM week_receipts WHERE week_key = ?').run(key);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
