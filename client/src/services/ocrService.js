@@ -1,5 +1,5 @@
 import Tesseract from 'tesseract.js';
-import { cleanRawNotes } from '../utils/remarkUtils';
+import { cleanRawNotes } from '../utils/remarkUtils.js';
 
 // Normalizer for address keys (for deduplication)
 function normalizeAddrKey(addr) {
@@ -332,6 +332,30 @@ function loadImage(source) {
       reject(new Error('Formato de imagen no soportado'));
     }
   });
+}
+
+export function extractOrdersFromOcrText(text, defaultDate = null, defaultTech = null) {
+  if (!text) return [];
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const ordersList = [];
+  for (const line of lines) {
+    const parsed = parseDispatchLine(line, defaultDate, defaultTech);
+    if (parsed) ordersList.push(parsed);
+  }
+  const finalOrders = [];
+  const seenAddresses = new Set();
+  const seenJobs = new Set();
+  for (const o of ordersList) {
+    const addrKey = normalizeAddrKey(o.address);
+    if (addrKey && addrKey !== 'DIRECCIONPORVERIFICAR') {
+      if (seenAddresses.has(addrKey)) continue;
+      seenAddresses.add(addrKey);
+    }
+    if (o.job_id && seenJobs.has(o.job_id)) continue;
+    if (o.job_id) seenJobs.add(o.job_id);
+    finalOrders.push(o);
+  }
+  return finalOrders;
 }
 
 // High-Precision Client-Side OCR Engine with Dynamic Canvas Row-Slicing

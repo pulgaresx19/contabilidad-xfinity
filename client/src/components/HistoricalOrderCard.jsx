@@ -3,6 +3,7 @@ import {
   MapPin, Sparkles, AlertTriangle, Camera, Copy, Pencil, Maximize2, Check, Share2, CheckCheck
 } from 'lucide-react';
 import { getOrderRemark, getOrderFieldBadges } from '../utils/remarkUtils';
+import { formatAdjustmentReason } from '../utils/adjustmentUtils';
 
 export default function HistoricalOrderCard({
   order,
@@ -156,9 +157,17 @@ export default function HistoricalOrderCard({
 
         {/* 5. Ajuste Manual de Tarifa */}
         {order.manual_adjustment !== undefined && Number(order.manual_adjustment) !== 0 && (
-          <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 font-mono text-[10px] font-medium flex items-center gap-1">
+          <span 
+            className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 font-mono text-[10px] font-medium flex items-center gap-1"
+            title={`Ajuste: ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}${order.adjustment_reason ? ` • ${formatAdjustmentReason(order.adjustment_reason)}` : ''}`}
+          >
             <Sparkles className="h-2.5 w-2.5 text-cyan-400 opacity-90" />
             <span className="text-slate-200">{order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}</span>
+            {order.adjustment_reason && (
+              <span className="font-normal opacity-75 text-[9px] max-w-[85px] truncate font-sans">
+                ({formatAdjustmentReason(order.adjustment_reason)})
+              </span>
+            )}
           </span>
         )}
 

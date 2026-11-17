@@ -4,7 +4,7 @@ import {
   Trash2, ExternalLink, Image as ImageIcon, X, DollarSign, 
   Ruler, ChevronRight, ChevronLeft, Copy, Camera, AlertCircle, FileText, 
   ShieldAlert, CheckCircle, Search, Filter, Sparkles, MapPin, Phone, ShieldCheck, AlertTriangle,
-  BarChart3, Sun, Pencil, Briefcase, Paperclip, ChevronDown, Eye
+  BarChart3, Sun, Pencil, Briefcase, Paperclip, ChevronDown, Eye, Download
 } from 'lucide-react';
 import ShareReportModal from './ShareReportModal';
 import TodayView from './TodayView';
@@ -14,6 +14,7 @@ import HistoricalOrderCard from './HistoricalOrderCard';
 import ZoomableImageViewer from './ZoomableImageViewer';
 import { getOrderRemark } from '../utils/remarkUtils';
 import { stampReceiptPhoto } from '../utils/receiptStamper';
+import { formatAdjustmentReason } from '../utils/adjustmentUtils';
 
 const CUTOFF_LABELS = {
   '0': 'Domingo (Lunes a Domingo)',
@@ -57,8 +58,13 @@ export default function HistoryView({
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [confirmPaymentWeek, setConfirmPaymentWeek] = useState(null);
   const [receiptPhotoPreview, setReceiptPhotoPreview] = useState(null);
+  const [receiptFileName, setReceiptFileName] = useState('');
+  const [receiptIsPdf, setReceiptIsPdf] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconciliationResult, setReconciliationResult] = useState(null);
   const [savingPayment, setSavingPayment] = useState(false);
   const [selectedReceiptModal, setSelectedReceiptModal] = useState(null);
+  const [selectedPdfModal, setSelectedPdfModal] = useState(null);
 
   // Modal y Filtro de Constancia General de Recibos
   const [showReceiptsModal, setShowReceiptsModal] = useState(false);
@@ -71,10 +77,18 @@ export default function HistoryView({
     return weeks
       .map(w => {
         const photo = w.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null);
-        if (!photo) return null;
+        const filename = w.receipt_filename || (typeof window !== 'undefined' ? localStorage.getItem('receipt_fn_' + w.key) : null);
+        if (!photo && !filename) return null;
+        const isPdf = Boolean(
+          photo?.startsWith('data:application/pdf') ||
+          photo?.endsWith('.pdf') ||
+          filename?.toLowerCase().endsWith('.pdf')
+        );
         return {
           ...w,
-          photo
+          photo,
+          filename,
+          isPdf
         };
       })
       .filter(Boolean);
@@ -268,10 +282,23 @@ export default function HistoryView({
     if (e) e.stopPropagation();
 
     if (targetStatus === 'Cobrado') {
-      // Abre el modal de confirmación con comprobante opcional
+      // Abre el modal de confirmación con comprobante opcional (foto o PDF)
       setConfirmPaymentWeek(w);
       const existingReceipt = w.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null);
+      const existingFilename = w.receipt_filename || (typeof window !== 'undefined' ? localStorage.getItem('receipt_fn_' + w.key) : null);
       setReceiptPhotoPreview(existingReceipt || null);
+      setReceiptFileName(existingFilename || '');
+      setReceiptIsPdf(Boolean(
+        existingReceipt?.startsWith('data:application/pdf') ||
+        existingReceipt?.endsWith('.pdf') ||
+        existingFilename?.toLowerCase().endsWith('.pdf')
+      ));
+      try {
+        const existingAudit = w.audit_summary ? (typeof w.audit_summary === 'string' ? JSON.parse(w.audit_summary) : w.audit_summary) : null;
+        setReconciliationResult(existingAudit || null);
+      } catch (e) {
+        setReconciliationResult(null);
+      }
       return;
     }
 
@@ -290,6 +317,7 @@ export default function HistoryView({
         try {
           if (typeof window !== 'undefined') {
             localStorage.removeItem('receipt_' + w.key);
+            localStorage.removeItem('receipt_fn_' + w.key);
           }
         } catch (e) {}
         if (selectedWeekModal && selectedWeekModal.key === w.key) {
@@ -312,27 +340,23 @@ export default function HistoryView({
     setSavingPayment(true);
     setUpdatingWeekKey(confirmPaymentWeek.key);
     try {
-      if (receiptPhotoPreview) {
-        try {
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('receipt_' + confirmPaymentWeek.key, receiptPhotoPreview);
-          }
-        } catch (e) {
-          console.warn('localStorage quota', e);
-        }
-      }
       const res = await fetch(`/api/weeks/${encodeURIComponent(confirmPaymentWeek.key)}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           payment_status: 'Cobrado',
-          receipt_photo: receiptPhotoPreview || null
+          receipt_photo: receiptPhotoPreview || null,
+          receipt_filename: receiptFileName || null,
+          audit_summary: reconciliationResult || null
         })
       });
 
       if (res.ok) {
         setConfirmPaymentWeek(null);
         setReceiptPhotoPreview(null);
+        setReceiptFileName('');
+        setReceiptIsPdf(false);
+        setReconciliationResult(null);
         setSelectedWeekModal(null); // Cerrar tarjeta de detalle para que se vea reflejada como cobrada en la lista
         if (onRefresh) await onRefresh();
       } else {
@@ -347,6 +371,34 @@ export default function HistoryView({
     }
   };
 
+  const handleReconcileWithAi = async () => {
+    if (!confirmPaymentWeek || !receiptPhotoPreview) return;
+    setReconciling(true);
+    try {
+      const res = await fetch(`/api/weeks/${encodeURIComponent(confirmPaymentWeek.key)}/reconcile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file: {
+            data: receiptPhotoPreview,
+            mimeType: receiptIsPdf ? 'application/pdf' : 'image/jpeg'
+          },
+          filename: receiptFileName || (receiptIsPdf ? 'comprobante.pdf' : 'comprobante.jpg')
+        })
+      });
+      const data = await res.json();
+      if (data.ok && data.data) {
+        setReconciliationResult(data.data);
+      } else {
+        alert(data.error || 'No se pudo completar la auditoría con IA.');
+      }
+    } catch (err) {
+      alert('Error al conectar con AuraCore-AI: ' + err.message);
+    } finally {
+      setReconciling(false);
+    }
+  };
+
   // Comprehensive audit statement for dispute/claim
   const copyAuditStatement = (w) => {
     const completedList = w.orders.filter(o => o.status === 'Completado');
@@ -355,7 +407,7 @@ export default function HistoryView({
       const footageBonus = o.drop_footage > 300 ? Math.floor((o.drop_footage - 300) / 100) * 25 : 0;
       const footTxt = footageBonus > 0 ? ` [METRAJE >300ft: +$${footageBonus}]` : '';
       const adjTxt = o.manual_adjustment && o.manual_adjustment !== 0 
-        ? ` [AJUSTE SUPERVISOR: ${o.manual_adjustment > 0 ? `+$${o.manual_adjustment}` : `-$${Math.abs(o.manual_adjustment)}`} (${o.adjustment_reason || 'Inconsistencia'})]`
+        ? ` [AJUSTE SUPERVISOR: ${o.manual_adjustment > 0 ? `+$${o.manual_adjustment}` : `-$${Math.abs(o.manual_adjustment)}`} (${formatAdjustmentReason(o.adjustment_reason) || 'Inconsistencia'})]`
         : '';
       const photosTxt = o.photos_count > 0 ? ` (${o.photos_count} fotos de respaldo)` : ' (Sin fotos)';
       return `${idx + 1}. Job #${o.job_id} | ${o.work_date}
@@ -1006,7 +1058,14 @@ ${jobLines}
                   {modalReceiptPhoto ? (
                     <button
                       type="button"
-                      onClick={() => setSelectedReceiptModal({ photo: modalReceiptPhoto, week: selectedWeekModal })}
+                      onClick={() => {
+                        const isPdf = modalReceiptPhoto.startsWith('data:application/pdf') || modalReceiptPhoto.endsWith('.pdf') || selectedWeekModal.receipt_filename?.toLowerCase().endsWith('.pdf');
+                        if (isPdf) {
+                          setSelectedPdfModal({ url: modalReceiptPhoto, filename: selectedWeekModal.receipt_filename, week: selectedWeekModal });
+                        } else {
+                          setSelectedReceiptModal({ photo: modalReceiptPhoto, week: selectedWeekModal });
+                        }
+                      }}
                       className="h-8 w-8 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer shrink-0"
                       title="Ver comprobante de pago o cheque de esta semana"
                     >
@@ -1015,34 +1074,37 @@ ${jobLines}
                   ) : selectedWeekModal.isPaid ? (
                     <label
                       className="h-8 w-8 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-slate-200 border border-white/10 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer shrink-0"
-                      title="Adjuntar foto del recibo o cheque"
+                      title="Adjuntar comprobante (Foto o PDF)"
                     >
                       <Paperclip className="h-4 w-4 stroke-[1.8]" />
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,application/pdf,.pdf"
                         className="hidden"
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (file) {
                             try {
-                              const photoData = await stampReceiptPhoto(file, { week: selectedWeekModal });
-                              try {
-                                if (typeof window !== 'undefined') {
-                                  localStorage.setItem('receipt_' + selectedWeekModal.key, photoData);
-                                }
-                              } catch (err) {
-                                console.warn('localStorage quota', err);
+                              const isPdfFile = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                              let photoData = null;
+                              if (isPdfFile) {
+                                const r = new FileReader();
+                                photoData = await new Promise((resolve) => {
+                                  r.onload = () => resolve(r.result);
+                                  r.readAsDataURL(file);
+                                });
+                              } else {
+                                photoData = await stampReceiptPhoto(file, { week: selectedWeekModal });
                               }
                               await fetch(`/api/weeks/${encodeURIComponent(selectedWeekModal.key)}/receipt`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ receipt_photo: photoData })
+                                body: JSON.stringify({ receipt_photo: photoData, receipt_filename: file.name })
                               });
-                              setSelectedWeekModal(prev => ({ ...prev, receipt_photo: photoData }));
+                              setSelectedWeekModal(prev => ({ ...prev, receipt_photo: photoData, receipt_filename: file.name }));
                               if (onRefresh) await onRefresh();
                             } catch (err) {
-                              console.warn('Error al estampar recibo:', err);
+                              console.warn('Error al guardar comprobante:', err);
                             }
                           }
                           e.target.value = '';
@@ -1184,14 +1246,14 @@ ${jobLines}
         />
       )}
 
-      {/* MODAL: CONFIRMAR COBRO SEMANAL CON COMPROBANTE OPCIONAL */}
+      {/* MODAL: CONFIRMAR COBRO SEMANAL CON COMPROBANTE (FOTO O PDF) Y AUDITORÍA IA */}
       {confirmPaymentWeek && (
         <div
-          className="fixed inset-0 z-[85] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => !savingPayment && setConfirmPaymentWeek(null)}
+          className="fixed inset-0 z-[85] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in"
+          onClick={() => !savingPayment && !reconciling && setConfirmPaymentWeek(null)}
         >
           <div
-            className="bg-[#131b26] border border-white/10 rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl"
+            className="bg-[#101722] border border-white/10 rounded-3xl p-4 sm:p-5 max-w-sm w-full space-y-3.5 shadow-2xl overflow-y-auto max-h-[90dvh]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -1203,14 +1265,14 @@ ${jobLines}
                   <h3 className="text-sm font-black text-white">
                     Confirmar Cobro
                   </h3>
-                  <p className="text-[10.5px] text-slate-400 font-medium">
+                  <p className="text-[10.5px] text-slate-400 font-medium font-mono">
                     Semana {confirmPaymentWeek.displayLabel || confirmPaymentWeek.key}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
-                disabled={savingPayment}
+                disabled={savingPayment || reconciling}
                 onClick={() => setConfirmPaymentWeek(null)}
                 className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 cursor-pointer"
               >
@@ -1226,44 +1288,63 @@ ${jobLines}
               </span>
             </div>
 
-            {/* Comprobante Opcional (Foto / Recibo / Cheque) */}
+            {/* Comprobante Opcional (Foto / Recibo / Reporte PDF) */}
             <div className="space-y-1.5">
               <label className="text-[10.5px] font-bold text-slate-300 uppercase tracking-wider block">
-                Comprobante / Cheque <span className="text-slate-500 font-normal lowercase">(opcional)</span>
+                Comprobante / Reporte <span className="text-slate-500 font-normal lowercase">(opcional)</span>
               </label>
 
               {receiptPhotoPreview ? (
-                <div className="relative rounded-2xl overflow-hidden border border-emerald-500/30 bg-[#0f1722] p-2 flex items-center justify-between">
+                <div className={`relative rounded-2xl overflow-hidden border p-2.5 flex items-center justify-between ${
+                  receiptIsPdf
+                    ? 'border-rose-500/35 bg-[#0f1722]'
+                    : 'border-emerald-500/35 bg-[#0f1722]'
+                }`}>
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <img
-                      src={receiptPhotoPreview}
-                      alt="Comprobante"
-                      className="h-12 w-12 object-cover rounded-xl border border-white/10 shrink-0"
-                    />
+                    {receiptIsPdf ? (
+                      <div className="h-11 w-11 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
+                        <FileText className="h-5 w-5 stroke-[2.2]" />
+                      </div>
+                    ) : (
+                      <img
+                        src={receiptPhotoPreview}
+                        alt="Comprobante"
+                        className="h-11 w-11 object-cover rounded-xl border border-white/10 shrink-0"
+                      />
+                    )}
                     <div className="min-w-0">
-                      <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                        <Check className="h-3 w-3 stroke-[3]" /> Comprobante listo
+                      <span className={`text-xs font-bold flex items-center gap-1 truncate ${
+                        receiptIsPdf ? 'text-rose-300' : 'text-emerald-400'
+                      }`}>
+                        <Check className="h-3 w-3 stroke-[3] text-emerald-400 shrink-0" />
+                        <span className="truncate">{receiptFileName || (receiptIsPdf ? 'Reporte.pdf' : 'Foto comprobante')}</span>
                       </span>
                       <span className="text-[10px] text-slate-400 block truncate">
-                        Se guardará con la semana
+                        {receiptIsPdf ? 'Documento PDF listo para auditar' : 'Foto estampada con fecha'}
                       </span>
                     </div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setReceiptPhotoPreview(null)}
-                    className="p-1 text-slate-400 hover:text-rose-400 transition cursor-pointer"
-                    title="Quitar foto"
+                    onClick={() => {
+                      setReceiptPhotoPreview(null);
+                      setReceiptFileName('');
+                      setReceiptIsPdf(false);
+                      setReconciliationResult(null);
+                    }}
+                    className="p-1 text-slate-400 hover:text-rose-400 transition cursor-pointer shrink-0"
+                    title="Quitar archivo"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group">
-                    <Camera className="h-5 w-5 text-cyan-400 group-hover:scale-110 transition" />
-                    <span className="text-xs font-bold text-slate-200">Tomar Foto</span>
-                    <span className="text-[9.5px] text-slate-400">Abrir cámara</span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {/* Opción 1: Cámara */}
+                  <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-2.5 flex flex-col items-center justify-center gap-1 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group text-center select-none active:scale-95">
+                    <Camera className="h-4 w-4 text-cyan-400 group-hover:scale-110 transition" />
+                    <span className="text-[11px] font-bold text-slate-200">Cámara</span>
+                    <span className="text-[8.5px] text-slate-400">Tomar foto</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -1272,11 +1353,13 @@ ${jobLines}
                       onChange={async (e) => {
                         const f = e.target.files?.[0];
                         if (f) {
+                          setReceiptFileName(f.name || 'foto.jpg');
+                          setReceiptIsPdf(false);
+                          setReconciliationResult(null);
                           try {
                             const stamped = await stampReceiptPhoto(f, { week: confirmPaymentWeek });
                             setReceiptPhotoPreview(stamped);
                           } catch (err) {
-                            console.warn('Error al estampar recibo:', err);
                             const r = new FileReader();
                             r.onload = () => setReceiptPhotoPreview(r.result);
                             r.readAsDataURL(f);
@@ -1287,10 +1370,11 @@ ${jobLines}
                     />
                   </label>
 
-                  <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group">
-                    <ImageIcon className="h-5 w-5 text-cyan-400 group-hover:scale-110 transition" />
-                    <span className="text-xs font-bold text-slate-200">Elegir Galería</span>
-                    <span className="text-[9.5px] text-slate-400">Fotos guardadas</span>
+                  {/* Opción 2: Galería */}
+                  <label className="border border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-2.5 flex flex-col items-center justify-center gap-1 cursor-pointer bg-white/5 hover:bg-white/10 transition text-slate-300 hover:text-white group text-center select-none active:scale-95">
+                    <ImageIcon className="h-4 w-4 text-cyan-400 group-hover:scale-110 transition" />
+                    <span className="text-[11px] font-bold text-slate-200">Galería</span>
+                    <span className="text-[8.5px] text-slate-400">Fotos</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -1298,15 +1382,41 @@ ${jobLines}
                       onChange={async (e) => {
                         const f = e.target.files?.[0];
                         if (f) {
+                          setReceiptFileName(f.name || 'foto.jpg');
+                          setReceiptIsPdf(false);
+                          setReconciliationResult(null);
                           try {
                             const stamped = await stampReceiptPhoto(f, { week: confirmPaymentWeek });
                             setReceiptPhotoPreview(stamped);
                           } catch (err) {
-                            console.warn('Error al estampar recibo:', err);
                             const r = new FileReader();
                             r.onload = () => setReceiptPhotoPreview(r.result);
                             r.readAsDataURL(f);
                           }
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+
+                  {/* Opción 3: Reporte PDF */}
+                  <label className="border border-dashed border-rose-500/30 hover:border-rose-400/70 rounded-2xl p-2.5 flex flex-col items-center justify-center gap-1 cursor-pointer bg-rose-500/5 hover:bg-rose-500/10 transition text-slate-300 hover:text-white group text-center select-none active:scale-95">
+                    <FileText className="h-4 w-4 text-rose-400 group-hover:scale-110 transition" />
+                    <span className="text-[11px] font-bold text-rose-300">Reporte PDF</span>
+                    <span className="text-[8.5px] text-slate-400">Subir PDF</span>
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          setReceiptFileName(f.name || 'reporte.pdf');
+                          setReceiptIsPdf(true);
+                          setReconciliationResult(null);
+                          const r = new FileReader();
+                          r.onload = () => setReceiptPhotoPreview(r.result);
+                          r.readAsDataURL(f);
                         }
                         e.target.value = '';
                       }}
@@ -1316,11 +1426,90 @@ ${jobLines}
               )}
             </div>
 
+            {/* SECCIÓN DE AUDITORÍA Y CONCILIACIÓN CON IA */}
+            {receiptPhotoPreview && (
+              <div className="pt-0.5 space-y-2">
+                {!reconciliationResult ? (
+                  <button
+                    type="button"
+                    disabled={reconciling}
+                    onClick={handleReconcileWithAi}
+                    className="w-full py-2.5 px-3 rounded-2xl bg-gradient-to-r from-cyan-500/20 via-blue-600/20 to-emerald-500/20 hover:from-cyan-500/30 hover:to-emerald-500/30 border border-cyan-500/40 text-cyan-300 font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                  >
+                    <Sparkles className={`h-4 w-4 ${reconciling ? 'animate-spin text-amber-400' : 'text-cyan-400'}`} />
+                    <span>{reconciling ? 'AuraCore-AI auditando liquidación...' : '✨ Analizar y Comparar con IA'}</span>
+                  </button>
+                ) : (
+                  <div className="rounded-2xl border border-white/10 bg-[#0d141f] p-3 space-y-2 text-left animate-fade-in shadow-inner">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+                        <span className="text-[10.5px] font-black uppercase tracking-wider text-slate-200">
+                          Auditoría AuraCore
+                        </span>
+                      </div>
+                      <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-md border ${
+                        reconciliationResult.status === 'MATCH'
+                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      }`}>
+                        {reconciliationResult.status === 'MATCH' ? '🟢 Cuadra 100%' : '⚠️ Discrepancia'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5 text-center py-1.5 bg-black/40 rounded-xl border border-white/5">
+                      <div>
+                        <span className="text-[8.5px] text-slate-400 block uppercase">En Reporte</span>
+                        <span className="text-xs font-mono font-bold text-white">
+                          ${Number(reconciliationResult.reported_total || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[8.5px] text-slate-400 block uppercase">En Sistema</span>
+                        <span className="text-xs font-mono font-bold text-slate-300">
+                          ${Number(reconciliationResult.expected_total || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[8.5px] text-slate-400 block uppercase">Diferencia</span>
+                        <span className={`text-xs font-mono font-bold ${
+                          (reconciliationResult.difference || 0) === 0
+                            ? 'text-emerald-400'
+                            : (reconciliationResult.difference || 0) > 0
+                              ? 'text-cyan-400'
+                              : 'text-rose-400'
+                        }`}>
+                          {(reconciliationResult.difference || 0) >= 0 ? '+' : ''}${Number(reconciliationResult.difference || 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {reconciliationResult.summary_notes && (
+                      <p className="text-[10px] text-slate-300 leading-relaxed bg-white/5 p-2 rounded-xl border border-white/5">
+                        {reconciliationResult.summary_notes}
+                      </p>
+                    )}
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleReconcileWithAi}
+                        disabled={reconciling}
+                        className="text-[10px] text-cyan-400 hover:text-cyan-300 underline font-medium cursor-pointer"
+                      >
+                        {reconciling ? 'Re-analizando...' : 'Volver a auditar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Botones de Acción */}
             <div className="grid grid-cols-2 gap-2 pt-1">
               <button
                 type="button"
-                disabled={savingPayment}
+                disabled={savingPayment || reconciling}
                 onClick={() => setConfirmPaymentWeek(null)}
                 className="py-2.5 px-3 bg-white/10 hover:bg-white/15 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer"
               >
@@ -1328,9 +1517,9 @@ ${jobLines}
               </button>
               <button
                 type="button"
-                disabled={savingPayment}
+                disabled={savingPayment || reconciling}
                 onClick={handleConfirmPaymentWithReceipt}
-                className="py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/25 transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                className="py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/25 transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Check className="h-4 w-4 stroke-[3]" />
                 <span>{savingPayment ? 'Guardando...' : 'Confirmar Cobro'}</span>
@@ -1360,7 +1549,69 @@ ${jobLines}
         />
       )}
 
-      {/* COMPONENTE MODAL: HISTORIAL Y CONSTANCIA GENERAL DE RECIBOS */}
+      {/* MODAL: VISOR DE DOCUMENTO PDF (COCKPIT COMPACT HIGH-TECH STYLE) */}
+      {selectedPdfModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
+          style={{
+            paddingTop: 'max(env(safe-area-inset-top, 0px) + 16px, 1.25rem)',
+            paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
+          }}
+          onClick={() => setSelectedPdfModal(null)}
+        >
+          <div 
+            className="bg-[#101722]/95 backdrop-blur-xl border border-white/10 rounded-3xl w-full max-w-sm sm:max-w-md h-[80dvh] sm:h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 sm:px-5 py-3 border-b border-white/10 flex items-center justify-between bg-slate-900/80 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-500/20 text-white font-bold shrink-0">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xs font-black text-white uppercase tracking-wider font-mono truncate">
+                    {selectedPdfModal.filename || 'Reporte de Liquidación'}
+                  </h3>
+                  <p className="text-[10.5px] text-rose-300 font-mono truncate">
+                    Semana {selectedPdfModal.week?.displayLabel || selectedPdfModal.week?.key} • ${(selectedPdfModal.week?.totalEarnings || 0).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <a
+                  href={selectedPdfModal.url}
+                  download={selectedPdfModal.filename || 'reporte.pdf'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-300 hover:text-white transition shrink-0 cursor-pointer"
+                  title="Descargar o Abrir en Pestaña"
+                >
+                  <Download className="w-4 h-4" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPdfModal(null)}
+                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition shrink-0 cursor-pointer"
+                  title="Cerrar ventana"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 bg-black/40 p-2 overflow-hidden flex flex-col">
+              <iframe
+                src={selectedPdfModal.url}
+                title={selectedPdfModal.filename || 'Reporte PDF'}
+                className="w-full h-full rounded-2xl border border-white/10 bg-white"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* COMPONENTE MODAL: HISTORIAL Y CONSTANCIA GENERAL DE RECIBOS (ESTÉTICA COCKPIT ALINEADA) */}
       {showReceiptsModal && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in modal-overlay-safe"
@@ -1373,7 +1624,7 @@ ${jobLines}
           }}
         >
           <div 
-            className="bg-[#101722] border border-white/10 rounded-3xl w-full max-w-lg h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all"
+            className="bg-[#101722]/95 backdrop-blur-xl border border-white/10 rounded-3xl w-full max-w-sm sm:max-w-md h-[80dvh] sm:h-[82dvh] modal-sheet-compact flex flex-col overflow-hidden shadow-2xl text-white transition-all"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header del Modal */}
@@ -1402,17 +1653,16 @@ ${jobLines}
               </button>
             </div>
 
-            {/* Buscador / Filtro de Fecha */}
-            <div className="p-3.5 bg-[#0d141f] border-b border-white/5 shrink-0">
+            {/* Buscador / Filtro de Fecha (SIN autoFocus para no robar el foco al entrar) */}
+            <div className="p-3 bg-[#0d141f] border-b border-white/5 shrink-0">
               <div className="relative">
                 <Calendar className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-cyan-400" />
                 <input
                   type="text"
-                  placeholder="Filtrar por fecha (ej. 2026, 10, Oct, Sem 44)..."
+                  placeholder="Filtrar por fecha o semana (ej. 2026, Oct, Sem 44)..."
                   value={receiptDateFilter}
                   onChange={(e) => setReceiptDateFilter(e.target.value)}
-                  className="w-full bg-[#131b26] border border-white/10 focus:border-cyan-400 rounded-xl pl-9 pr-8 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none transition shadow-inner"
-                  autoFocus
+                  className="w-full bg-[#131b26] border border-white/10 focus:border-cyan-400 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none transition shadow-inner"
                 />
                 {receiptDateFilter && (
                   <button
@@ -1428,7 +1678,7 @@ ${jobLines}
             </div>
 
             {/* Lista / Galería de Recibos con Scroll */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-3.5 space-y-3">
               {allWeeklyReceipts.length === 0 ? (
                 <div className="py-16 text-center space-y-2">
                   <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-slate-400">
@@ -1438,13 +1688,13 @@ ${jobLines}
                     No hay recibos de cobro archivados aún
                   </p>
                   <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-                    Al confirmar el cobro de una semana con comprobante, se estampará automáticamente con su fecha y se guardará aquí.
+                    Al confirmar el cobro de una semana con foto o PDF, se estampará automáticamente con su fecha y se archivará aquí.
                   </p>
                 </div>
               ) : filteredReceipts.length === 0 ? (
                 <div className="py-12 text-center space-y-2">
                   <p className="text-xs font-bold text-slate-300">
-                    No se encontraron recibos con la fecha "{receiptDateFilter}"
+                    No se encontraron recibos con "{receiptDateFilter}"
                   </p>
                   <button
                     type="button"
@@ -1455,34 +1705,58 @@ ${jobLines}
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {filteredReceipts.map((r) => (
-                    <div
-                      key={r.key}
-                      onClick={() => setSelectedReceiptModal({ photo: r.photo, week: r })}
-                      className="bg-[#131b26] border border-emerald-500/30 hover:border-emerald-400/60 rounded-2xl p-2 cursor-pointer transition select-none group shadow-md hover:shadow-emerald-500/10 space-y-1.5 active:scale-95"
-                      title={`Ver recibo de Semana ${r.displayLabel || r.key} (${r.startDate} al ${r.endDate})`}
-                    >
-                      <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-black/60 border border-white/5">
-                        <img
-                          src={r.photo}
-                          alt={`Recibo Semana ${r.displayLabel || r.key}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-xs text-[9.5px] font-mono font-bold text-emerald-400 border border-white/10">
-                          ${(r.totalEarnings || 0).toFixed(0)}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {filteredReceipts.map((r) => {
+                    const isPdf = Boolean(r.isPdf || r.photo?.startsWith('data:application/pdf') || r.photo?.endsWith('.pdf') || r.filename?.toLowerCase().endsWith('.pdf'));
+                    return (
+                      <div
+                        key={r.key}
+                        onClick={() => {
+                          if (isPdf) {
+                            setSelectedPdfModal({ url: r.photo, filename: r.filename, week: r });
+                          } else {
+                            setSelectedReceiptModal({ photo: r.photo, week: r });
+                          }
+                        }}
+                        className="bg-[#131b26] border border-white/10 hover:border-cyan-500/40 rounded-2xl p-2 cursor-pointer transition select-none group shadow-md hover:shadow-cyan-500/10 space-y-1.5 active:scale-95"
+                        title={`Ver comprobante de Semana ${r.displayLabel || r.key} (${r.startDate} al ${r.endDate})`}
+                      >
+                        <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-black/60 border border-white/5 flex items-center justify-center">
+                          {isPdf ? (
+                            <div className="flex flex-col items-center justify-center gap-1 p-2 text-center w-full h-full bg-gradient-to-br from-rose-950/40 to-[#0f1722]">
+                              <FileText className="w-8 h-8 text-rose-400 group-hover:scale-110 transition stroke-[1.8]" />
+                              <span className="text-[9.5px] font-bold text-rose-300 font-mono tracking-tight truncate max-w-full px-1">
+                                {r.filename || 'Reporte PDF'}
+                              </span>
+                            </div>
+                          ) : (
+                            <img
+                              src={r.photo}
+                              alt={`Recibo Semana ${r.displayLabel || r.key}`}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          )}
+                          <div className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-xs text-[9.5px] font-mono font-bold text-emerald-400 border border-white/10">
+                            ${(r.totalEarnings || 0).toFixed(0)}
+                          </div>
+                          {isPdf && (
+                            <div className="absolute bottom-1.5 left-1.5 px-1.5 py-0.2 rounded bg-rose-500/80 text-[8px] font-black text-white uppercase tracking-wider">
+                              PDF
+                            </div>
+                          )}
+                        </div>
+                        <div className="px-1">
+                          <p className="text-xs font-black text-white truncate font-mono">
+                            Semana {r.displayLabel || r.key}
+                          </p>
+                          <p className="text-[10px] text-slate-400 truncate mt-0.5 font-medium flex items-center gap-1">
+                            <Calendar className="w-3 h-3 text-cyan-400/70 shrink-0" />
+                            <span>{r.startDate} al {r.endDate}</span>
+                          </p>
                         </div>
                       </div>
-                      <div className="px-1">
-                        <p className="text-xs font-black text-white truncate font-mono">
-                          Semana {r.displayLabel || r.key}
-                        </p>
-                        <p className="text-[10px] text-slate-400 truncate mt-0.5 font-medium">
-                          {r.startDate} al {r.endDate}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

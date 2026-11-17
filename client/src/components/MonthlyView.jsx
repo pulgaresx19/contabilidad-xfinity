@@ -228,16 +228,6 @@ ${jobList || '  (Sin órdenes registradas)'}
     setSavingPayment(true);
     setUpdatingWeekKey(confirmPaymentWeek.key);
     try {
-      if (receiptPhotoPreview) {
-        try {
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('receipt_' + confirmPaymentWeek.key, receiptPhotoPreview);
-          }
-        } catch (err) {
-          console.warn('localStorage quota', err);
-        }
-      }
-
       const res = await fetch(`/api/weeks/${encodeURIComponent(confirmPaymentWeek.key)}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -962,24 +952,29 @@ ${weeksLines || '  (No hay semanas registradas)'}
                       <Paperclip className="h-4 w-4 stroke-[1.8]" />
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,application/pdf,.pdf"
                         className="hidden"
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (file) {
                             try {
-                              const photoData = await stampReceiptPhoto(file, { week: selectedWeekModal });
-                              try {
-                                if (typeof window !== 'undefined') {
-                                  localStorage.setItem('receipt_' + selectedWeekModal.key, photoData);
-                                }
-                              } catch (err) {}
+                              const isPdfFile = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                              let photoData = null;
+                              if (isPdfFile) {
+                                const r = new FileReader();
+                                photoData = await new Promise((resolve) => {
+                                  r.onload = () => resolve(r.result);
+                                  r.readAsDataURL(file);
+                                });
+                              } else {
+                                photoData = await stampReceiptPhoto(file, { week: selectedWeekModal });
+                              }
                               await fetch(`/api/weeks/${encodeURIComponent(selectedWeekModal.key)}/receipt`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ receipt_photo: photoData })
+                                body: JSON.stringify({ receipt_photo: photoData, receipt_filename: file.name })
                               });
-                              setSelectedWeekModal(prev => ({ ...prev, receipt_photo: photoData }));
+                              setSelectedWeekModal(prev => ({ ...prev, receipt_photo: photoData, receipt_filename: file.name }));
                               await fetchMonthlyData(selectedMonth);
                               if (onRefresh) await onRefresh();
                             } catch (err) {

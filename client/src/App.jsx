@@ -35,7 +35,11 @@ export default function App() {
         if (Array.isArray(data)) {
           setOrders(data);
           try {
-            localStorage.setItem('xfinity_cached_orders', JSON.stringify(data));
+            const lightOrders = data.map(({ photos, ...rest }) => ({
+              ...rest,
+              photos: Array.isArray(photos) ? photos.map(({ photo_data, ...pMeta }) => pMeta) : []
+            }));
+            localStorage.setItem('xfinity_cached_orders', JSON.stringify(lightOrders));
           } catch (e) {}
           return;
         }
@@ -92,7 +96,18 @@ export default function App() {
         const data = await res.json();
         setSummaryData(data);
         try {
-          localStorage.setItem('xfinity_cached_summary', JSON.stringify(data));
+          const lightSummary = {
+            ...data,
+            weeks: Array.isArray(data?.weeks)
+              ? data.weeks.map(({ receipt_photo, orders, ...wRest }) => ({
+                  ...wRest,
+                  orders: Array.isArray(orders)
+                    ? orders.map(({ photos, ...oRest }) => oRest)
+                    : []
+                }))
+              : []
+          };
+          localStorage.setItem('xfinity_cached_summary', JSON.stringify(lightSummary));
         } catch (e) {}
         return;
       }

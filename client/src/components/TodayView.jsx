@@ -4,7 +4,7 @@ import {
   CheckCircle2, AlertCircle, Plus, Sparkles, AlertTriangle, Shield,
   SlidersHorizontal, Edit3, Minus, DollarSign, Calendar, ChevronLeft, ChevronRight, Pencil, Info,
   Image as ImageIcon, Map, List, Navigation, Trash2, ExternalLink, RotateCcw,
-  FileText
+  FileText, Ruler
 } from 'lucide-react';
 import AddJobModal from './AddJobModal';
 import EditJobModal from './EditJobModal';
@@ -17,6 +17,7 @@ import { getLocalDateStr, normalizeDateStr, formatDateFriendly } from '../utils/
 import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
 import { getOrderRemark, getOrderFieldBadges } from '../utils/remarkUtils';
 import ZoomableImageViewer from './ZoomableImageViewer';
+import { parseAdjustmentItems, formatAdjustmentReason, calculateNetAdjustment } from '../utils/adjustmentUtils';
 
 export default function TodayView({ 
   orders, 
@@ -112,11 +113,12 @@ export default function TodayView({
   const [copiedShareText, setCopiedShareText] = useState(false);
   const [previewFullPhoto, setPreviewFullPhoto] = useState(null);
 
-  // Manual Price Adjustment Modal State
+  // Manual Price Adjustment Modal State (Historial de ajustes combinables)
   const [adjustModalOrder, setAdjustModalOrder] = useState(null);
   const [adjustType, setAdjustType] = useState('add'); // 'add' | 'sub'
   const [adjustAmount, setAdjustAmount] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
+  const [adjustmentItems, setAdjustmentItems] = useState([]);
   const [savingAdjust, setSavingAdjust] = useState(false);
 
   // Dispatch Sheet Photo State for the active day (solo lectura y zoom interactivo)
@@ -175,28 +177,53 @@ export default function TodayView({
 
   const openAdjustModal = (order) => {
     setAdjustModalOrder(order);
-    const currentAdj = order.manual_adjustment || 0;
-    if (currentAdj < 0) {
-      setAdjustType('sub');
-      setAdjustAmount(String(Math.abs(currentAdj)));
-    } else if (currentAdj > 0) {
-      setAdjustType('add');
-      setAdjustAmount(String(currentAdj));
-    } else {
-      setAdjustType('add');
-      setAdjustAmount('');
+    const items = parseAdjustmentItems(order);
+    setAdjustmentItems(items);
+    setAdjustType('add');
+    setAdjustAmount('');
+    setAdjustReason('');
+  };
+
+  const handleAddAdjustmentItem = () => {
+    const amt = parseFloat(adjustAmount) || 0;
+    if (amt <= 0) {
+      alert('Ingresa un monto válido mayor a 0 para el ajuste.');
+      return;
     }
-    setAdjustReason(order.adjustment_reason || '');
+    const newItem = {
+      id: 'adj-' + Date.now(),
+      type: adjustType,
+      amount: amt,
+      reason: adjustReason.trim() || (adjustType === 'add' ? 'Bono adicional' : 'Descuento')
+    };
+    setAdjustmentItems((prev) => [...prev, newItem]);
+    setAdjustAmount('');
+    setAdjustReason('');
+  };
+
+  const handleRemoveAdjustmentItem = (id) => {
+    setAdjustmentItems((prev) => prev.filter((item) => item.id !== id));
   };
 
   const handleSaveAdjustment = async () => {
     if (!adjustModalOrder) return;
     setSavingAdjust(true);
 
+    let currentItems = [...adjustmentItems];
+    const pendingAmt = parseFloat(adjustAmount) || 0;
+    if (pendingAmt > 0) {
+      currentItems.push({
+        id: 'adj-' + Date.now(),
+        type: adjustType,
+        amount: pendingAmt,
+        reason: adjustReason.trim() || (adjustType === 'add' ? 'Bono adicional' : 'Descuento')
+      });
+    }
+
     const { autoSubtotal } = getOrderBaseCalculation(adjustModalOrder);
-    const rawAmt = parseFloat(adjustAmount) || 0;
-    const finalAdjustment = adjustType === 'sub' ? -Math.abs(rawAmt) : Math.abs(rawAmt);
+    const finalAdjustment = calculateNetAdjustment(currentItems);
     const finalRate = Math.max(0, autoSubtotal + finalAdjustment);
+    const finalReason = currentItems.length > 0 ? JSON.stringify(currentItems) : '';
 
     try {
       const res = await fetch(`/api/orders/${adjustModalOrder.id}/adjust`, {
@@ -205,7 +232,7 @@ export default function TodayView({
         body: JSON.stringify({
           rate_calculated: finalRate,
           manual_adjustment: finalAdjustment,
-          adjustment_reason: adjustReason.trim()
+          adjustment_reason: finalReason
         })
       });
 
@@ -925,14 +952,18 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     {/* Medallón de Dinero Profesional / Saldo en la esquina */}
                     <div 
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border shadow-sm select-none transition-all ${
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openAdjustModal(order);
+                      }}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border shadow-sm select-none transition-all cursor-pointer hover:scale-105 active:scale-95 ${
                         isCancelled
                           ? 'bg-slate-900/60 text-slate-500 border-white/5 line-through'
                           : isCompleted
                           ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-emerald-500/10'
                           : 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-amber-500/10'
                       }`}
-                      title={`Tarifa del trabajo: $${order.rate_calculated} USD`}
+                      title={`Tarifa del trabajo: $${order.rate_calculated} USD (Toca para ajustar precio)`}
                     >
                       <span className={`h-4 w-4 rounded-full flex items-center justify-center text-[9.5px] font-black shadow-inner flex-shrink-0 ${
                         isCancelled
@@ -1052,19 +1083,18 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                       {/* 5. Ajuste Manual de Tarifa */}
                       {order.manual_adjustment !== undefined && Number(order.manual_adjustment) !== 0 && (
                         <span 
-                          className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md font-mono text-[10px] font-medium border border-slate-700/60 text-slate-300 flex items-center gap-1 shadow-2xs cursor-pointer"
+                          className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md font-mono text-[10px] font-medium border border-slate-700/60 text-slate-300 flex items-center gap-1 shadow-2xs cursor-pointer hover:border-cyan-500/40 transition"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setEditModalInitialMode('edit');
-                            setEditingOrder(order);
+                            openAdjustModal(order);
                           }}
-                          title={`Ajuste Supervisor: ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}${order.adjustment_reason ? ` • ${order.adjustment_reason}` : ''} (Toca para editar)`}
+                          title={`Ajuste: ${order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}${order.adjustment_reason ? ` • ${formatAdjustmentReason(order.adjustment_reason)}` : ''} (Toca para editar)`}
                         >
                           <Sparkles className="h-2.5 w-2.5 text-cyan-400 opacity-90" />
                           <span className="text-slate-200">{order.manual_adjustment > 0 ? `+$${order.manual_adjustment}` : `-$${Math.abs(order.manual_adjustment)}`}</span>
                           {order.adjustment_reason && (
-                            <span className="font-normal opacity-75 text-[9px] max-w-[85px] truncate font-sans">
-                              ({order.adjustment_reason})
+                            <span className="font-normal opacity-75 text-[9px] max-w-[100px] truncate font-sans">
+                              ({formatAdjustmentReason(order.adjustment_reason)})
                             </span>
                           )}
                         </span>
@@ -1330,204 +1360,288 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         </div>
       )}
 
-      {/* MODAL: Ajustar Tarifa / Inconsistencia de Pago */}
+      {/* MODAL: Ajustar Tarifa de la Orden con Historial de Ajustes Combinables */}
       {adjustModalOrder && (() => {
-        const { base, dwBonus, footageBonus, autoSubtotal } = getOrderBaseCalculation(adjustModalOrder);
-        const parsedAmt = parseFloat(adjustAmount) || 0;
-        const calcAdj = adjustType === 'sub' ? -Math.abs(parsedAmt) : Math.abs(parsedAmt);
-        const finalEstRate = Math.max(0, autoSubtotal + calcAdj);
+        const { autoSubtotal } = getOrderBaseCalculation(adjustModalOrder);
+        const pendingAmt = parseFloat(adjustAmount) || 0;
+        const pendingAdj = pendingAmt > 0 ? (adjustType === 'sub' ? -pendingAmt : pendingAmt) : 0;
+        const currentNetAdj = calculateNetAdjustment(adjustmentItems) + pendingAdj;
+        const finalEstRate = Math.max(0, autoSubtotal + currentNetAdj);
 
         return (
           <div 
-            className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in modal-overlay-safe"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in modal-overlay-safe"
             style={{
               paddingTop: 'max(env(safe-area-inset-top, 0px) + 16px, 1.25rem)',
               paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 16px, 1.25rem)'
             }}
+            onClick={() => !savingAdjust && setAdjustModalOrder(null)}
           >
-            <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-2xl space-y-3.5 max-h-[78dvh] sm:max-h-[82dvh] modal-sheet-compact overflow-y-auto my-auto">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+            <div 
+              className="bg-[#101722] border border-white/10 w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden flex flex-col text-white transition-all my-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header Fijo */}
+              <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-white/10 bg-slate-900/60 shrink-0">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 bg-cyan-500/10 text-cyan-400 rounded-xl">
+                  <div className="p-2 bg-cyan-500/15 text-cyan-400 rounded-xl border border-cyan-500/30">
                     <SlidersHorizontal className="h-4 w-4" />
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">Ajustar Precio de la Orden</h3>
-                    <p className="text-[10px] text-slate-400 font-mono">Job #{adjustModalOrder.job_id}</p>
-                  </div>
+                  <h3 className="text-sm font-black text-white">Ajustar Precio de la Orden</h3>
                 </div>
 
                 <button
                   type="button"
+                  disabled={savingAdjust}
                   onClick={() => setAdjustModalOrder(null)}
-                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition cursor-pointer"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 text-xs">
-                <p className="font-bold text-slate-200">{adjustModalOrder.address}</p>
-                <p className="text-[10px] text-slate-400">{adjustModalOrder.city}</p>
-              </div>
-
-              <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1 text-xs font-mono">
-                <div className="flex items-center justify-between text-slate-400 text-[11px]">
-                  <span>Tarifa Base:</span>
-                  <span className="text-white font-bold">$100.00</span>
-                </div>
-
-                {dwBonus > 0 && (
-                  <div className="flex items-center justify-between text-cyan-400 text-[11px]">
-                    <span>Driveway Bore (DW):</span>
-                    <span className="font-bold">+$30.00</span>
+              {/* Contenido (Sin scroll exterior, distribución limpia) */}
+              <div className="p-4 space-y-3 flex flex-col">
+                {/* 1. Ficha Informativa Simple (Dirección y Tarifa Inicial en la esquina) */}
+                <div className="bg-[#0d141f] p-2.5 rounded-2xl border border-white/5 flex items-center justify-between gap-2.5 shrink-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MapPin className="h-4 w-4 text-cyan-400 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-bold text-xs text-white truncate">{adjustModalOrder.address}</p>
+                      {adjustModalOrder.city && (
+                        <p className="text-[10px] text-slate-400 truncate">{adjustModalOrder.city}</p>
+                      )}
+                    </div>
                   </div>
-                )}
-
-                {footageBonus > 0 && (
-                  <div className="flex items-center justify-between text-amber-300 text-[11px]">
-                    <span>Drop Extra ({adjustModalOrder.drop_footage} ft):</span>
-                    <span className="font-bold">+${footageBonus.toFixed(2)}</span>
+                  <div className="text-center shrink-0 bg-[#0a1019] px-3 py-1 rounded-xl border border-white/10 shadow-sm min-w-[85px]">
+                    <span className="text-[8.5px] text-slate-400 block uppercase font-mono tracking-wider font-semibold">Tarifa inicial</span>
+                    <span className="text-xs font-black text-emerald-400 font-mono block mt-0.5">${autoSubtotal.toFixed(2)}</span>
                   </div>
-                )}
-
-                <div className="pt-1 border-t border-slate-800 flex items-center justify-between font-bold text-xs">
-                  <span className="text-slate-300 font-sans">Subtotal Automático:</span>
-                  <span className="text-emerald-400">${autoSubtotal.toFixed(2)}</span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-slate-300 block">
-                  Ajuste / Inconsistencia del Supervisor:
-                </label>
-
-                <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setAdjustType('add')}
-                    className={`py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1 ${
-                      adjustType === 'add'
-                        ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Plus className="h-3 w-3 stroke-[3]" />
-                    <span>Sumar (+ Bono)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setAdjustType('sub')}
-                    className={`py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1 ${
-                      adjustType === 'sub'
-                        ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Minus className="h-3 w-3 stroke-[3]" />
-                    <span>Restar (- Descuento)</span>
-                  </button>
                 </div>
 
-                <div className="relative">
-                  <span className={`absolute left-3 top-2.5 text-xs font-mono font-black ${
-                    adjustType === 'add' ? 'text-emerald-400' : 'text-amber-400'
-                  }`}>
-                    {adjustType === 'add' ? '+$' : '-$'}
+                {/* 2. Formulario para Agregar Nuevo Ajuste (ARRIBA) */}
+                <div className="space-y-2 bg-[#0d141f] p-3 rounded-2xl border border-white/5 shrink-0">
+                  <span className="text-[10.5px] font-bold text-slate-300 block">
+                    Agregar ajuste, bono o descuento:
                   </span>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    placeholder="Monto a ajustar (ej. 30 o 25)"
-                    value={adjustAmount}
-                    onChange={(e) => setAdjustAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-8 pr-3 py-2 text-xs sm:text-sm text-white font-mono font-bold focus:outline-none focus:border-cyan-500"
-                  />
+
+                  {/* Selector de Tipo (Sumar / Restar) */}
+                  <div className="grid grid-cols-2 gap-1.5 bg-black/40 p-1 rounded-xl border border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => setAdjustType('add')}
+                      className={`py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer ${
+                        adjustType === 'add'
+                          ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Plus className="h-3 w-3 stroke-[3]" />
+                      <span>Sumar (+ Bono)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAdjustType('sub')}
+                      className={`py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer ${
+                        adjustType === 'sub'
+                          ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Minus className="h-3 w-3 stroke-[3]" />
+                      <span>Restar (- Descuento)</span>
+                    </button>
+                  </div>
+
+                  {/* Input de Monto */}
+                  <div className="relative">
+                    <span className={`absolute left-3 top-2 text-xs font-mono font-black ${
+                      adjustType === 'add' ? 'text-emerald-400' : 'text-amber-400'
+                    }`}>
+                      {adjustType === 'add' ? '+$' : '-$'}
+                    </span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="Monto (ej. 30 o 15)"
+                      value={adjustAmount}
+                      onChange={(e) => setAdjustAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                      className="w-full bg-black/50 border border-white/10 focus:border-cyan-400 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white font-mono font-bold focus:outline-none transition"
+                    />
+                  </div>
+
+                  {/* Atajos Rápidos: 100% LINEALES en una sola fila (grid-cols-4) */}
+                  <div className="grid grid-cols-4 gap-1.5 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => { setAdjustType('sub'); setAdjustAmount('30'); setAdjustReason('Descuento DW (no perforado)'); }}
+                      className="py-1 px-1 text-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/25 text-[10px] font-bold rounded-lg transition cursor-pointer active:scale-95 truncate"
+                      title="Descuento DW (no perforado)"
+                    >
+                      -30 Sin DW
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAdjustType('add'); setAdjustAmount('25'); setAdjustReason('Bono metraje extra autorizado'); }}
+                      className="py-1 px-1 text-center bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/25 text-[10px] font-bold rounded-lg transition cursor-pointer active:scale-95 truncate"
+                      title="Bono metraje extra autorizado"
+                    >
+                      +25 Metraje
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAdjustType('add'); setAdjustAmount('30'); setAdjustReason('Terreno rocoso / difícil'); }}
+                      className="py-1 px-1 text-center bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/25 text-[10px] font-bold rounded-lg transition cursor-pointer active:scale-95 truncate"
+                      title="Terreno rocoso / difícil"
+                    >
+                      +30 Terreno
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAdjustType('add'); setAdjustAmount('50'); setAdjustReason('Trabajo complejo aprobado'); }}
+                      className="py-1 px-1 text-center bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/25 text-[10px] font-bold rounded-lg transition cursor-pointer active:scale-95 truncate"
+                      title="Trabajo complejo aprobado"
+                    >
+                      +50 Extra
+                    </button>
+                  </div>
+
+                  {/* Fila Lineal: Motivo + Botón Cuadrado Añadir (mismo alto/grosor del input) */}
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="Motivo (ej. Terreno rocoso, descuento supervisor...)"
+                      value={adjustReason}
+                      onChange={(e) => setAdjustReason(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && parseFloat(adjustAmount) > 0) {
+                          e.preventDefault();
+                          handleAddAdjustmentItem();
+                        }
+                      }}
+                      className="flex-1 min-w-0 bg-black/50 border border-white/10 focus:border-cyan-400 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none transition h-[30px]"
+                    />
+
+                    <button
+                      type="button"
+                      disabled={!(parseFloat(adjustAmount) > 0)}
+                      onClick={handleAddAdjustmentItem}
+                      title={parseFloat(adjustAmount) > 0 ? `Añadir ajuste a la lista (${adjustType === 'add' ? `+$${adjustAmount}` : `-$${adjustAmount}`})` : 'Ingresa un monto para añadir'}
+                      className={`w-[30px] h-[30px] rounded-lg flex items-center justify-center shrink-0 transition active:scale-95 border ${
+                        parseFloat(adjustAmount) > 0
+                          ? 'bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 border-cyan-400/50 shadow-md shadow-cyan-500/30 cursor-pointer'
+                          : 'bg-white/5 border-white/10 text-slate-600 cursor-not-allowed opacity-40'
+                      }`}
+                    >
+                      <Plus className="h-3.5 w-3.5 stroke-[3]" />
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                  <span className="text-[10px] text-slate-500">Rápidos:</span>
-                  <button
-                    type="button"
-                    onClick={() => { setAdjustType('sub'); setAdjustAmount('30'); setAdjustReason('Supervisor descontó DW (no se perforó)'); }}
-                    className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] rounded-lg hover:bg-slate-700"
-                  >
-                    -30 (Sin DW)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setAdjustType('add'); setAdjustAmount('25'); setAdjustReason('Bono metraje extra autorizado'); }}
-                    className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] rounded-lg hover:bg-slate-700"
-                  >
-                    +25 (Bono)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setAdjustType('add'); setAdjustAmount('50'); setAdjustReason('Trabajo complejo / rocoso'); }}
-                    className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] rounded-lg hover:bg-slate-700"
-                  >
-                    +50 (Extra)
-                  </button>
+                {/* 3. Historial / Lista de Ajustes Acumulados (ÁREA CON TAMAÑO FIJO ESTABLECIDO) */}
+                <div className="space-y-1 shrink-0">
+                  <div className="flex items-center justify-between px-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                      <Sparkles className="h-3 w-3 text-cyan-400" />
+                      Ajustes Aplicados
+                    </span>
+                    {adjustmentItems.length > 0 && (
+                      <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md ${
+                        calculateNetAdjustment(adjustmentItems) >= 0 ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
+                      }`}>
+                        Neto: {calculateNetAdjustment(adjustmentItems) >= 0 ? '+' : ''}${calculateNetAdjustment(adjustmentItems).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Contenedor de Altura Fija Estática (h-28): no varía su tamaño al añadir o quitar */}
+                  <div className="bg-black/30 p-1.5 rounded-2xl border border-white/5 h-28 flex flex-col justify-start">
+                    {adjustmentItems.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center rounded-xl border border-dashed border-white/5 p-2 text-center">
+                        <p className="text-[10.5px] text-slate-400 font-medium">
+                          Sin ajustes aplicados
+                        </p>
+                        <p className="text-[9px] text-slate-500 mt-0.5">
+                          Usa los atajos o ingresa un monto arriba
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 h-full overflow-y-auto pr-1 cockpit-scroll">
+                        {adjustmentItems.map((item, idx) => (
+                          <div
+                            key={item.id || idx}
+                            className="flex items-center justify-between p-2 rounded-xl bg-[#0d141f] border border-white/5 text-xs animate-fade-in hover:border-white/10 transition"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={`font-mono font-black text-xs px-1.5 py-0.5 rounded-md shrink-0 ${
+                                item.type === 'add'
+                                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                              }`}>
+                                {item.type === 'add' ? `+$${item.amount}` : `-$${item.amount}`}
+                              </span>
+                              <span className="text-[11px] text-slate-300 truncate font-medium">
+                                {item.reason || (item.type === 'add' ? 'Bono adicional' : 'Descuento')}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAdjustmentItem(item.id)}
+                              className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition cursor-pointer shrink-0 ml-1.5"
+                              title="Eliminar este ajuste"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-300 block">
-                  Motivo / Constancia del Ajuste:
-                </label>
-                <input
-                  type="text"
-                  placeholder="ej. Supervisor descontó DW / Terreno rocoso aprobado"
-                  value={adjustReason}
-                  onChange={(e) => setAdjustReason(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div className="p-3 bg-gradient-to-r from-slate-950 to-slate-900 border border-cyan-500/30 rounded-xl flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-slate-400 block font-bold uppercase">
+                {/* 4. Tarjeta de Tarifa Final Cobrable (Centrada y Estilizada) */}
+                <div className="p-2.5 bg-gradient-to-b from-[#0d141f] via-slate-900/90 to-slate-950/90 border border-cyan-500/30 rounded-2xl text-center space-y-0.5 shadow-inner relative overflow-hidden shrink-0">
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent" />
+                  <span className="text-[9.5px] text-cyan-300 font-bold uppercase tracking-wider block">
                     Tarifa Final Cobrable
                   </span>
-                  {calcAdj !== 0 ? (
-                    <span className="text-[11px] text-cyan-300 font-mono">
-                      ${autoSubtotal} {calcAdj > 0 ? `+ $${Math.abs(calcAdj)}` : `- $${Math.abs(calcAdj)}`}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-slate-500 font-mono">Sin ajuste manual</span>
-                  )}
-                </div>
-
-                <div className="text-right">
-                  <span className="text-xl font-black text-emerald-400 font-mono">
+                  <div className="text-xl font-black text-emerald-400 font-mono tracking-tight drop-shadow-sm">
                     ${finalEstRate.toFixed(2)}
-                  </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono flex items-center justify-center gap-1.5">
+                    <span>Base ${autoSubtotal.toFixed(0)}</span>
+                    <span className="text-slate-600">•</span>
+                    <span className={currentNetAdj > 0 ? 'text-emerald-400 font-bold' : currentNetAdj < 0 ? 'text-amber-400 font-bold' : 'text-slate-500'}>
+                      {currentNetAdj !== 0 
+                        ? (currentNetAdj > 0 ? `Ajustes +$${currentNetAdj.toFixed(2)}` : `Ajustes -$${Math.abs(currentNetAdj).toFixed(2)}`) 
+                        : 'Sin ajustes aplicados'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-1">
-                {adjustModalOrder.manual_adjustment !== 0 && (
-                  <button
-                    type="button"
-                    disabled={savingAdjust}
-                    onClick={handleResetAdjustment}
-                    className="py-2.5 px-3 bg-slate-800 hover:bg-rose-950 text-slate-300 hover:text-rose-300 text-xs font-bold rounded-xl transition"
-                    title="Eliminar ajuste y volver a la tarifa automática"
-                  >
-                    Restablecer
-                  </button>
-                )}
+              {/* Fila Fija de Botones (Footer Fijo en su espacio, NUNCA se oculta ni hace scroll) */}
+              <div className="px-4 py-3 border-t border-white/10 bg-slate-900/80 flex items-center justify-between gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={savingAdjust}
+                  onClick={() => setAdjustModalOrder(null)}
+                  className="py-2 px-4 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-semibold rounded-xl transition cursor-pointer"
+                >
+                  Cerrar
+                </button>
 
                 <button
                   type="button"
                   disabled={savingAdjust}
                   onClick={handleSaveAdjustment}
-                  className="flex-1 py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 active:scale-95 transition"
+                  className="py-2.5 px-5 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-black text-xs rounded-xl inline-flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/20 active:scale-95 transition cursor-pointer disabled:opacity-50"
                 >
                   <Check className="h-4 w-4 stroke-[3]" />
-                  <span>{savingAdjust ? 'Guardando...' : 'Guardar Ajuste'}</span>
+                  <span>{savingAdjust ? 'Guardando...' : 'Guardar Ajustes'}</span>
                 </button>
               </div>
             </div>

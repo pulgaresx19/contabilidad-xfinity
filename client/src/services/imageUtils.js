@@ -2,9 +2,12 @@
 
 export async function compressImage(fileOrBlob, maxWidth = 1280, maxHeight = 1280, quality = 0.75) {
   return new Promise((resolve, reject) => {
-    // If it's not an image file (e.g. text/pdf), return as is
+    // If it's not an image file (e.g. application/pdf), preserve its dataUrl for IndexedDB
     if (fileOrBlob.type && !fileOrBlob.type.startsWith('image/')) {
-      return resolve({ blob: fileOrBlob, dataUrl: null });
+      fileToDataUrl(fileOrBlob)
+        .then((dataUrl) => resolve({ blob: fileOrBlob, dataUrl }))
+        .catch(() => resolve({ blob: fileOrBlob, dataUrl: null }));
+      return;
     }
 
     const reader = new FileReader();

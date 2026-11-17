@@ -119,6 +119,9 @@ function initDb() {
   try {
     db.exec("ALTER TABLE dispatch_sheets ADD COLUMN photo_data TEXT");
   } catch (e) {}
+  try {
+    db.exec("ALTER TABLE week_receipts ADD COLUMN audit_summary TEXT");
+  } catch (e) {}
 
   // Cache for geocoding coordinates so we never re-request the same address
   db.exec(`

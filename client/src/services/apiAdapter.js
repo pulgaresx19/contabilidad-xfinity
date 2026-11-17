@@ -1,6 +1,7 @@
 import * as localDb from './localDb';
 import { compressImage, dataUrlToBlob } from './imageUtils';
 import { recognizeDispatchSheet, parseDispatchLine } from './ocrService';
+import { getAuraCoreUrl } from './auraService';
 
 // Save reference to native fetch
 const originalFetch = window.fetch;
@@ -132,6 +133,7 @@ export function initApiAdapter() {
           } else if (method === 'POST') {
             const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
             const created = await localDb.createOrder(body);
+            try { originalFetch(input, init).catch(() => {}); } catch (e) {}
             return jsonResponse(created, 201);
           }
         }
@@ -165,6 +167,7 @@ export function initApiAdapter() {
           if (subAction === '/adjust' && method === 'POST') {
             const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
             const updated = await localDb.adjustOrder(orderId, body.manual_adjustment, body.adjustment_reason);
+            try { originalFetch(input, init).catch(() => {}); } catch (e) {}
             return jsonResponse({ success: true, order: updated });
           }
 
@@ -172,6 +175,7 @@ export function initApiAdapter() {
           if (subAction === '/whatsapp-shared') {
             const body = init.body ? (typeof init.body === 'string' ? JSON.parse(init.body) : init.body) : {};
             const updated = await localDb.setWhatsappShared(orderId, body.shared !== undefined ? body.shared : true);
+            try { originalFetch(input, init).catch(() => {}); } catch (e) {}
             return jsonResponse({ success: true, order: updated });
           }
 
@@ -230,6 +234,7 @@ export function initApiAdapter() {
             } else if (method === 'PUT') {
               const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
               const updated = await localDb.updateOrder(orderId, body);
+              try { originalFetch(input, init).catch(() => {}); } catch (e) {}
               return jsonResponse(updated);
             } else if (method === 'DELETE') {
               await localDb.deleteOrder(orderId);
@@ -256,8 +261,7 @@ export function initApiAdapter() {
           return jsonResponse({ success: true });
         }
 
-        // --- WEEKLY SUMMARY ---
-        // --- WEEKLY SUMMARY (Sincroniza comprobantes con backend y localStorage) ---
+        // --- WEEKLY SUMMARY (Sincroniza comprobantes con IndexedDB week_receipts) ---
         if (cleanUrl === '/api/weekly-summary') {
           let backendReceipts = {};
           try {
@@ -265,12 +269,16 @@ export function initApiAdapter() {
             if (netRes && netRes.ok) {
               const netData = await netRes.json();
               if (netData?.weeks) {
-                netData.weeks.forEach((w) => {
+                for (const w of netData.weeks) {
                   if (w.key && w.receipt_photo) {
-                    backendReceipts[w.key] = w.receipt_photo;
-                    try { localStorage.setItem('receipt_' + w.key, w.receipt_photo); } catch (e) {}
+                    backendReceipts[w.key] = {
+                      receipt_photo: w.receipt_photo,
+                      receipt_filename: w.receipt_filename || null,
+                      audit_summary: w.audit_summary || null
+                    };
+                    await localDb.saveWeekReceipt(w.key, backendReceipts[w.key]);
                   }
-                });
+                }
               }
             }
           } catch (e) {}
@@ -279,15 +287,68 @@ export function initApiAdapter() {
           return jsonResponse(summary);
         }
 
+        // --- WEEK RECONCILE (Auditoría IA de PDF de cobro directo desde el teléfono) ---
+        const weekReconcileMatch = cleanUrl.match(/^\/api\/weeks\/(.+)\/reconcile$/);
+        if (weekReconcileMatch && method === 'POST') {
+          const weekKey = decodeURIComponent(weekReconcileMatch[1]);
+          const body = typeof init.body === 'string' ? JSON.parse(init.body) : (init.body || {});
+          const summary = await localDb.getWeeklySummary();
+          const targetWeek = summary.weeks.find((w) => w.key === weekKey);
+
+          const activeOrders = (targetWeek?.orders || [])
+            .filter((o) => o.status !== 'No Realizado' && o.status !== 'Cancelado')
+            .map((o) => ({
+              id: o.id,
+              job_id: o.job_id,
+              address: o.address,
+              city: o.city,
+              work_date: o.work_date,
+              drop_footage: o.drop_footage,
+              cable_type: o.cable_type,
+              bore_type: o.bore_type,
+              rate_calculated: o.rate_calculated,
+              manual_adjustment: o.manual_adjustment,
+              total_rate: Number(o.rate_calculated || 0)
+            }));
+
+          const expectedTotal = activeOrders.reduce((sum, o) => sum + (o.total_rate || 0), 0);
+          const forwardPayload = {
+            file: body.file || null,
+            filename: body.filename || 'comprobante.pdf',
+            weekKey,
+            orders: activeOrders,
+            expectedTotal
+          };
+
+          const auraBase = getAuraCoreUrl();
+          try {
+            const auraRes = await originalFetch(`${auraBase}/api/reconcile-settlement`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(forwardPayload)
+            });
+            const auditData = await auraRes.json();
+            return jsonResponse(auditData, auraRes.status);
+          } catch (auraErr) {
+            return jsonResponse({
+              ok: false,
+              error: 'No se pudo conectar con AuraCore IA: ' + auraErr.message
+            }, 502);
+          }
+        }
+
         // --- WEEK STATUS UPDATE ---
         const weekStatusMatch = cleanUrl.match(/^\/api\/weeks\/(.+)\/status$/);
         if (weekStatusMatch && method === 'POST') {
           const weekKey = decodeURIComponent(weekStatusMatch[1]);
           const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
-          if (body.receipt_photo) {
-            try { localStorage.setItem('receipt_' + weekKey, body.receipt_photo); } catch (e) {}
-          }
-          const result = await localDb.updateWeekStatus(weekKey, body.payment_status, body.receipt_photo);
+          const result = await localDb.updateWeekStatus(
+            weekKey,
+            body.payment_status,
+            body.receipt_photo || null,
+            body.receipt_filename || null,
+            body.audit_summary || null
+          );
           try {
             await originalFetch(input, init);
           } catch (e) {}
@@ -299,10 +360,6 @@ export function initApiAdapter() {
         if (weekReceiptMatch && method === 'POST') {
           const weekKey = decodeURIComponent(weekReceiptMatch[1]);
           const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
-          const photoToSave = body.receipt_photo || body.photo;
-          if (photoToSave) {
-            try { localStorage.setItem('receipt_' + weekKey, photoToSave); } catch (e) {}
-          }
           const result = await localDb.saveWeekReceipt(weekKey, body);
           try {
             await originalFetch(input, init);
@@ -315,16 +372,19 @@ export function initApiAdapter() {
           const monthParam = searchParams.get('month');
           let backendReceipts = {};
           try {
-            const rawRes = await nativeFetch(url, options);
-            if (rawRes.ok) {
+            const rawRes = await originalFetch(input, init);
+            if (rawRes && rawRes.ok) {
               const bData = await rawRes.clone().json();
               if (bData && bData.weeks) {
-                bData.weeks.forEach(w => {
+                for (const w of bData.weeks) {
                   if (w.key && w.receipt_photo) {
                     backendReceipts[w.key] = w.receipt_photo;
-                    try { localStorage.setItem('receipt_' + w.key, w.receipt_photo); } catch (e) {}
+                    await localDb.saveWeekReceipt(w.key, {
+                      receipt_photo: w.receipt_photo,
+                      receipt_filename: w.receipt_filename || null
+                    });
                   }
-                });
+                }
               }
             }
           } catch (e) {}
@@ -334,10 +394,6 @@ export function initApiAdapter() {
             summary.weeks.forEach(w => {
               if (!w.receipt_photo && backendReceipts[w.key]) {
                 w.receipt_photo = backendReceipts[w.key];
-              }
-              if (!w.receipt_photo && typeof window !== 'undefined') {
-                const lsPhoto = localStorage.getItem('receipt_' + w.key);
-                if (lsPhoto) w.receipt_photo = lsPhoto;
               }
             });
           }
@@ -562,6 +618,28 @@ export function initApiAdapter() {
           const sheetId = sheetDeleteMatch[1];
           await localDb.deleteDispatchSheet(sheetId);
           return jsonResponse({ success: true });
+        }
+
+        // --- BACKUP & RESTORE (Directamente desde IndexedDB del teléfono) ---
+        if (cleanUrl === '/api/backup/export' && method === 'GET') {
+          const jsonStr = await localDb.exportAllData();
+          return new Response(jsonStr, {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (cleanUrl === '/api/backup/restore' && method === 'POST') {
+          const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
+          const result = await localDb.importAllData(body);
+          try { originalFetch(input, init).catch(() => {}); } catch (e) {}
+          return jsonResponse(result);
+        }
+
+        if (cleanUrl === '/api/backup/clear' && method === 'POST') {
+          const result = await localDb.clearAllData();
+          try { originalFetch(input, init).catch(() => {}); } catch (e) {}
+          return jsonResponse(result);
         }
 
       } catch (err) {

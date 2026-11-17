@@ -1274,9 +1274,15 @@ app.get('/api/weekly-summary', (req, res) => {
     // Look up weekly receipts
     let receiptsMap = {};
     try {
-      const allR = db.prepare('SELECT week_key, receipt_photo FROM week_receipts').all();
+      const allR = db.prepare('SELECT week_key, receipt_photo, receipt_filename, audit_summary FROM week_receipts').all();
       for (const r of allR) {
-        if (r && r.week_key) receiptsMap[r.week_key] = r.receipt_photo;
+        if (r && r.week_key) {
+          receiptsMap[r.week_key] = {
+            photo: r.receipt_photo,
+            filename: r.receipt_filename,
+            audit: r.audit_summary
+          };
+        }
       }
     } catch (e) {}
 
@@ -1284,11 +1290,14 @@ app.get('/api/weekly-summary', (req, res) => {
     const weeks = Object.values(weeksMap).map(w => {
       const activeOrders = w.orders.filter(o => o.status !== 'No Realizado' && o.status !== 'Cancelado');
       const isPaid = activeOrders.length > 0 && activeOrders.every(o => o.payment_status === 'Cobrado');
+      const rec = receiptsMap[w.key] || {};
       return {
         ...w,
         isPaid,
         payment_status: isPaid ? 'Cobrado' : 'Pendiente',
-        receipt_photo: receiptsMap[w.key] || null
+        receipt_photo: rec.photo || null,
+        receipt_filename: rec.filename || null,
+        audit_summary: rec.audit || null
       };
     }).sort((a, b) => b.startDate.localeCompare(a.startDate));
 
@@ -1336,7 +1345,7 @@ app.get('/api/weekly-summary', (req, res) => {
 app.post('/api/weeks/:key/status', (req, res) => {
   try {
     const { key } = req.params;
-    const { payment_status, receipt_photo } = req.body; // 'Cobrado' | 'Pendiente'
+    const { payment_status, receipt_photo, receipt_filename, audit_summary } = req.body; // 'Cobrado' | 'Pendiente'
     const newStatus = payment_status === 'Cobrado' ? 'Cobrado' : 'Pendiente';
 
     const cutoffSetting = getCutoffDaySetting();
@@ -1361,20 +1370,86 @@ app.post('/api/weeks/:key/status', (req, res) => {
       updateMany(activeOrders, newStatus);
     }
 
-    // Save or update receipt photo if provided
-    if (receipt_photo) {
+    // Save or update receipt photo/file if provided
+    if (receipt_photo || receipt_filename || audit_summary) {
       try {
+        const auditText = audit_summary ? (typeof audit_summary === 'string' ? audit_summary : JSON.stringify(audit_summary)) : null;
         db.prepare(`
-          INSERT INTO week_receipts (week_key, receipt_photo, updated_at)
-          VALUES (?, ?, CURRENT_TIMESTAMP)
-          ON CONFLICT(week_key) DO UPDATE SET receipt_photo = excluded.receipt_photo, updated_at = CURRENT_TIMESTAMP
-        `).run(key, receipt_photo);
+          INSERT INTO week_receipts (week_key, receipt_photo, receipt_filename, audit_summary, updated_at)
+          VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(week_key) DO UPDATE SET 
+            receipt_photo = COALESCE(excluded.receipt_photo, week_receipts.receipt_photo),
+            receipt_filename = COALESCE(excluded.receipt_filename, week_receipts.receipt_filename),
+            audit_summary = COALESCE(excluded.audit_summary, week_receipts.audit_summary),
+            updated_at = CURRENT_TIMESTAMP
+        `).run(key, receipt_photo || null, receipt_filename || null, auditText);
       } catch (e) {}
     }
 
-    res.json({ success: true, updated: orderIds.length, payment_status: newStatus });
+    res.json({ success: true, updated: activeOrders.length, payment_status: newStatus });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// 10c. Reconcile and audit settlement report with AuraCore-AI
+app.post('/api/weeks/:key/reconcile', async (req, res) => {
+  try {
+    const { key } = req.params;
+    const { file, filename } = req.body; // file: { data, mimeType }
+    const cutoffSetting = getCutoffDaySetting();
+    const allOrders = db.prepare('SELECT * FROM work_orders').all();
+    const activeOrders = [];
+
+    for (const o of allOrders) {
+      const weekInfo = getWeekInfo(o.work_date, cutoffSetting);
+      if (weekInfo.key === key && o.status !== 'No Realizado' && o.status !== 'Cancelado') {
+        activeOrders.push({
+          id: o.id,
+          job_id: o.job_id,
+          address: o.address,
+          city: o.city,
+          work_date: o.work_date,
+          drop_footage: o.drop_footage,
+          cable_type: o.cable_type,
+          bore_type: o.bore_type,
+          rate_calculated: o.rate_calculated,
+          manual_adjustment: o.manual_adjustment,
+          total_rate: Number(o.rate_calculated || 0)
+        });
+      }
+    }
+
+    const expectedTotal = activeOrders.reduce((sum, o) => sum + (o.total_rate || 0), 0);
+
+    // Call AuraCore-AI local endpoint
+    const forwardPayload = {
+      file: file || null,
+      filename: filename || 'comprobante.pdf',
+      weekKey: key,
+      orders: activeOrders,
+      expectedTotal
+    };
+
+    let auditResponse;
+    try {
+      const response = await fetch('http://127.0.0.1:3100/api/reconcile-settlement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(forwardPayload),
+        signal: AbortSignal.timeout(45000)
+      });
+      auditResponse = await response.json();
+    } catch (err) {
+      return res.status(502).json({
+        ok: false,
+        error: 'AuraCore-AI no respondió en puerto 3100: ' + err.message
+      });
+    }
+
+    res.json(auditResponse);
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
   }
 });
 
@@ -2054,6 +2129,13 @@ process.on('SIGTERM', () => { killAuraChild(); process.exit(); });
 
 // Same-origin proxy hacia AuraCore-AI local (permite usar el QR/túnel desde iPhone/Android sin CORS ni créditos externos)
 app.use('/auracore', async (req, res) => {
+  if (req.url && req.url.startsWith('/api/config/key')) {
+    const addr = req.socket?.remoteAddress || '';
+    const isLocal = addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
+    if (!isLocal) {
+      return res.status(403).json({ ok: false, error: 'Configuración de API Key permitida únicamente desde localhost.' });
+    }
+  }
   const targetUrl = `http://127.0.0.1:3100${req.url}`;
   const forwardRequest = async () => {
     return await fetch(targetUrl, {

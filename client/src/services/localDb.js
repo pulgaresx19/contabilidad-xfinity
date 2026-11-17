@@ -53,6 +53,11 @@ export function getDb() {
 
       request.onsuccess = async (event) => {
         const db = event.target.result;
+        try {
+          if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
+            navigator.storage.persist().catch(() => {});
+          }
+        } catch (_) {}
         await checkAndSeedInitialData(db);
         resolve(db);
       };
@@ -744,8 +749,22 @@ export async function getWeeklySummary(backendReceipts = {}) {
     w.orders.push(order);
   }
 
-  // Receipts lookup map (combina backendReceipts, IndexedDB y localStorage)
-  let receiptsMap = { ...(backendReceipts || {}) };
+  // Receipts lookup map (almacenado en la Bodega Grande IndexedDB week_receipts)
+  let receiptsMap = {};
+  let receiptsMetaMap = {};
+
+  for (const [k, val] of Object.entries(backendReceipts || {})) {
+    if (val && typeof val === 'object') {
+      if (val.receipt_photo || val.photo) receiptsMap[k] = val.receipt_photo || val.photo;
+      receiptsMetaMap[k] = {
+        receipt_filename: val.receipt_filename || val.filename || null,
+        audit_summary: val.audit_summary || val.audit || null
+      };
+    } else if (val) {
+      receiptsMap[k] = val;
+    }
+  }
+
   try {
     if (db.objectStoreNames.contains('week_receipts')) {
       const rTx = db.transaction('week_receipts', 'readonly');
@@ -756,16 +775,43 @@ export async function getWeeklySummary(backendReceipts = {}) {
         req.onerror = () => res([]);
       });
       for (const r of allR) {
-        if (r && r.week_key && r.receipt_photo) receiptsMap[r.week_key] = r.receipt_photo;
+        if (r && r.week_key) {
+          if (r.receipt_photo) receiptsMap[r.week_key] = r.receipt_photo;
+          receiptsMetaMap[r.week_key] = {
+            receipt_filename: r.receipt_filename || null,
+            audit_summary: r.audit_summary || null
+          };
+        }
       }
     }
   } catch (e) {}
 
+  // Migración automática: si había algún recibo antiguo en localStorage, pasarlo a IndexedDB y liberar los 5MB de localStorage
   try {
     for (const key of Object.keys(weeksMap)) {
-      if (!receiptsMap[key]) {
-        const cached = localStorage.getItem('receipt_' + key);
-        if (cached) receiptsMap[key] = cached;
+      const legacyPhoto = localStorage.getItem('receipt_' + key);
+      const legacyFn = localStorage.getItem('receipt_fn_' + key);
+      if (legacyPhoto) {
+        if (!receiptsMap[key]) {
+          receiptsMap[key] = legacyPhoto;
+          receiptsMetaMap[key] = {
+            receipt_filename: legacyFn || null,
+            audit_summary: null
+          };
+          if (db.objectStoreNames.contains('week_receipts')) {
+            const mTx = db.transaction('week_receipts', 'readwrite');
+            mTx.objectStore('week_receipts').put({
+              week_key: key,
+              receipt_photo: legacyPhoto,
+              receipt_filename: legacyFn || null,
+              updated_at: new Date().toISOString()
+            });
+          }
+        }
+        try {
+          localStorage.removeItem('receipt_' + key);
+          localStorage.removeItem('receipt_fn_' + key);
+        } catch (_) {}
       }
     }
   } catch (e) {}
@@ -774,11 +820,14 @@ export async function getWeeklySummary(backendReceipts = {}) {
     .map((w) => {
       const activeOrders = w.orders.filter((o) => o.status !== 'No Realizado' && o.status !== 'Cancelado');
       const isPaid = activeOrders.length > 0 && activeOrders.every((o) => o.payment_status === 'Cobrado');
+      const meta = receiptsMetaMap[w.key] || {};
       return {
         ...w,
         isPaid,
         payment_status: isPaid ? 'Cobrado' : 'Pendiente',
-        receipt_photo: receiptsMap[w.key] || null
+        receipt_photo: receiptsMap[w.key] || null,
+        receipt_filename: meta.receipt_filename || null,
+        audit_summary: meta.audit_summary || null
       };
     })
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
@@ -821,7 +870,7 @@ export async function getWeeklySummary(backendReceipts = {}) {
   };
 }
 
-export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = null) {
+export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = null, receiptFilename = null, auditSummary = null) {
   const db = await getDb();
   const summary = await getWeeklySummary();
   const targetWeek = summary.weeks.find((w) => w.key === weekKey);
@@ -844,21 +893,25 @@ export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = nu
     store.put(order);
   }
 
-  // Save receipt photo if provided
-  if (receiptPhoto) {
-    try {
-      if (db.objectStoreNames.contains('week_receipts')) {
-        const rTx = db.transaction('week_receipts', 'readwrite');
-        const rStore = rTx.objectStore('week_receipts');
+  // Save or clear receipt in IndexedDB week_receipts store
+  try {
+    if (db.objectStoreNames.contains('week_receipts')) {
+      const rTx = db.transaction('week_receipts', 'readwrite');
+      const rStore = rTx.objectStore('week_receipts');
+      if (targetStatus === 'Pendiente') {
+        rStore.delete(weekKey);
+      } else if (receiptPhoto || receiptFilename || auditSummary) {
         rStore.put({
           week_key: weekKey,
-          receipt_photo: receiptPhoto,
+          receipt_photo: receiptPhoto || targetWeek.receipt_photo || null,
+          receipt_filename: receiptFilename || targetWeek.receipt_filename || null,
+          audit_summary: auditSummary ? (typeof auditSummary === 'string' ? auditSummary : JSON.stringify(auditSummary)) : (targetWeek.audit_summary || null),
           updated_at: new Date().toISOString()
         });
       }
-    } catch (e) {
-      console.warn('Error saving week receipt:', e);
     }
+  } catch (e) {
+    console.warn('Error updating week receipt in IndexedDB:', e);
   }
 
   return new Promise((resolve, reject) => {
@@ -874,10 +927,21 @@ export async function saveWeekReceipt(weekKey, receiptData) {
     try {
       const tx = db.transaction('week_receipts', 'readwrite');
       const store = tx.objectStore('week_receipts');
+      const photo = typeof receiptData === 'object' && receiptData !== null
+        ? (receiptData.receipt_photo || receiptData.photo || null)
+        : receiptData;
+      const filename = typeof receiptData === 'object' && receiptData !== null
+        ? (receiptData.receipt_filename || receiptData.filename || null)
+        : null;
+      const audit = typeof receiptData === 'object' && receiptData !== null
+        ? (receiptData.audit_summary || null)
+        : null;
+
       store.put({
         week_key: weekKey,
-        receipt_photo: receiptData.receipt_photo || receiptData,
-        receipt_filename: receiptData.receipt_filename || null,
+        receipt_photo: photo,
+        receipt_filename: filename,
+        audit_summary: audit ? (typeof audit === 'string' ? audit : JSON.stringify(audit)) : null,
         updated_at: new Date().toISOString()
       });
       tx.oncomplete = () => resolve({ success: true });
@@ -1208,13 +1272,18 @@ export async function batchImportOrders(ordersList = []) {
 export async function exportAllData() {
   const db = await getDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(['work_orders', 'job_photos', 'monthly_expenses', 'dispatch_sheets', 'settings'], 'readonly');
+    const storeNames = ['work_orders', 'job_photos', 'monthly_expenses', 'dispatch_sheets', 'settings'];
+    if (db.objectStoreNames.contains('week_receipts')) storeNames.push('week_receipts');
+    const tx = db.transaction(storeNames, 'readonly');
 
     const ordersReq = tx.objectStore('work_orders').getAll();
     const photosReq = tx.objectStore('job_photos').getAll();
     const expReq = tx.objectStore('monthly_expenses').getAll();
     const sheetsReq = tx.objectStore('dispatch_sheets').getAll();
     const settingsReq = tx.objectStore('settings').getAll();
+    const receiptsReq = db.objectStoreNames.contains('week_receipts')
+      ? tx.objectStore('week_receipts').getAll()
+      : { result: [] };
 
     tx.oncomplete = () => {
       const backup = {
@@ -1224,7 +1293,8 @@ export async function exportAllData() {
         orders: ordersReq.result || [],
         photos: photosReq.result || [],
         expenses: expReq.result || [],
-        sheets: sheetsReq.result || []
+        sheets: sheetsReq.result || [],
+        week_receipts: receiptsReq.result || []
       };
       resolve(JSON.stringify(backup, null, 2));
     };
@@ -1238,13 +1308,18 @@ export async function importAllData(jsonString) {
   const db = await getDb();
 
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(['work_orders', 'job_photos', 'monthly_expenses', 'dispatch_sheets', 'settings'], 'readwrite');
+    const storeNames = ['work_orders', 'job_photos', 'monthly_expenses', 'dispatch_sheets', 'settings'];
+    const hasReceiptsStore = db.objectStoreNames.contains('week_receipts');
+    if (hasReceiptsStore) storeNames.push('week_receipts');
+
+    const tx = db.transaction(storeNames, 'readwrite');
 
     const ordersStore = tx.objectStore('work_orders');
     const photosStore = tx.objectStore('job_photos');
     const expStore = tx.objectStore('monthly_expenses');
     const sheetsStore = tx.objectStore('dispatch_sheets');
     const settingsStore = tx.objectStore('settings');
+    const receiptsStore = hasReceiptsStore ? tx.objectStore('week_receipts') : null;
 
     // Clear existing stores
     ordersStore.clear();
@@ -1252,6 +1327,7 @@ export async function importAllData(jsonString) {
     expStore.clear();
     sheetsStore.clear();
     settingsStore.clear();
+    if (receiptsStore) receiptsStore.clear();
 
     // Restore Settings
     if (Array.isArray(data.settings)) {
@@ -1281,6 +1357,13 @@ export async function importAllData(jsonString) {
       data.sheets.forEach((s) => sheetsStore.put(s));
     }
 
+    // Restore Week Receipts (Comprobantes de Cierre Semanal y PDFs)
+    if (receiptsStore && Array.isArray(data.week_receipts)) {
+      data.week_receipts.forEach((r) => {
+        if (r && r.week_key) receiptsStore.put(r);
+      });
+    }
+
     tx.oncomplete = () => resolve({ success: true, count: data.orders?.length || 0 });
     tx.onerror = () => reject(tx.error);
   });
@@ -1289,12 +1372,27 @@ export async function importAllData(jsonString) {
 export async function clearAllData() {
   const db = await getDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(['work_orders', 'job_photos', 'monthly_expenses', 'dispatch_sheets', 'settings'], 'readwrite');
+    const storeNames = ['work_orders', 'job_photos', 'monthly_expenses', 'dispatch_sheets', 'settings'];
+    const hasReceiptsStore = db.objectStoreNames.contains('week_receipts');
+    if (hasReceiptsStore) storeNames.push('week_receipts');
+
+    const tx = db.transaction(storeNames, 'readwrite');
     tx.objectStore('work_orders').clear();
     tx.objectStore('job_photos').clear();
     tx.objectStore('monthly_expenses').clear();
     tx.objectStore('dispatch_sheets').clear();
     tx.objectStore('settings').clear();
+    if (hasReceiptsStore) tx.objectStore('week_receipts').clear();
+
+    // Clean any legacy receipt keys from localStorage
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('receipt_') || k.startsWith('xfinity_cached_'))) {
+          localStorage.removeItem(k);
+        }
+      }
+    } catch (_) {}
 
     tx.oncomplete = () => resolve({ success: true });
     tx.onerror = () => reject(tx.error);
