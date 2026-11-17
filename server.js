@@ -1282,8 +1282,8 @@ app.get('/api/weekly-summary', (req, res) => {
 
     // Determine week payment status and sort chronologically descending
     const weeks = Object.values(weeksMap).map(w => {
-      const completedList = w.orders.filter(o => o.status === 'Completado');
-      const isPaid = completedList.length > 0 && completedList.every(o => o.payment_status === 'Cobrado');
+      const activeOrders = w.orders.filter(o => o.status !== 'No Realizado' && o.status !== 'Cancelado');
+      const isPaid = activeOrders.length > 0 && activeOrders.every(o => o.payment_status === 'Cobrado');
       return {
         ...w,
         isPaid,
@@ -1341,23 +1341,24 @@ app.post('/api/weeks/:key/status', (req, res) => {
 
     const cutoffSetting = getCutoffDaySetting();
     const allOrders = db.prepare('SELECT id, work_date, status, payment_status FROM work_orders').all();
-    const orderIds = [];
+    const activeOrders = [];
 
     for (const o of allOrders) {
       const weekInfo = getWeekInfo(o.work_date, cutoffSetting);
-      if (weekInfo.key === key && o.status === 'Completado') {
-        orderIds.push(o.id);
+      if (weekInfo.key === key && o.status !== 'No Realizado' && o.status !== 'Cancelado') {
+        activeOrders.push(o);
       }
     }
 
-    if (orderIds.length > 0) {
-      const stmt = db.prepare('UPDATE work_orders SET payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-      const updateMany = db.transaction((ids, st) => {
-        for (const id of ids) {
-          stmt.run(st, id);
+    if (activeOrders.length > 0) {
+      const stmt = db.prepare('UPDATE work_orders SET status = ?, payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+      const updateMany = db.transaction((orders, st) => {
+        for (const o of orders) {
+          const finalStatus = (st === 'Cobrado' && o.status !== 'Completado') ? 'Completado' : o.status;
+          stmt.run(finalStatus, st, o.id);
         }
       });
-      updateMany(orderIds, newStatus);
+      updateMany(activeOrders, newStatus);
     }
 
     // Save or update receipt photo if provided

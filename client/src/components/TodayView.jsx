@@ -775,33 +775,6 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                     Ir a Hoy
                   </button>
                 )}
-
-                {/* Micro-icono minimalista y curioso para la Hoja de Despacho Diaria */}
-                {daySheetPhoto ? (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedSheetModal(daySheetPhoto)}
-                    className="h-6 w-6 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 flex items-center justify-center transition active:scale-95 shadow-xs cursor-pointer ml-1"
-                    title="Ver hoja de despacho original del día"
-                  >
-                    <FileText className="h-3.5 w-3.5 stroke-[2.2]" />
-                  </button>
-                ) : (
-                  <label
-                    className="h-6 w-6 rounded-lg bg-slate-800/60 hover:bg-slate-700/60 text-slate-400 hover:text-slate-200 border border-white/5 flex items-center justify-center transition cursor-pointer active:scale-95 ml-1"
-                    title="Adjuntar foto de la hoja de despacho del día (opcional)"
-                  >
-                    <FilePlus className="h-3 w-3 stroke-[2]" />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="hidden"
-                      onChange={handleUploadDaySheet}
-                      disabled={uploadingSheet}
-                    />
-                  </label>
-                )}
               </div>
 
               <button
@@ -829,8 +802,36 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
               </div>
 
               <div className="text-right">
-                <span className="text-[10px] text-slate-400 block font-semibold">Progreso del Día</span>
-                <span className="text-xs font-bold text-slate-200">
+                <div className="flex items-center justify-end gap-1.5 mb-0.5">
+                  <span className="text-[10px] text-slate-400 font-semibold leading-none">Progreso del Día</span>
+                  {/* Micro-icono hoja de despacho del día (exactamente del mismo tamaño) */}
+                  {daySheetPhoto ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSheetModal(daySheetPhoto)}
+                      className="h-4.5 w-4.5 rounded-md bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/35 flex items-center justify-center transition active:scale-95 shadow-2xs cursor-pointer shrink-0"
+                      title="Ver hoja de despacho original del día"
+                    >
+                      <FileText className="h-2.5 w-2.5 stroke-[2.2]" />
+                    </button>
+                  ) : (
+                    <label
+                      className="h-4.5 w-4.5 rounded-md bg-slate-800/60 hover:bg-slate-700/60 text-slate-400 hover:text-slate-200 border border-white/10 flex items-center justify-center transition cursor-pointer active:scale-95 shrink-0"
+                      title="Adjuntar foto de la hoja de despacho del día (opcional)"
+                    >
+                      <FilePlus className="h-2.5 w-2.5 stroke-[2]" />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={handleUploadDaySheet}
+                        disabled={uploadingSheet}
+                      />
+                    </label>
+                  )}
+                </div>
+                <span className="text-xs font-bold text-slate-200 block">
                   <strong className="text-emerald-400 text-sm font-black">{dayCompleted.length}</strong> de {dayOrders.length} hechos
                 </span>
                 {dayPending.length > 0 && (

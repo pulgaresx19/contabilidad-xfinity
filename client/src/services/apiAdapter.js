@@ -268,6 +268,9 @@ export function initApiAdapter() {
           const weekKey = decodeURIComponent(weekStatusMatch[1]);
           const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
           const result = await localDb.updateWeekStatus(weekKey, body.payment_status, body.receipt_photo);
+          try {
+            await originalFetch(input, init);
+          } catch (e) {}
           return jsonResponse(result);
         }
 
@@ -277,6 +280,9 @@ export function initApiAdapter() {
           const weekKey = decodeURIComponent(weekReceiptMatch[1]);
           const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
           const result = await localDb.saveWeekReceipt(weekKey, body);
+          try {
+            await originalFetch(input, init);
+          } catch (e) {}
           return jsonResponse(result);
         }
 

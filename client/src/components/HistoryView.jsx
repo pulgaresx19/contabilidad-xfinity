@@ -222,9 +222,12 @@ export default function HistoryView({
       });
 
       if (res.ok) {
+        if (selectedWeekModal && selectedWeekModal.key === w.key) {
+          setSelectedWeekModal(null);
+        }
         if (onRefresh) await onRefresh();
       } else {
-        const errData = await res.json();
+        const errData = await res.json().catch(() => ({}));
         alert('Error: ' + (errData.error || 'No se pudo actualizar'));
       }
     } catch (err) {
@@ -251,6 +254,7 @@ export default function HistoryView({
       if (res.ok) {
         setConfirmPaymentWeek(null);
         setReceiptPhotoPreview(null);
+        setSelectedWeekModal(null); // Cerrar tarjeta de detalle para que se vea reflejada como cobrada en la lista
         if (onRefresh) await onRefresh();
       } else {
         const errData = await res.json().catch(() => ({}));

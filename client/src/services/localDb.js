@@ -1,7 +1,7 @@
 import { initialSeedData } from '../data/seedData';
 
 const DB_NAME = 'ContabilidadXfinityDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise = null;
 
@@ -763,8 +763,8 @@ export async function getWeeklySummary() {
 
   const weeks = Object.values(weeksMap)
     .map((w) => {
-      const completedList = w.orders.filter((o) => o.status === 'Completado');
-      const isPaid = completedList.length > 0 && completedList.every((o) => o.payment_status === 'Cobrado');
+      const activeOrders = w.orders.filter((o) => o.status !== 'No Realizado' && o.status !== 'Cancelado');
+      const isPaid = activeOrders.length > 0 && activeOrders.every((o) => o.payment_status === 'Cobrado');
       return {
         ...w,
         isPaid,
@@ -819,32 +819,41 @@ export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = nu
   if (!targetWeek) return { success: false, message: 'Week not found' };
 
   const targetStatus = paymentStatus === 'Cobrado' ? 'Cobrado' : 'Pendiente';
-  const completedOrders = targetWeek.orders.filter((o) => o.status === 'Completado');
+  const targetOrders = targetWeek.orders.filter(
+    (o) => o.status !== 'No Realizado' && o.status !== 'Cancelado'
+  );
 
   const tx = db.transaction('work_orders', 'readwrite');
   const store = tx.objectStore('work_orders');
 
-  for (const order of completedOrders) {
+  for (const order of targetOrders) {
+    if (targetStatus === 'Cobrado' && order.status !== 'Completado') {
+      order.status = 'Completado';
+    }
     order.payment_status = targetStatus;
     order.updated_at = new Date().toISOString();
     store.put(order);
   }
 
   // Save receipt photo if provided
-  if (receiptPhoto && db.objectStoreNames.contains('week_receipts')) {
+  if (receiptPhoto) {
     try {
-      const rTx = db.transaction('week_receipts', 'readwrite');
-      const rStore = rTx.objectStore('week_receipts');
-      rStore.put({
-        week_key: weekKey,
-        receipt_photo: receiptPhoto,
-        updated_at: new Date().toISOString()
-      });
-    } catch (e) {}
+      if (db.objectStoreNames.contains('week_receipts')) {
+        const rTx = db.transaction('week_receipts', 'readwrite');
+        const rStore = rTx.objectStore('week_receipts');
+        rStore.put({
+          week_key: weekKey,
+          receipt_photo: receiptPhoto,
+          updated_at: new Date().toISOString()
+        });
+      }
+    } catch (e) {
+      console.warn('Error saving week receipt:', e);
+    }
   }
 
   return new Promise((resolve, reject) => {
-    tx.oncomplete = () => resolve({ success: true, updatedCount: completedOrders.length });
+    tx.oncomplete = () => resolve({ success: true, updatedCount: targetOrders.length });
     tx.onerror = () => reject(tx.error);
   });
 }
