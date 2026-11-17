@@ -2755,12 +2755,8 @@ export default function UberDriverView({
                         : 'Paso 1: Solicita fotos de evidencia. Toca para tomar fotos'
                     }
                   >
-                    {isSelectedCompleted ? (
-                      <Check className="h-4 w-4 stroke-[3]" />
-                    ) : (
-                      <Camera className="h-4 w-4 stroke-[2.2]" />
-                    )}
-                    {activePhotosCount > 0 && !isSelectedCompleted && (
+                    <Camera className="h-4 w-4 stroke-[2.2]" />
+                    {activePhotosCount > 0 && (
                       <span className="absolute -top-1 -right-1 px-1 min-w-[14px] h-[14px] bg-emerald-500 text-slate-950 text-[8.5px] font-black rounded-full flex items-center justify-center leading-none shadow-xs">
                         {activePhotosCount}
                       </span>
