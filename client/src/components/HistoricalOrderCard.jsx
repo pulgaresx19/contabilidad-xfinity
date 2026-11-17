@@ -115,18 +115,22 @@ export default function HistoricalOrderCard({
 
       {/* FILA 3: ESPECIFICACIONES TÉCNICAS (Contador de Fotos Adelante + Metraje + Cable + Bore + Nota) */}
       <div className="flex items-center gap-1.5 text-[10px] overflow-x-auto scrollbar-none py-0.5 whitespace-nowrap">
-        {/* 1. Contador de Fotos adelante de los pies (para trabajos realizados) */}
-        {!isCancelled && photosCount > 0 && (
+        {/* 1. Contador de Fotos siempre al principio (tonito rojizo si no realizado, cian si completado) */}
+        {photosCount > 0 && (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onOpenPhotos && onOpenPhotos(order);
             }}
-            className="shrink-0 bg-slate-800/90 hover:bg-slate-700/90 text-cyan-300 px-2 py-0.5 rounded-md border border-cyan-500/30 text-[10px] font-medium flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-2xs"
-            title={`${photosCount} foto(s) de evidencia archivada(s). Toca para ver o gestionar.`}
+            className={`shrink-0 px-2 py-0.5 rounded-md border text-[10px] font-medium flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-2xs ${
+              isCancelled
+                ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-rose-500/35'
+                : 'bg-slate-800/90 hover:bg-slate-700/90 text-cyan-300 border-cyan-500/30'
+            }`}
+            title={isCancelled ? `${photosCount} foto(s) de la constancia. Toca para ver reporte.` : `${photosCount} foto(s) de evidencia archivada(s). Toca para ver o gestionar.`}
           >
-            <Camera className="h-3 w-3 text-cyan-400 shrink-0" />
+            <Camera className={`h-3 w-3 shrink-0 ${isCancelled ? 'text-rose-400' : 'text-cyan-400'}`} />
             <span className="font-semibold">{photosCount} {photosCount === 1 ? 'foto' : 'fotos'}</span>
           </button>
         )}
@@ -187,36 +191,24 @@ export default function HistoricalOrderCard({
         )}
       </div>
 
-      {/* FILA 4 / 5: CONTENIDO VISUAL UNIFICADO (Sin agrandar la tarjeta para trabajos no realizados) */}
+      {/* FILA 4 / 5: CONTENIDO VISUAL UNIFICADO (Sin fotos ni botones dentro del motivo cuando no es realizado) */}
       {isCancelled ? (
-        /* Trabajo No Realizado: Muestra el motivo en el mismo espacio donde irían las fotos, compacto y con el botón/icono de fotos del obstáculo */
+        /* Trabajo No Realizado: Ocupa el mismo espacio mostrando únicamente el motivo limpio */
         <div 
           onClick={(e) => {
             e.stopPropagation();
             onOpenPhotos && onOpenPhotos(order);
           }}
-          className="bg-rose-950/20 border border-rose-500/25 hover:border-rose-500/40 p-2 rounded-xl text-xs text-rose-200 flex items-center justify-between gap-2 transition cursor-pointer active:scale-[0.99] group/reason"
+          className="bg-rose-950/20 border border-rose-500/25 hover:border-rose-500/40 px-3 py-2 rounded-xl text-xs text-rose-200 flex items-center gap-2 transition cursor-pointer active:scale-[0.99]"
           title="Toca para ver la constancia y fotos del obstáculo"
         >
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-            <span className="text-[10px] uppercase font-bold text-rose-400 shrink-0 tracking-wider">
-              Motivo:
-            </span>
-            <span className="font-semibold text-xs text-rose-100 truncate">
-              {order.cancel_reason || 'Inconveniente en la propiedad'}
-            </span>
-          </div>
-
-          {photosCount > 0 && (
-            <span 
-              className="shrink-0 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/35 px-2 py-0.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-xs"
-              title={`${photosCount} foto(s) del obstáculo. Toca para ver.`}
-            >
-              <Camera className="h-3 w-3 text-rose-300 shrink-0" />
-              <span>{photosCount} {photosCount === 1 ? 'foto' : 'fotos'}</span>
-            </span>
-          )}
+          <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+          <span className="text-[10px] uppercase font-bold text-rose-400 shrink-0 tracking-wider">
+            Motivo:
+          </span>
+          <span className="font-semibold text-xs text-rose-100 truncate flex-1 min-w-0">
+            {order.cancel_reason || 'Inconveniente en la propiedad'}
+          </span>
         </div>
       ) : photos.length > 0 ? (
         /* Trabajo Realizado: Tira horizontal de fotos de evidencia */
