@@ -219,34 +219,56 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
       }
       setRawAiText(extractedText);
       setExtractedOrders(
-        ordersFound.map((o) => ({
-          ...o,
-          work_date: normalizeDateStr(o.work_date || detectedDate) || detectedDate,
-          tech_id: String(o.tech_id || techId || 'Javier (P0G1)').trim(),
-          job_id: String(o.job_id || '').trim(),
-          address: String(o.address || '').trim(),
-          city: String(o.city || '').trim(),
-          zip_code: String(o.zip_code || '').trim(),
-          phone: String(o.phone || '').trim(),
-          drop_footage: parseFloat(o.drop_footage) || 0,
-          cable_type: o.cable_type === 'RG-11' ? 'RG-11' : 'RG-6',
-          bore_type: o.bore_type || 'N',
-          obstacles: (() => {
-            const rawObs = String(o.obstacles || '').toUpperCase();
-            if (rawObs.includes('LANDSC') || rawObs.includes('LANS') || /LANS/i.test(String(o.raw_notes || ''))) {
-              return 'LANDSC';
-            }
-            if (rawObs.includes('SPRKLR') || rawObs.includes('SPRKL') || /SPRKLR|SPRKL/i.test(String(o.raw_notes || ''))) {
-              return 'SPRKL';
-            }
-            return o.obstacles || 'N';
-          })(),
-          is_temp: o.is_temp ? 1 : (/TEMP[:\s.\-_]*Y/i.test(String(o.raw_notes || '')) ? 1 : 0),
-          rate_calculated: calcOrderRate(o.drop_footage, o.bore_type),
-          status: 'Pendiente',
-          payment_status: 'Pendiente',
-          raw_notes: cleanRawNotes(o.raw_notes || '')
-        }))
+        ordersFound.map((o) => {
+          const rawNotesStr = String(o.raw_notes || '');
+          const detectedNeighbor = (() => {
+            if (o.neighbor_notice && o.neighbor_notice !== 'N') return String(o.neighbor_notice).toUpperCase();
+            const m = rawNotesStr.match(/\b(?:NBR|NB)[:\s]*([A-Za-z0-9]+)\b/i);
+            if (m) return m[1].toUpperCase();
+            if (/\bNB\b/i.test(rawNotesStr)) return 'N';
+            return o.neighbor_notice || 'N';
+          })();
+
+          const detectedPremise = (() => {
+            if (o.premise_access && o.premise_access !== 'N') return String(o.premise_access).toUpperCase();
+            if (/RQHM/i.test(rawNotesStr)) return 'RQHM';
+            if (/DOG/i.test(rawNotesStr)) return 'DOG';
+            if (/(?:GATE|LOCK)/i.test(rawNotesStr)) return 'GATE';
+            if (/CALL/i.test(rawNotesStr)) return 'CALL';
+            return o.premise_access || 'N';
+          })();
+
+          return {
+            ...o,
+            work_date: normalizeDateStr(o.work_date || detectedDate) || detectedDate,
+            tech_id: String(o.tech_id || techId || 'Javier (P0G1)').trim(),
+            job_id: String(o.job_id || '').trim(),
+            address: String(o.address || '').trim(),
+            city: String(o.city || '').trim(),
+            zip_code: String(o.zip_code || '').trim(),
+            phone: String(o.phone || '').trim(),
+            drop_footage: parseFloat(o.drop_footage) || 0,
+            cable_type: o.cable_type === 'RG-11' ? 'RG-11' : 'RG-6',
+            bore_type: o.bore_type || 'N',
+            obstacles: (() => {
+              const rawObs = String(o.obstacles || '').toUpperCase();
+              if (rawObs.includes('LANDSC') || rawObs.includes('LANS') || /LANS/i.test(rawNotesStr)) {
+                return 'LANDSC';
+              }
+              if (rawObs.includes('SPRKLR') || rawObs.includes('SPRKL') || /SPRKLR|SPRKL/i.test(rawNotesStr)) {
+                return 'SPRKL';
+              }
+              return o.obstacles || 'N';
+            })(),
+            is_temp: o.is_temp ? 1 : (/TEMP[:\s.\-_]*Y/i.test(rawNotesStr) ? 1 : 0),
+            premise_access: detectedPremise,
+            neighbor_notice: detectedNeighbor,
+            rate_calculated: calcOrderRate(o.drop_footage, o.bore_type),
+            status: 'Pendiente',
+            payment_status: 'Pendiente',
+            raw_notes: cleanRawNotes(rawNotesStr)
+          };
+        })
       );
       if (aiNeedsConfirmation && aiNote) {
         setMessage({

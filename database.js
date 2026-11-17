@@ -166,7 +166,7 @@ function cleanRawNotes(rawText) {
   if (remarkMatch && remarkMatch[1].trim()) {
     let afterRemark = remarkMatch[1].trim();
     afterRemark = afterRemark.replace(/^[\s/|,;:-]+|[\s/|,;:-]+$/g, '').trim();
-    if (afterRemark) return afterRemark;
+    if (afterRemark && !/^(?:N|NO|NONE|NULL)$/i.test(afterRemark)) return afterRemark;
   }
 
   let cleaned = text
@@ -178,15 +178,17 @@ function cleanRawNotes(rawText) {
     .replace(/BORE[:\s]*(?:DW[:\s]*1?|SW[:\s]*1?|DV[:\s]*1?|SV[:\s]*1?|N\b)/gi, ' ')
     .replace(/\b(?:DW|SW)[:\s]*1\b/gi, ' ')
     .replace(/\bTEMP[:\s]*[YN]\b/gi, ' ')
-    .replace(/Obstacl(?:es|ias)?[:\s]*[A-Za-z0-9, ]*(?=\/|$|\b(?:Premise|NBR|REMARKS?)\b)/gi, ' ')
-    .replace(/Premise\s*ACS[:\s]*[A-Za-z0-9, ]*(?=\/|$|\b(?:NBR|REMARKS?)\b)/gi, ' ')
-    .replace(/\bNBR[:\s]*\d+\b/gi, ' ')
+    .replace(/Obstacl(?:es|ias)?[:\s]*[A-Za-z0-9, ]*(?=\/|$|\b(?:Premise|NBR|NB|REMARKS?)\b)/gi, ' ')
+    .replace(/Premise\s*(?:ACS)?[:\s]*[A-Za-z0-9, ]*(?=\/|$|\b(?:NBR|NB|REMARKS?)\b)/gi, ' ')
+    .replace(/\b(?:NBR|NB)[:\s]*[A-Za-z0-9]+\b/gi, ' ')
+    .replace(/\bNB\b/gi, ' ')
     .replace(/\bREMARKS?[:\s-]*/gi, ' ')
     .replace(/[/|~_\[\]]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
   cleaned = cleaned.replace(/^[\s/|,;:-]+|[\s/|,;:-]+$/g, '').trim();
+  if (!cleaned || /^(?:N|NO|NONE|NULL)$/i.test(cleaned)) return '';
   return cleaned;
 }
 
@@ -235,8 +237,8 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
         const up = t.toUpperCase();
         if (up === 'CALLFIRST') {
           call_first = true;
-        } else if (/^(?:P#?|TEL|PHONE|CELL)[:\s]*/i.test(t)) {
-          const rawP = t.replace(/^(?:P#?|TEL|PHONE|CELL)[:\s]*/i, '').trim();
+        } else if (/^(?:P#?[:\s]|P#\b|TEL[:\s]|PHONE[:\s]|CELL[:\s])/i.test(t)) {
+          const rawP = t.replace(/^(?:P#?[:\s]|P#\b|TEL[:\s]|PHONE[:\s]|CELL[:\s])\s*/i, '').trim();
           const digits = rawP.replace(/\D/g, '');
           phone = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : (digits || rawP);
         } else if (up.startsWith('DROP:')) {
@@ -254,10 +256,12 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
         } else if (up.startsWith('OBSTACLES:')) {
           const obsRaw = t.substring(10).trim();
           obstacles = (obsRaw.toUpperCase().includes('LANDSC') || obsRaw.toUpperCase().includes('LANS')) ? 'LANDSC' : obsRaw;
-        } else if (up.startsWith('PREMISE ACS:')) {
-          premise_access = t.substring(12).trim() || 'N';
-        } else if (up.startsWith('NBR:')) {
-          neighbor_notice = t.substring(4).trim();
+        } else if (up.startsWith('PREMISE ACS:') || up.startsWith('PREMISE:')) {
+          premise_access = t.replace(/^(?:PREMISE\s*ACS|PREMISE)[:\s]*/i, '').trim() || 'N';
+        } else if (up.startsWith('NBR:') || up.startsWith('NB:')) {
+          neighbor_notice = t.replace(/^(?:NBR|NB)[:\s]*/i, '').trim().toUpperCase();
+        } else if (up === 'NB') {
+          neighbor_notice = 'N';
         }
       }
     }
@@ -481,8 +485,13 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
     bore_type: boreType,
     is_temp: /TEMP[:\s.\-_]*Y/i.test(postJobText) ? 1 : 0,
     obstacles,
-    premise_access: /RQHM/i.test(postJobText) ? 'RQHM' : /DOG/i.test(postJobText) ? 'DOG' : 'N',
-    neighbor_notice: /NBR[:\s]*2/i.test(postJobText) ? '2' : 'N',
+    premise_access: /RQHM/i.test(postJobText) ? 'RQHM' : /DOG/i.test(postJobText) ? 'DOG' : /(?:GATE|LOCK)/i.test(postJobText) ? 'GATE' : /CALL/i.test(postJobText) ? 'CALL' : 'N',
+    neighbor_notice: (() => {
+      const m = postJobText.match(/\b(?:NBR|NB)[:\s]*([A-Za-z0-9]+)\b/i);
+      if (m) return m[1].toUpperCase();
+      if (/\bNB\b/i.test(postJobText)) return 'N';
+      return 'N';
+    })(),
     raw_notes: cleanRawNotes(postJobText),
     rate_calculated: rate,
     manual_adjustment: 0,

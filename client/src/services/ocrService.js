@@ -51,8 +51,8 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
         const up = t.toUpperCase();
         if (up === 'CALLFIRST') {
           call_first = true;
-        } else if (/^(?:P#?|TEL|PHONE|CELL)[:\s]*/i.test(t)) {
-          const rawP = t.replace(/^(?:P#?|TEL|PHONE|CELL)[:\s]*/i, '').trim();
+        } else if (/^(?:P#?[:\s]|P#\b|TEL[:\s]|PHONE[:\s]|CELL[:\s])/i.test(t)) {
+          const rawP = t.replace(/^(?:P#?[:\s]|P#\b|TEL[:\s]|PHONE[:\s]|CELL[:\s])\s*/i, '').trim();
           const digits = rawP.replace(/\D/g, '');
           phone = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : (digits || rawP);
         } else if (up.startsWith('DROP:')) {
@@ -70,10 +70,12 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
         } else if (up.startsWith('OBSTACLES:')) {
           const obsRaw = t.substring(10).trim();
           obstacles = (obsRaw.toUpperCase().includes('LANDSC') || obsRaw.toUpperCase().includes('LANS')) ? 'LANDSC' : obsRaw;
-        } else if (up.startsWith('PREMISE ACS:')) {
-          premise_access = t.substring(12).trim() || 'N';
-        } else if (up.startsWith('NBR:')) {
-          neighbor_notice = t.substring(4).trim();
+        } else if (up.startsWith('PREMISE ACS:') || up.startsWith('PREMISE:')) {
+          premise_access = t.replace(/^(?:PREMISE\s*ACS|PREMISE)[:\s]*/i, '').trim() || 'N';
+        } else if (up.startsWith('NBR:') || up.startsWith('NB:')) {
+          neighbor_notice = t.replace(/^(?:NBR|NB)[:\s]*/i, '').trim().toUpperCase();
+        } else if (up === 'NB') {
+          neighbor_notice = 'N';
         }
       }
     }
@@ -296,8 +298,13 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
     bore_type: boreType,
     is_temp: /TEMP[:\s.\-_]*Y/i.test(postJobText) ? 1 : 0,
     obstacles,
-    premise_access: /RQHM/i.test(postJobText) ? 'RQHM' : /DOG/i.test(postJobText) ? 'DOG' : 'N',
-    neighbor_notice: /NBR[:\s]*2/i.test(postJobText) ? '2' : 'N',
+    premise_access: /RQHM/i.test(postJobText) ? 'RQHM' : /DOG/i.test(postJobText) ? 'DOG' : /(?:GATE|LOCK)/i.test(postJobText) ? 'GATE' : /CALL/i.test(postJobText) ? 'CALL' : 'N',
+    neighbor_notice: (() => {
+      const m = postJobText.match(/\b(?:NBR|NB)[:\s]*([A-Za-z0-9]+)\b/i);
+      if (m) return m[1].toUpperCase();
+      if (/\bNB\b/i.test(postJobText)) return 'N';
+      return 'N';
+    })(),
     raw_notes: cleanRawNotes(postJobText),
     rate_calculated: rate,
     manual_adjustment: 0,
