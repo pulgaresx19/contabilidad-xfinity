@@ -18,6 +18,7 @@ import EditJobModal from './EditJobModal';
 import ShareReportModal from './ShareReportModal';
 import HistoricalOrderCard from './HistoricalOrderCard';
 import ZoomableImageViewer from './ZoomableImageViewer';
+import PdfDocumentViewer from './PdfDocumentViewer';
 import { stampReceiptPhoto } from '../utils/receiptStamper';
 
 const CATEGORY_ICONS = {
@@ -58,8 +59,6 @@ export default function MonthlyView({
   const [selectedExpenseModal, setSelectedExpenseModal] = useState(null);
   const [selectedReceiptModal, setSelectedReceiptModal] = useState(null);
   const [selectedPdfModal, setSelectedPdfModal] = useState(null);
-  const [pdfZoom, setPdfZoom] = useState(1);
-  const [isPdfFullscreen, setIsPdfFullscreen] = useState(false);
   const [confirmPaymentWeek, setConfirmPaymentWeek] = useState(null);
   const [receiptPhotoPreview, setReceiptPhotoPreview] = useState(null);
   const [receiptFileName, setReceiptFileName] = useState('');
@@ -1467,152 +1466,15 @@ ${weeksLines || '  (No hay semanas registradas)'}
         }}
       />
 
-      {/* MODAL: VISOR DE DOCUMENTO PDF (COCKPIT COMPACT HIGH-TECH STYLE CON ZOOM Y FULLSCREEN) */}
+      {/* MODAL: VISOR DE DOCUMENTO PDF CON ZOOM INTERACTIVO Y COMPARTIR POR WHATSAPP */}
       {selectedPdfModal && (
-        <div 
-          className="fixed inset-0 z-[95] flex items-center justify-center p-2.5 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in modal-overlay-safe"
-          style={{
-            paddingTop: 'max(env(safe-area-inset-top, 0px) + 12px, 1rem)',
-            paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 12px, 1rem)'
-          }}
-          onClick={() => {
-            setSelectedPdfModal(null);
-            setPdfZoom(1);
-            setIsPdfFullscreen(false);
-          }}
-        >
-          <div 
-            className={`bg-[#101722]/95 backdrop-blur-xl border border-white/10 rounded-3xl w-full flex flex-col overflow-hidden shadow-2xl text-white transition-all duration-200 ${
-              isPdfFullscreen ? 'max-w-5xl h-[94dvh]' : 'max-w-sm sm:max-w-2xl h-[84dvh]'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-3 sm:px-4 py-2.5 border-b border-white/10 flex items-center justify-between bg-slate-900/90 shrink-0 gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-500/20 text-white font-bold shrink-0">
-                  <FileText className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-xs font-black text-white uppercase tracking-wider font-mono truncate">
-                    {selectedPdfModal.filename || 'Reporte de Liquidación'}
-                  </h3>
-                  <p className="text-[10px] text-rose-300 font-mono truncate">
-                    Semana {selectedPdfModal.week?.displayLabel || selectedPdfModal.week?.key} • ${(selectedPdfModal.week?.totalEarnings || 0).toFixed(2)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-                {/* Controles de Zoom */}
-                <div className="flex items-center gap-0.5 sm:gap-1 bg-black/40 border border-white/10 rounded-xl px-1 sm:px-1.5 py-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setPdfZoom((z) => Math.max(0.6, Math.round((z - 0.2) * 10) / 10))}
-                    className="p-1 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
-                    title="Reducir tamaño"
-                  >
-                    <ZoomOut className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPdfZoom(1)}
-                    className="text-[10px] font-mono font-bold px-1 text-cyan-400 hover:text-cyan-300 transition cursor-pointer"
-                    title="Restablecer 100%"
-                  >
-                    {Math.round(pdfZoom * 100)}%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPdfZoom((z) => Math.min(2.5, Math.round((z + 0.2) * 10) / 10))}
-                    className="p-1 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
-                    title="Aumentar tamaño"
-                  >
-                    <ZoomIn className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Maximizar / Restaurar */}
-                <button
-                  type="button"
-                  onClick={() => setIsPdfFullscreen((f) => !f)}
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-300 hover:text-white transition shrink-0 cursor-pointer"
-                  title={isPdfFullscreen ? 'Restaurar ventana' : 'Pantalla completa'}
-                >
-                  {isPdfFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                </button>
-
-                {/* Abrir en pestaña nueva */}
-                <a
-                  href={selectedPdfModal.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-300 hover:text-white transition shrink-0 cursor-pointer"
-                  title="Abrir en pestaña nueva"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-
-                {/* Descargar */}
-                <a
-                  href={selectedPdfModal.url}
-                  download={selectedPdfModal.filename || 'reporte.pdf'}
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-300 hover:text-white transition shrink-0 cursor-pointer"
-                  title="Descargar PDF"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                </a>
-
-                {/* Eliminar */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (selectedPdfModal.week?.key) {
-                      handleDeleteReceipt(selectedPdfModal.week.key);
-                    }
-                  }}
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 hover:text-rose-200 transition shrink-0 cursor-pointer"
-                  title="Eliminar Reporte PDF permanentemente"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-
-                {/* Cerrar */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedPdfModal(null);
-                    setPdfZoom(1);
-                    setIsPdfFullscreen(false);
-                  }}
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition shrink-0 cursor-pointer"
-                  title="Cerrar ventana"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 bg-black/60 p-2 overflow-auto flex items-center justify-center relative scrollbar-thin">
-              <div
-                className="transition-transform duration-150 origin-top flex items-center justify-center w-full h-full"
-                style={{
-                  transform: `scale(${pdfZoom})`,
-                  transformOrigin: 'top center',
-                  width: pdfZoom > 1 ? `${100 * pdfZoom}%` : '100%',
-                  height: pdfZoom > 1 ? `${100 * pdfZoom}%` : '100%',
-                  minWidth: '100%',
-                  minHeight: '100%'
-                }}
-              >
-                <iframe
-                  src={`${selectedPdfModal.url}#zoom=${Math.round(pdfZoom * 100)}`}
-                  title={selectedPdfModal.filename || 'Reporte PDF'}
-                  className="w-full h-full rounded-2xl border border-white/10 bg-white shadow-2xl"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+        <PdfDocumentViewer
+          url={selectedPdfModal.url}
+          filename={selectedPdfModal.filename}
+          week={selectedPdfModal.week}
+          onClose={() => setSelectedPdfModal(null)}
+          onDelete={(key) => handleDeleteReceipt(key)}
+        />
       )}
 
       {/* MODAL: CONFIRMAR COBRO SEMANAL CON COMPROBANTE (FOTO O PDF) Y AUDITORÍA IA */}
