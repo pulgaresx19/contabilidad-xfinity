@@ -208,15 +208,15 @@ export default function PdfDocumentViewer({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[95] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-2.5 sm:p-4 select-none animate-fade-in"
+      className="fixed inset-0 z-[95] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-3 sm:p-4 select-none animate-fade-in"
       style={{
-        paddingTop: 'max(env(safe-area-inset-top, 0px) + 8px, 0.6rem)',
-        paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 10px, 0.75rem)'
+        paddingTop: 'max(env(safe-area-inset-top, 0px) + 18px, 1.35rem)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 12px, 1rem)'
       }}
     >
-      {/* 1. BARRA SUPERIOR FIJA (NUNCA DESAPARECE, CON POSICIONAMIENTO RELATIVO Y Z-INDEX 50) */}
+      {/* 1. BARRA SUPERIOR FIJA (DESPEGADA DE ARRIBA CON MARGEN INFERIOR Y POSICIONAMIENTO RELATIVO) */}
       <div
-        className="w-full flex items-center justify-between px-2 sm:px-3 py-2 bg-slate-900/95 border border-white/10 rounded-2xl shrink-0 z-50 relative gap-2 shadow-2xl"
+        className="w-full flex items-center justify-between px-2.5 sm:px-3.5 py-2.5 bg-slate-900/95 border border-white/10 rounded-2xl shrink-0 z-50 relative gap-2 shadow-2xl mb-2 sm:mb-3"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Título y Datos de la Semana */}
@@ -283,9 +283,9 @@ export default function PdfDocumentViewer({
         </div>
       </div>
 
-      {/* 2. CUERPO CENTRAL CON ZOOM Y PAN INTERACTIVO (CLIPEADO ESTRICTAMENTE, NUNCA INVADE EL HEADER) */}
+      {/* 2. CUERPO CENTRAL CON ZOOM Y PAN INTERACTIVO (CENTRADO Y APROVECHANDO MEJOR EL ESPACIO INFERIOR) */}
       <div
-        className="flex-1 min-h-0 w-full flex items-center justify-center p-1 sm:p-2 overflow-hidden relative cursor-grab active:cursor-grabbing select-none z-10"
+        className="flex-1 min-h-0 w-full flex items-center justify-center p-1 sm:p-2 overflow-hidden relative cursor-grab active:cursor-grabbing select-none z-10 my-auto"
         onClick={(e) => e.stopPropagation()}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -302,11 +302,11 @@ export default function PdfDocumentViewer({
             transition: isDragging ? 'none' : 'transform 0.15s ease-out',
             width: '100%',
             height: '100%',
-            maxWidth: '820px',
-            maxHeight: '74dvh',
-            minHeight: '280px'
+            maxWidth: '860px',
+            maxHeight: '78dvh',
+            minHeight: '300px'
           }}
-          className="flex items-center justify-center rounded-2xl overflow-hidden shadow-2xl relative pointer-events-auto"
+          className="flex items-center justify-center rounded-2xl overflow-hidden shadow-2xl relative pointer-events-auto border border-white/10"
         >
           <iframe
             src={blobUrl ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=1` : url}
@@ -319,7 +319,7 @@ export default function PdfDocumentViewer({
 
       {/* 3. BARRA INFERIOR FIJA CON CONTROLES DE ZOOM TIPO FOTO */}
       <div
-        className="shrink-0 pt-1 flex flex-col items-center gap-2 z-50 relative"
+        className="shrink-0 pt-2 pb-1 flex flex-col items-center gap-2 z-50 relative mt-1.5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-1.5 bg-slate-900/90 border border-white/15 px-3 py-1.5 rounded-2xl shadow-2xl">
