@@ -283,6 +283,27 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use('/uploads', express.static(uploadsDir));
 
+// Descarga directa con 1-click para el usuario
+app.get('/descargar/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const testDir = path.join(__dirname, 'PDFs_Prueba_Liquidacion');
+  const targetFile = path.join(testDir, filename);
+  if (fs.existsSync(targetFile)) {
+    return res.download(targetFile, filename);
+  }
+  const receiptsDir = path.join(uploadsDir, 'receipts');
+  const receiptFile = path.join(receiptsDir, filename);
+  if (fs.existsSync(receiptFile)) {
+    return res.download(receiptFile, filename);
+  }
+  const sheetsDir = path.join(uploadsDir, 'sheets');
+  const sheetFile = path.join(sheetsDir, filename);
+  if (fs.existsSync(sheetFile)) {
+    return res.download(sheetFile, filename);
+  }
+  res.status(404).send('Archivo no encontrado');
+});
+
 // Subdirectory for dispatch sheet scans
 const sheetsDir = path.join(uploadsDir, 'sheets');
 if (!fs.existsSync(sheetsDir)) {
@@ -1408,8 +1429,28 @@ app.get('/api/weekly-summary', (req, res) => {
       const activeOrders = w.orders.filter(o => o.status !== 'No Realizado' && o.status !== 'Cancelado');
       const payableOrders = completedOrders.length > 0 ? completedOrders : activeOrders;
       const isPaid = (w.orders.length === 0 && rec.photo) ? true : (payableOrders.length > 0 && payableOrders.every(o => o.payment_status === 'Cobrado'));
+
+      let auditObj = null;
+      try {
+        auditObj = rec.audit ? (typeof rec.audit === 'string' ? JSON.parse(rec.audit) : rec.audit) : null;
+      } catch (e) {}
+
+      const reportedPay = auditObj ? Number(auditObj.reported_total ?? auditObj.totalPay ?? 0) : 0;
+      const auditedDiff = auditObj ? Number(auditObj.difference ?? 0) : 0;
+      let effectiveEarnings = w.totalEarnings;
+      let effectivePaid = w.paidEarnings;
+
+      if (isPaid && reportedPay > 0) {
+        effectivePaid = reportedPay;
+        effectiveEarnings = Math.max(w.totalEarnings, reportedPay);
+      }
+
       return {
         ...w,
+        totalEarnings: effectiveEarnings,
+        paidEarnings: effectivePaid,
+        settlementTotal: reportedPay > 0 ? reportedPay : null,
+        settlementDifference: auditedDiff,
         isPaid,
         payment_status: isPaid ? 'Cobrado' : 'Pendiente',
         receipt_photo: rec.photo || null,
@@ -1425,18 +1466,12 @@ app.get('/api/weekly-summary', (req, res) => {
     let totalFeetAll = 0;
     let totalCompletedCount = 0;
 
-    for (const o of allOrders) {
-      if (o.status === 'Completado') {
-        totalCompletedCount++;
-        totalFeetAll += o.drop_footage || 0;
-        const val = o.rate_calculated || 0;
-        totalAllEarnings += val;
-        if (o.payment_status === 'Cobrado') {
-          totalPaid += val;
-        } else {
-          totalPending += val;
-        }
-      }
+    for (const w of weeks) {
+      totalAllEarnings += w.totalEarnings;
+      totalPaid += w.paidEarnings;
+      totalPending += w.pendingEarnings;
+      totalFeetAll += w.totalFootage;
+      totalCompletedCount += w.completedCount;
     }
 
     res.json({
@@ -1735,8 +1770,28 @@ app.get('/api/monthly-summary', (req, res) => {
       const payableList = completedList.length > 0 ? completedList : activeList;
       const isPaid = payableList.length > 0 && payableList.every(o => o.payment_status === 'Cobrado');
       const rec = receiptsMap[w.key] || {};
+
+      let auditObj = null;
+      try {
+        auditObj = rec.audit ? (typeof rec.audit === 'string' ? JSON.parse(rec.audit) : rec.audit) : null;
+      } catch (e) {}
+
+      const reportedPay = auditObj ? Number(auditObj.reported_total ?? auditObj.totalPay ?? 0) : 0;
+      const auditedDiff = auditObj ? Number(auditObj.difference ?? 0) : 0;
+      let effectiveEarnings = w.totalEarnings;
+      let effectivePaid = w.paidEarnings;
+
+      if (isPaid && reportedPay > 0) {
+        effectivePaid = reportedPay;
+        effectiveEarnings = Math.max(w.totalEarnings, reportedPay);
+      }
+
       return {
         ...w,
+        totalEarnings: effectiveEarnings,
+        paidEarnings: effectivePaid,
+        settlementTotal: reportedPay > 0 ? reportedPay : null,
+        settlementDifference: auditedDiff,
         isPaid,
         payment_status: isPaid ? 'Cobrado' : 'Pendiente',
         receipt_photo: rec.photo || null,
