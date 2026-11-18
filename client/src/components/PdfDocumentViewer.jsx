@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, ZoomIn, ZoomOut, Download, Trash2, FileText, Share2, MessageCircle } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, Trash2, FileText, Share2, MessageCircle } from 'lucide-react';
 
 export default function PdfDocumentViewer({
   url,
@@ -188,20 +188,6 @@ export default function PdfDocumentViewer({
     window.open(waUrl, '_blank');
   };
 
-  // Descarga directa del archivo
-  const handleDownload = () => {
-    try {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename || 'comprobante.pdf';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } catch (_) {
-      window.open(url, '_blank');
-    }
-  };
-
   const weekDisplay = week?.displayLabel || week?.key || '';
   const earningsDisplay = week?.totalEarnings !== undefined ? `$${Number(week.totalEarnings).toFixed(2)}` : null;
 
@@ -234,7 +220,7 @@ export default function PdfDocumentViewer({
           </div>
         </div>
 
-        {/* Botones de Acción Superiores: Compartir WhatsApp, Descargar, Eliminar y Cerrar */}
+        {/* Botones de Acción Superiores: Compartir WhatsApp, Eliminar y Cerrar */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Botón WhatsApp */}
           <button
@@ -245,16 +231,6 @@ export default function PdfDocumentViewer({
           >
             <Share2 className="w-3.5 h-3.5 stroke-[2.2]" />
             <span className="hidden sm:inline text-[11px]">WhatsApp</span>
-          </button>
-
-          {/* Botón Descargar */}
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-300 hover:text-white transition active:scale-95 shadow-md cursor-pointer"
-            title="Descargar PDF"
-          >
-            <Download className="w-3.5 h-3.5" />
           </button>
 
           {/* Botón Eliminar (opcional) */}
