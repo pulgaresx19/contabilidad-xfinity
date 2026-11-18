@@ -15,6 +15,38 @@ export default function PdfDocumentViewer({
   const touchStartDistRef = useRef(0);
   const lastTapRef = useRef(0);
 
+  const [blobUrl, setBlobUrl] = useState(null);
+
+  // Convertir base64 a Blob URL para renderizado nativo ultra-rápido y limpio
+  useEffect(() => {
+    let createdUrl = null;
+    if (url) {
+      if (url.startsWith('data:application/pdf')) {
+        try {
+          const parts = url.split(',');
+          const byteString = atob(parts[1]);
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+          }
+          const blob = new Blob([ab], { type: 'application/pdf' });
+          createdUrl = URL.createObjectURL(blob);
+          setBlobUrl(createdUrl);
+        } catch (e) {
+          setBlobUrl(url);
+        }
+      } else {
+        setBlobUrl(url);
+      }
+    }
+    return () => {
+      if (createdUrl) {
+        URL.revokeObjectURL(createdUrl);
+      }
+    };
+  }, [url]);
+
   // Reiniciar escala al cambiar de archivo
   useEffect(() => {
     setScale(1);
@@ -182,9 +214,9 @@ export default function PdfDocumentViewer({
         paddingBottom: 'max(env(safe-area-inset-bottom, 0px) + 10px, 0.75rem)'
       }}
     >
-      {/* 1. BARRA SUPERIOR FIJA (NUNCA DESAPARECE, SIN BOTÓN DE PANTALLA COMPLETA) */}
+      {/* 1. BARRA SUPERIOR FIJA (NUNCA DESAPARECE, CON POSICIONAMIENTO RELATIVO Y Z-INDEX 50) */}
       <div
-        className="w-full flex items-center justify-between px-2 sm:px-3 py-2 bg-slate-900/95 border border-white/10 rounded-2xl shrink-0 z-50 gap-2 shadow-2xl"
+        className="w-full flex items-center justify-between px-2 sm:px-3 py-2 bg-slate-900/95 border border-white/10 rounded-2xl shrink-0 z-50 relative gap-2 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Título y Datos de la Semana */}
@@ -251,9 +283,9 @@ export default function PdfDocumentViewer({
         </div>
       </div>
 
-      {/* 2. CUERPO CENTRAL CON ZOOM Y PAN INTERACTIVO (SCROLL SUAVE Y EXPANDIBLE TIPO FOTO) */}
+      {/* 2. CUERPO CENTRAL CON ZOOM Y PAN INTERACTIVO (CLIPEADO ESTRICTAMENTE, NUNCA INVADE EL HEADER) */}
       <div
-        className="flex-1 min-h-0 w-full flex items-center justify-center p-1 sm:p-2 overflow-auto relative cursor-grab active:cursor-grabbing scrollbar-thin select-none"
+        className="flex-1 min-h-0 w-full flex items-center justify-center p-1 sm:p-2 overflow-hidden relative cursor-grab active:cursor-grabbing select-none z-10"
         onClick={(e) => e.stopPropagation()}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -268,16 +300,16 @@ export default function PdfDocumentViewer({
             transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`,
             transformOrigin: 'center center',
             transition: isDragging ? 'none' : 'transform 0.15s ease-out',
-            width: scale > 1 ? `${Math.round(100 * scale)}%` : '100%',
-            height: scale > 1 ? `${Math.round(100 * scale)}%` : '100%',
-            maxWidth: scale > 1 ? 'none' : '820px',
-            maxHeight: scale > 1 ? 'none' : '72dvh',
+            width: '100%',
+            height: '100%',
+            maxWidth: '820px',
+            maxHeight: '74dvh',
             minHeight: '280px'
           }}
-          className="flex items-center justify-center rounded-2xl overflow-hidden shadow-2xl relative"
+          className="flex items-center justify-center rounded-2xl overflow-hidden shadow-2xl relative pointer-events-auto"
         >
           <iframe
-            src={`${url}#toolbar=0&navpanes=0&scrollbar=1&zoom=${Math.round(scale * 100)}`}
+            src={blobUrl ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=1` : url}
             title={filename || 'Reporte PDF'}
             className="w-full h-full rounded-2xl border border-white/10 bg-white shadow-2xl pointer-events-auto"
             style={{ minHeight: '340px', height: '100%', width: '100%' }}
@@ -287,7 +319,7 @@ export default function PdfDocumentViewer({
 
       {/* 3. BARRA INFERIOR FIJA CON CONTROLES DE ZOOM TIPO FOTO */}
       <div
-        className="shrink-0 pt-1 flex flex-col items-center gap-2 z-50"
+        className="shrink-0 pt-1 flex flex-col items-center gap-2 z-50 relative"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-1.5 bg-slate-900/90 border border-white/15 px-3 py-1.5 rounded-2xl shadow-2xl">
