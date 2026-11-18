@@ -704,16 +704,7 @@ ${weeksLines || '  (No hay semanas registradas)'}
                       }`}>
                         ${(w.totalEarnings || 0).toFixed(2)}
                       </span>
-                      <div className="flex items-center justify-end gap-1">
-                        {w.settlementDifference && w.settlementDifference !== 0 ? (
-                          <span className={`text-[8.5px] font-bold px-1.5 py-0.2 rounded border font-mono ${
-                            w.settlementDifference > 0
-                              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                              : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-                          }`}>
-                            {w.settlementDifference > 0 ? '+' : ''}${w.settlementDifference.toFixed(2)} {w.settlementDifference > 0 ? 'Bono' : 'Faltante'}
-                          </span>
-                        ) : null}
+                      <div className="flex items-center justify-end">
                         <span className="text-[10px] text-slate-400 font-mono font-bold">
                           {Math.round(w.totalFootage || 0)} ft
                         </span>
@@ -721,12 +712,30 @@ ${weeksLines || '  (No hay semanas registradas)'}
                     </div>
                   </div>
 
-                  {/* Fila Inferior con Espacio de Confirmación Estético */}
-                  <div className="flex items-center justify-between pt-2 border-t border-white/8">
-                    <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                      <FileText className="h-3 w-3 text-cyan-400" />
-                      <span>{w.orders?.length || 0} órdenes registradas</span>
-                    </span>
+                  {/* Fila Inferior con Espacio de Confirmación Estético y Reporte de Bono/Faltante al lado de las órdenes */}
+                  <div className="flex items-center justify-between pt-2 border-t border-white/8 gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                      <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 shrink-0">
+                        <FileText className="h-3 w-3 text-cyan-400" />
+                        <span>{w.orders?.length || 0} órdenes</span>
+                      </span>
+
+                      {w.settlementDifference && w.settlementDifference !== 0 ? (
+                        <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded-lg border font-mono flex items-center gap-1 shrink-0 shadow-xs ${
+                          w.settlementDifference > 0
+                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                            : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                        }`}>
+                          <span className="text-[8px]">{w.settlementDifference > 0 ? '▲' : '▼'}</span>
+                          <span>{w.settlementDifference > 0 ? '+' : ''}${w.settlementDifference.toFixed(2)}</span>
+                          <span className={`text-[8px] uppercase font-sans font-extrabold px-1 py-0.2 rounded ${
+                            w.settlementDifference > 0 ? 'bg-emerald-500/25 text-emerald-200' : 'bg-rose-500/25 text-rose-200'
+                          }`}>
+                            {w.settlementDifference > 0 ? 'Bono' : 'Faltante'}
+                          </span>
+                        </span>
+                      ) : null}
+                    </div>
 
                     <div className="flex items-center gap-2">
                       {w.isPaid ? (
