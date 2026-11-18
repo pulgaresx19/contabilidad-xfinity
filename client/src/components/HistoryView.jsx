@@ -77,25 +77,66 @@ export default function HistoryView({
 
   // Recopilar todos los recibos de cobro de las semanas con comprobante
   const allWeeklyReceipts = useMemo(() => {
-    return weeks
-      .map(w => {
-        const photo = w.receipt_photo;
-        const filename = w.receipt_filename;
-        if (!photo && !filename) return null;
+    const map = new Map();
+
+    // 1. Recorrer semanas provistas en el summary
+    weeks.forEach(w => {
+      const localPhoto = typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null;
+      const localFn = typeof window !== 'undefined' ? localStorage.getItem('receipt_fn_' + w.key) : null;
+      const localAudit = typeof window !== 'undefined' ? localStorage.getItem('receipt_audit_' + w.key) : null;
+      const photo = w.receipt_photo || localPhoto;
+      const filename = w.receipt_filename || localFn;
+      if (photo || filename) {
         const isPdf = Boolean(
           photo?.startsWith('data:application/pdf') ||
           photo?.endsWith('.pdf') ||
           filename?.toLowerCase().endsWith('.pdf')
         );
-        return {
+        map.set(w.key, {
           ...w,
+          receipt_photo: photo,
           photo,
-          filename,
-          isPdf
-        };
-      })
-      .filter(Boolean);
-  }, [weeks]);
+          filename: filename || 'comprobante.pdf',
+          isPdf,
+          audit_summary: w.audit_summary || localAudit
+        });
+      }
+    });
+
+    // 2. Respaldo directo: comprobar comprobantes guardados en localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('receipt_') && !k.startsWith('receipt_fn_') && !k.startsWith('receipt_audit_')) {
+            const wKey = k.replace('receipt_', '');
+            if (!map.has(wKey)) {
+              const photo = localStorage.getItem(k);
+              const filename = localStorage.getItem('receipt_fn_' + wKey) || 'comprobante.pdf';
+              const audit = localStorage.getItem('receipt_audit_' + wKey);
+              const isPdf = Boolean(
+                photo?.startsWith('data:application/pdf') ||
+                photo?.endsWith('.pdf') ||
+                filename?.toLowerCase().endsWith('.pdf')
+              );
+              map.set(wKey, {
+                key: wKey,
+                displayLabel: wKey,
+                totalEarnings: 0,
+                receipt_photo: photo,
+                photo,
+                filename,
+                isPdf,
+                audit_summary: audit
+              });
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    return Array.from(map.values());
+  }, [weeks, summaryData]);
 
   // Filtrar los recibos por fecha escrita por el usuario
   const filteredReceipts = useMemo(() => {
@@ -347,6 +388,7 @@ export default function HistoryView({
       if (typeof window !== 'undefined') {
         localStorage.removeItem('receipt_' + key);
         localStorage.removeItem('receipt_fn_' + key);
+        localStorage.removeItem('receipt_audit_' + key);
       }
       if (confirmPaymentWeek && confirmPaymentWeek.key === key) {
         setReceiptPhotoPreview(null);
@@ -383,9 +425,20 @@ export default function HistoryView({
       });
 
       if (res.ok) {
-        if (!receiptPhotoPreview && typeof window !== 'undefined') {
+        if (receiptPhotoPreview && typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('receipt_' + confirmPaymentWeek.key, receiptPhotoPreview);
+            localStorage.setItem('receipt_fn_' + confirmPaymentWeek.key, receiptFileName || 'comprobante.pdf');
+            if (reconciliationResult) {
+              localStorage.setItem('receipt_audit_' + confirmPaymentWeek.key, JSON.stringify(reconciliationResult));
+            }
+          } catch (lsErr) {
+            console.warn('localStorage error:', lsErr);
+          }
+        } else if (!receiptPhotoPreview && typeof window !== 'undefined') {
           localStorage.removeItem('receipt_' + confirmPaymentWeek.key);
           localStorage.removeItem('receipt_fn_' + confirmPaymentWeek.key);
+          localStorage.removeItem('receipt_audit_' + confirmPaymentWeek.key);
         }
         setConfirmPaymentWeek(null);
         setReceiptPhotoPreview(null);

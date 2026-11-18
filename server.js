@@ -1528,6 +1528,25 @@ app.post('/api/weeks/:key/status', (req, res) => {
     if (receipt_photo !== undefined) {
       try {
         if (receipt_photo) {
+          // Physical file backup on disk in uploads/receipts/
+          if (typeof receipt_photo === 'string' && receipt_photo.startsWith('data:')) {
+            try {
+              const matches = receipt_photo.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+              if (matches && matches.length === 3) {
+                const mime = matches[1];
+                const b64Data = matches[2];
+                const ext = mime.includes('pdf') ? 'pdf' : (mime.includes('png') ? 'png' : 'jpg');
+                const safeKey = key.replace(/[^a-zA-Z0-9_-]/g, '_');
+                const receiptsDir = path.join(__dirname, 'uploads', 'receipts');
+                if (!fs.existsSync(receiptsDir)) fs.mkdirSync(receiptsDir, { recursive: true });
+                const outPath = path.join(receiptsDir, `receipt_${safeKey}.${ext}`);
+                fs.writeFileSync(outPath, Buffer.from(b64Data, 'base64'));
+              }
+            } catch (fsErr) {
+              console.warn('Physical receipt backup warning:', fsErr.message);
+            }
+          }
+
           const auditText = audit_summary ? (typeof audit_summary === 'string' ? audit_summary : JSON.stringify(audit_summary)) : null;
           db.prepare(`
             INSERT INTO week_receipts (week_key, receipt_photo, receipt_filename, audit_summary, updated_at)
@@ -1542,7 +1561,9 @@ app.post('/api/weeks/:key/status', (req, res) => {
           // If explicitly null or empty, delete receipt record for this week
           db.prepare('DELETE FROM week_receipts WHERE week_key = ?').run(key);
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Error saving week receipt to db:', e.message);
+      }
     }
 
     res.json({ success: true, updated: activeOrders.length, payment_status: newStatus });

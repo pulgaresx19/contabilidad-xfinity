@@ -117,7 +117,18 @@ export default function App() {
 
     try {
       const cached = localStorage.getItem('xfinity_cached_summary');
-      if (cached) setSummaryData(JSON.parse(cached));
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && Array.isArray(parsed.weeks)) {
+          parsed.weeks = parsed.weeks.map(w => ({
+            ...w,
+            receipt_photo: w.receipt_photo || (typeof window !== 'undefined' ? localStorage.getItem('receipt_' + w.key) : null),
+            receipt_filename: w.receipt_filename || (typeof window !== 'undefined' ? localStorage.getItem('receipt_fn_' + w.key) : null),
+            audit_summary: w.audit_summary || (typeof window !== 'undefined' ? localStorage.getItem('receipt_audit_' + w.key) : null)
+          }));
+        }
+        setSummaryData(parsed);
+      }
     } catch (e) {}
   };
 

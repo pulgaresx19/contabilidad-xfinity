@@ -258,6 +258,7 @@ ${jobList || '  (Sin órdenes registradas)'}
       if (typeof window !== 'undefined') {
         localStorage.removeItem('receipt_' + key);
         localStorage.removeItem('receipt_fn_' + key);
+        localStorage.removeItem('receipt_audit_' + key);
       }
       if (confirmPaymentWeek && confirmPaymentWeek.key === key) {
         setReceiptPhotoPreview(null);
@@ -302,9 +303,20 @@ ${jobList || '  (Sin órdenes registradas)'}
         })
       });
       if (res.ok) {
-        if (!receiptPhotoPreview && typeof window !== 'undefined') {
+        if (receiptPhotoPreview && typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('receipt_' + confirmPaymentWeek.key, receiptPhotoPreview);
+            localStorage.setItem('receipt_fn_' + confirmPaymentWeek.key, receiptFileName || 'comprobante.pdf');
+            if (reconciliationResult) {
+              localStorage.setItem('receipt_audit_' + confirmPaymentWeek.key, JSON.stringify(reconciliationResult));
+            }
+          } catch (lsErr) {
+            console.warn('localStorage error:', lsErr);
+          }
+        } else if (!receiptPhotoPreview && typeof window !== 'undefined') {
           localStorage.removeItem('receipt_' + confirmPaymentWeek.key);
           localStorage.removeItem('receipt_fn_' + confirmPaymentWeek.key);
+          localStorage.removeItem('receipt_audit_' + confirmPaymentWeek.key);
         }
         if (selectedWeekModal?.key === confirmPaymentWeek.key) {
           setSelectedWeekModal(prev => ({

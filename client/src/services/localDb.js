@@ -1,7 +1,7 @@
 import { initialSeedData } from '../data/seedData';
 
 const DB_NAME = 'ContabilidadXfinityDB';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let dbPromise = null;
 
@@ -757,7 +757,7 @@ export async function getWeeklySummary(backendReceipts = {}) {
     w.orders.push(order);
   }
 
-  // Receipts lookup map (almacenado en la Bodega Grande IndexedDB week_receipts)
+  // Receipts lookup map (almacenado en la Bodega Grande IndexedDB week_receipts y localStorage)
   let receiptsMap = {};
   let receiptsMetaMap = {};
 
@@ -794,48 +794,115 @@ export async function getWeeklySummary(backendReceipts = {}) {
     }
   } catch (e) {}
 
-  // Migración automática: si había algún recibo antiguo en localStorage, pasarlo a IndexedDB y liberar los 5MB de localStorage
-  try {
-    for (const key of Object.keys(weeksMap)) {
-      const legacyPhoto = localStorage.getItem('receipt_' + key);
-      const legacyFn = localStorage.getItem('receipt_fn_' + key);
-      if (legacyPhoto) {
-        if (!receiptsMap[key]) {
-          receiptsMap[key] = legacyPhoto;
-          receiptsMetaMap[key] = {
-            receipt_filename: legacyFn || null,
-            audit_summary: null
-          };
-          if (db.objectStoreNames.contains('week_receipts')) {
-            const mTx = db.transaction('week_receipts', 'readwrite');
-            mTx.objectStore('week_receipts').put({
-              week_key: key,
-              receipt_photo: legacyPhoto,
-              receipt_filename: legacyFn || null,
-              updated_at: new Date().toISOString()
-            });
+  // Sincronización y respaldo con localStorage
+  if (typeof window !== 'undefined') {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('receipt_') && !k.startsWith('receipt_fn_') && !k.startsWith('receipt_audit_')) {
+          const wKey = k.replace('receipt_', '');
+          const localPhoto = localStorage.getItem(k);
+          const localFn = localStorage.getItem('receipt_fn_' + wKey);
+          const localAudit = localStorage.getItem('receipt_audit_' + wKey);
+          if (localPhoto && !receiptsMap[wKey]) {
+            receiptsMap[wKey] = localPhoto;
+            receiptsMetaMap[wKey] = {
+              receipt_filename: localFn || null,
+              audit_summary: localAudit || null
+            };
+            if (db.objectStoreNames.contains('week_receipts')) {
+              try {
+                const mTx = db.transaction('week_receipts', 'readwrite');
+                mTx.objectStore('week_receipts').put({
+                  week_key: wKey,
+                  receipt_photo: localPhoto,
+                  receipt_filename: localFn || null,
+                  audit_summary: localAudit || null,
+                  updated_at: new Date().toISOString()
+                });
+              } catch (_) {}
+            }
           }
         }
-        try {
-          localStorage.removeItem('receipt_' + key);
-          localStorage.removeItem('receipt_fn_' + key);
-        } catch (_) {}
       }
+    } catch (e) {}
+  }
+
+  // Incluir semanas que tienen comprobantes/liquidaciones registradas aunque no tengan órdenes todavía
+  for (const weekKey of Object.keys(receiptsMap)) {
+    if (!weeksMap[weekKey]) {
+      const parts = weekKey.split('_al_');
+      const startDate = parts[0] || weekKey;
+      const endDate = parts[1] || weekKey;
+      const sD = new Date(startDate + 'T12:00:00');
+      const eD = new Date(endDate + 'T12:00:00');
+      const startShort = `${sD.getMonth() + 1}/${sD.getDate()}`;
+      const endShort = `${eD.getMonth() + 1}/${eD.getDate()}`;
+      const displayLabel = `${startShort} al ${endShort}`;
+
+      let auditData = null;
+      try {
+        const meta = receiptsMetaMap[weekKey] || {};
+        auditData = meta.audit_summary ? (typeof meta.audit_summary === 'string' ? JSON.parse(meta.audit_summary) : meta.audit_summary) : null;
+      } catch (e) {}
+
+      const settlementEarnings = Number(auditData?.reported_total ?? auditData?.totalPay ?? 0);
+
+      weeksMap[weekKey] = {
+        key: weekKey,
+        displayLabel,
+        year: eD.getFullYear() || new Date().getFullYear(),
+        startDate,
+        endDate,
+        totalJobs: 0,
+        completedCount: 0,
+        pendingJobsCount: 0,
+        cancelledCount: 0,
+        totalFootage: 0,
+        totalEarnings: settlementEarnings,
+        pendingEarnings: 0,
+        paidEarnings: settlementEarnings,
+        rg6Count: 0,
+        rg11Count: 0,
+        boresCount: 0,
+        orders: []
+      };
     }
-  } catch (e) {}
+  }
 
   const weeks = Object.values(weeksMap)
     .map((w) => {
       const completedOrders = w.orders.filter((o) => o.status === 'Completado');
       const activeOrders = w.orders.filter((o) => o.status !== 'No Realizado' && o.status !== 'Cancelado');
       const payableOrders = completedOrders.length > 0 ? completedOrders : activeOrders;
-      const isPaid = payableOrders.length > 0 && payableOrders.every((o) => o.payment_status === 'Cobrado');
       const meta = receiptsMetaMap[w.key] || {};
+      const receiptPhoto = receiptsMap[w.key] || null;
+      const isPaid = (w.orders.length === 0 && receiptPhoto) ? true : (payableOrders.length > 0 && payableOrders.every((o) => o.payment_status === 'Cobrado'));
+
+      let auditObj = null;
+      try {
+        auditObj = meta.audit_summary ? (typeof meta.audit_summary === 'string' ? JSON.parse(meta.audit_summary) : meta.audit_summary) : null;
+      } catch (e) {}
+
+      const reportedPay = auditObj ? Number(auditObj.reported_total ?? auditObj.totalPay ?? 0) : 0;
+      const auditedDiff = auditObj ? Number(auditObj.difference ?? 0) : 0;
+      let effectiveEarnings = w.totalEarnings;
+      let effectivePaid = w.paidEarnings;
+
+      if (isPaid && reportedPay > 0) {
+        effectivePaid = reportedPay;
+        effectiveEarnings = Math.max(w.totalEarnings, reportedPay);
+      }
+
       return {
         ...w,
+        totalEarnings: effectiveEarnings,
+        paidEarnings: effectivePaid,
+        settlementTotal: reportedPay > 0 ? reportedPay : null,
+        settlementDifference: auditedDiff,
         isPaid,
         payment_status: isPaid ? 'Cobrado' : 'Pendiente',
-        receipt_photo: receiptsMap[w.key] || null,
+        receipt_photo: receiptPhoto,
         receipt_filename: meta.receipt_filename || null,
         audit_summary: meta.audit_summary || null
       };
@@ -882,14 +949,60 @@ export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = nu
   const db = await getDb();
   const summary = await getWeeklySummary();
   const targetWeek = summary.weeks.find((w) => w.key === weekKey);
-  if (!targetWeek) return { success: false, message: 'Week not found' };
+
+  // 1. Siempre guardar o actualizar el comprobante en IndexedDB y localStorage como garantía
+  const auditString = auditSummary ? (typeof auditSummary === 'string' ? auditSummary : JSON.stringify(auditSummary)) : null;
+  if (receiptPhoto) {
+    if (db.objectStoreNames.contains('week_receipts')) {
+      try {
+        const rTx = db.transaction('week_receipts', 'readwrite');
+        rTx.objectStore('week_receipts').put({
+          week_key: weekKey,
+          receipt_photo: receiptPhoto,
+          receipt_filename: receiptFilename || null,
+          audit_summary: auditString,
+          updated_at: new Date().toISOString()
+        });
+      } catch (e) {
+        console.warn('Error guardando en week_receipts:', e);
+      }
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('receipt_' + weekKey, receiptPhoto);
+        if (receiptFilename) localStorage.setItem('receipt_fn_' + weekKey, receiptFilename);
+        if (auditString) localStorage.setItem('receipt_audit_' + weekKey, auditString);
+      } catch (lsErr) {
+        console.warn('localStorage error:', lsErr);
+      }
+    }
+  } else if (receiptPhoto === null) {
+    if (db.objectStoreNames.contains('week_receipts')) {
+      try {
+        const rTx = db.transaction('week_receipts', 'readwrite');
+        rTx.objectStore('week_receipts').delete(weekKey);
+      } catch (e) {}
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('receipt_' + weekKey);
+        localStorage.removeItem('receipt_fn_' + weekKey);
+        localStorage.removeItem('receipt_audit_' + weekKey);
+      } catch (_) {}
+    }
+  }
+
+  // Si la semana no tiene órdenes registradas aún, terminar exitosamente
+  if (!targetWeek || !targetWeek.orders || targetWeek.orders.length === 0) {
+    return { success: true, message: 'Week updated', updatedCount: 0 };
+  }
 
   const targetStatus = paymentStatus === 'Cobrado' ? 'Cobrado' : 'Pendiente';
   const completedOrders = targetWeek.orders.filter((o) => o.status === 'Completado');
   const activeOrders = targetWeek.orders.filter(
     (o) => o.status !== 'No Realizado' && o.status !== 'Cancelado'
   );
-  // Solo marcar como Cobrado las órdenes ya Completadas (evita convertir órdenes Pendientes sin fotos en Completadas)
+  // Solo marcar como Cobrado las órdenes ya Completadas
   const targetOrders = targetStatus === 'Cobrado'
     ? (completedOrders.length > 0 ? completedOrders : activeOrders)
     : activeOrders;
@@ -903,27 +1016,6 @@ export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = nu
     store.put(order);
   }
 
-  // Save, update or clear receipt in IndexedDB week_receipts store
-  try {
-    if (db.objectStoreNames.contains('week_receipts')) {
-      const rTx = db.transaction('week_receipts', 'readwrite');
-      const rStore = rTx.objectStore('week_receipts');
-      if (receiptPhoto) {
-        rStore.put({
-          week_key: weekKey,
-          receipt_photo: receiptPhoto,
-          receipt_filename: receiptFilename || null,
-          audit_summary: auditSummary ? (typeof auditSummary === 'string' ? auditSummary : JSON.stringify(auditSummary)) : null,
-          updated_at: new Date().toISOString()
-        });
-      } else if (receiptPhoto === null) {
-        rStore.delete(weekKey);
-      }
-    }
-  } catch (e) {
-    console.warn('Error updating week receipt in IndexedDB:', e);
-  }
-
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve({ success: true, updatedCount: targetOrders.length });
     tx.onerror = () => reject(tx.error);
@@ -932,6 +1024,13 @@ export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = nu
 
 export async function deleteWeekReceipt(weekKey) {
   const db = await getDb();
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem('receipt_' + weekKey);
+      localStorage.removeItem('receipt_fn_' + weekKey);
+      localStorage.removeItem('receipt_audit_' + weekKey);
+    } catch (_) {}
+  }
   if (!db.objectStoreNames.contains('week_receipts')) return { success: true };
   return new Promise((resolve, reject) => {
     try {
@@ -941,39 +1040,48 @@ export async function deleteWeekReceipt(weekKey) {
       tx.oncomplete = () => resolve({ success: true });
       tx.onerror = () => reject(tx.error);
     } catch (err) {
-      reject(err);
+      resolve({ success: true });
     }
   });
 }
 
 export async function saveWeekReceipt(weekKey, receiptData) {
   const db = await getDb();
-  if (!db.objectStoreNames.contains('week_receipts')) return { success: false };
+  const photo = typeof receiptData === 'object' && receiptData !== null
+    ? (receiptData.receipt_photo || receiptData.photo || null)
+    : receiptData;
+  const filename = typeof receiptData === 'object' && receiptData !== null
+    ? (receiptData.receipt_filename || receiptData.filename || null)
+    : null;
+  const audit = typeof receiptData === 'object' && receiptData !== null
+    ? (receiptData.audit_summary || null)
+    : null;
+  const auditStr = audit ? (typeof audit === 'string' ? audit : JSON.stringify(audit)) : null;
+
+  if (typeof window !== 'undefined' && photo) {
+    try {
+      localStorage.setItem('receipt_' + weekKey, photo);
+      if (filename) localStorage.setItem('receipt_fn_' + weekKey, filename);
+      if (auditStr) localStorage.setItem('receipt_audit_' + weekKey, auditStr);
+    } catch (_) {}
+  }
+
+  if (!db.objectStoreNames.contains('week_receipts')) return { success: true };
   return new Promise((resolve, reject) => {
     try {
       const tx = db.transaction('week_receipts', 'readwrite');
       const store = tx.objectStore('week_receipts');
-      const photo = typeof receiptData === 'object' && receiptData !== null
-        ? (receiptData.receipt_photo || receiptData.photo || null)
-        : receiptData;
-      const filename = typeof receiptData === 'object' && receiptData !== null
-        ? (receiptData.receipt_filename || receiptData.filename || null)
-        : null;
-      const audit = typeof receiptData === 'object' && receiptData !== null
-        ? (receiptData.audit_summary || null)
-        : null;
-
       store.put({
         week_key: weekKey,
         receipt_photo: photo,
         receipt_filename: filename,
-        audit_summary: audit ? (typeof audit === 'string' ? audit : JSON.stringify(audit)) : null,
+        audit_summary: auditStr,
         updated_at: new Date().toISOString()
       });
       tx.oncomplete = () => resolve({ success: true });
       tx.onerror = () => reject(tx.error);
     } catch (err) {
-      reject(err);
+      resolve({ success: false, error: err.message });
     }
   });
 }
