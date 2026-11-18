@@ -347,9 +347,9 @@ export function initApiAdapter() {
           const result = await localDb.updateWeekStatus(
             weekKey,
             body.payment_status,
-            body.receipt_photo || null,
-            body.receipt_filename || null,
-            body.audit_summary || null
+            body.receipt_photo !== undefined ? body.receipt_photo : undefined,
+            body.receipt_filename !== undefined ? body.receipt_filename : undefined,
+            body.audit_summary !== undefined ? body.audit_summary : undefined
           );
           try {
             await originalFetch(input, init);

@@ -945,7 +945,7 @@ export async function getWeeklySummary(backendReceipts = {}) {
   };
 }
 
-export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = null, receiptFilename = null, auditSummary = null) {
+export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = undefined, receiptFilename = undefined, auditSummary = undefined) {
   const db = await getDb();
   const summary = await getWeeklySummary();
   const targetWeek = summary.weeks.find((w) => w.key === weekKey);
@@ -969,14 +969,17 @@ export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = nu
     }
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('receipt_' + weekKey, receiptPhoto);
+        // Preservar cuota de localStorage: solo almacenar si es menor a 500KB
+        if (typeof receiptPhoto === 'string' && receiptPhoto.length < 500000) {
+          localStorage.setItem('receipt_' + weekKey, receiptPhoto);
+        }
         if (receiptFilename) localStorage.setItem('receipt_fn_' + weekKey, receiptFilename);
         if (auditString) localStorage.setItem('receipt_audit_' + weekKey, auditString);
       } catch (lsErr) {
         console.warn('localStorage error:', lsErr);
       }
     }
-  } else if (receiptPhoto === null) {
+  } else if (receiptPhoto === null || receiptPhoto === '') {
     if (db.objectStoreNames.contains('week_receipts')) {
       try {
         const rTx = db.transaction('week_receipts', 'readwrite');
@@ -1060,7 +1063,9 @@ export async function saveWeekReceipt(weekKey, receiptData) {
 
   if (typeof window !== 'undefined' && photo) {
     try {
-      localStorage.setItem('receipt_' + weekKey, photo);
+      if (typeof photo === 'string' && photo.length < 500000) {
+        localStorage.setItem('receipt_' + weekKey, photo);
+      }
       if (filename) localStorage.setItem('receipt_fn_' + weekKey, filename);
       if (auditStr) localStorage.setItem('receipt_audit_' + weekKey, auditStr);
     } catch (_) {}

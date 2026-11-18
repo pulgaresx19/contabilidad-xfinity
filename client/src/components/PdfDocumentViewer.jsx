@@ -163,20 +163,19 @@ export default function PdfDocumentViewer({
     const shareText = `📄 *COMPROBANTE DE LIQUIDACIÓN / PAGO - XFINITY*\n📅 *Semana:* ${weekLabel}\n💰 *Monto:* ${totalAmount}\n📎 *Archivo:* ${filename}\n\n_Comprobante registrado y auditado correctamente._`;
 
     // Intentar compartir archivo directo si el navegador móvil lo soporta
-    if (navigator.share && url) {
+    if (navigator.share && (blobUrl || url)) {
       try {
-        if (url.startsWith('data:application/pdf')) {
-          const res = await fetch(url);
-          const blob = await res.blob();
-          const file = new File([blob], filename || 'liquidacion.pdf', { type: 'application/pdf' });
-          if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              title: `Liquidación • Semana ${weekLabel}`,
-              text: shareText,
-              files: [file]
-            });
-            return;
-          }
+        const targetUrl = blobUrl || url;
+        const res = await fetch(targetUrl);
+        const blob = await res.blob();
+        const file = new File([blob], filename || 'liquidacion.pdf', { type: 'application/pdf' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: `Liquidación • Semana ${weekLabel}`,
+            text: shareText,
+            files: [file]
+          });
+          return;
         }
       } catch (err) {
         console.warn('Native share dismissed or not supported:', err);
@@ -284,12 +283,19 @@ export default function PdfDocumentViewer({
           }}
           className="flex items-center justify-center rounded-2xl overflow-hidden shadow-2xl relative pointer-events-auto border border-white/10"
         >
-          <iframe
-            src={blobUrl ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=1` : url}
-            title={filename || 'Reporte PDF'}
+          <object
+            data={blobUrl ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=1` : url}
+            type="application/pdf"
             className="w-full h-full rounded-2xl border border-white/10 bg-white shadow-2xl pointer-events-auto"
             style={{ minHeight: '340px', height: '100%', width: '100%' }}
-          />
+          >
+            <iframe
+              src={blobUrl ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=1` : url}
+              title={filename || 'Reporte PDF'}
+              className="w-full h-full rounded-2xl border border-white/10 bg-white shadow-2xl pointer-events-auto"
+              style={{ minHeight: '340px', height: '100%', width: '100%' }}
+            />
+          </object>
         </div>
       </div>
 

@@ -401,6 +401,14 @@ export default function HistoryView({
       if (selectedReceiptModal && selectedReceiptModal.week?.key === key) {
         setSelectedReceiptModal(null);
       }
+      if (selectedWeekModal && selectedWeekModal.key === key) {
+        setSelectedWeekModal(prev => ({
+          ...prev,
+          receipt_photo: null,
+          receipt_filename: null,
+          audit_summary: null
+        }));
+      }
       if (onRefresh) await onRefresh();
     } catch (err) {
       alert('Error al eliminar comprobante: ' + err.message);
@@ -426,7 +434,9 @@ export default function HistoryView({
       if (res.ok) {
         if (receiptPhotoPreview && typeof window !== 'undefined') {
           try {
-            localStorage.setItem('receipt_' + confirmPaymentWeek.key, receiptPhotoPreview);
+            if (typeof receiptPhotoPreview === 'string' && receiptPhotoPreview.length < 500000) {
+              localStorage.setItem('receipt_' + confirmPaymentWeek.key, receiptPhotoPreview);
+            }
             localStorage.setItem('receipt_fn_' + confirmPaymentWeek.key, receiptFileName || 'comprobante.pdf');
             if (reconciliationResult) {
               localStorage.setItem('receipt_audit_' + confirmPaymentWeek.key, JSON.stringify(reconciliationResult));
@@ -1191,6 +1201,11 @@ ${jobLines}
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (file) {
+                            if (file.size > 25 * 1024 * 1024) {
+                              alert('El archivo supera los 25 MB. Por favor elige un archivo más liviano.');
+                              e.target.value = '';
+                              return;
+                            }
                             try {
                               const isPdfFile = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
                               let photoData = null;
@@ -1478,6 +1493,11 @@ ${jobLines}
                       onChange={(e) => {
                         const f = e.target.files?.[0];
                         if (f) {
+                          if (f.size > 25 * 1024 * 1024) {
+                            alert('El archivo supera los 25 MB. Por favor elige un archivo más liviano.');
+                            e.target.value = '';
+                            return;
+                          }
                           setReceiptFileName(f.name || 'reporte.pdf');
                           setReceiptIsPdf(true);
                           setReconciliationResult(null);
@@ -1506,6 +1526,11 @@ ${jobLines}
                         onChange={async (e) => {
                           const f = e.target.files?.[0];
                           if (f) {
+                            if (f.size > 25 * 1024 * 1024) {
+                              alert('El archivo supera los 25 MB. Por favor elige un archivo más liviano.');
+                              e.target.value = '';
+                              return;
+                            }
                             setReceiptFileName(f.name || 'foto.jpg');
                             setReceiptIsPdf(false);
                             setReconciliationResult(null);
@@ -1538,6 +1563,11 @@ ${jobLines}
                         onChange={async (e) => {
                           const f = e.target.files?.[0];
                           if (f) {
+                            if (f.size > 25 * 1024 * 1024) {
+                              alert('El archivo supera los 25 MB. Por favor elige un archivo más liviano.');
+                              e.target.value = '';
+                              return;
+                            }
                             setReceiptFileName(f.name || 'foto.jpg');
                             setReceiptIsPdf(false);
                             setReconciliationResult(null);

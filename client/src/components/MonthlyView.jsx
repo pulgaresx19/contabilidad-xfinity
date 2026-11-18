@@ -304,7 +304,9 @@ ${jobList || '  (Sin órdenes registradas)'}
       if (res.ok) {
         if (receiptPhotoPreview && typeof window !== 'undefined') {
           try {
-            localStorage.setItem('receipt_' + confirmPaymentWeek.key, receiptPhotoPreview);
+            if (typeof receiptPhotoPreview === 'string' && receiptPhotoPreview.length < 500000) {
+              localStorage.setItem('receipt_' + confirmPaymentWeek.key, receiptPhotoPreview);
+            }
             localStorage.setItem('receipt_fn_' + confirmPaymentWeek.key, receiptFileName || 'comprobante.pdf');
             if (reconciliationResult) {
               localStorage.setItem('receipt_audit_' + confirmPaymentWeek.key, JSON.stringify(reconciliationResult));
@@ -1100,6 +1102,11 @@ ${weeksLines || '  (No hay semanas registradas)'}
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (file) {
+                            if (file.size > 25 * 1024 * 1024) {
+                              alert('El archivo supera los 25 MB. Por favor elige un archivo más liviano.');
+                              e.target.value = '';
+                              return;
+                            }
                             try {
                               const isPdfFile = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
                               let photoData = null;
@@ -1611,6 +1618,11 @@ ${weeksLines || '  (No hay semanas registradas)'}
                       onChange={(e) => {
                         const f = e.target.files?.[0];
                         if (f) {
+                          if (f.size > 25 * 1024 * 1024) {
+                            alert('El archivo supera los 25 MB. Por favor elige un archivo más liviano.');
+                            e.target.value = '';
+                            return;
+                          }
                           setReceiptFileName(f.name || 'reporte.pdf');
                           setReceiptIsPdf(true);
                           setReconciliationResult(null);
@@ -1639,6 +1651,11 @@ ${weeksLines || '  (No hay semanas registradas)'}
                         onChange={async (e) => {
                           const f = e.target.files?.[0];
                           if (f) {
+                            if (f.size > 25 * 1024 * 1024) {
+                              alert('El archivo supera los 25 MB. Por favor elige un archivo más liviano.');
+                              e.target.value = '';
+                              return;
+                            }
                             setReceiptFileName(f.name || 'foto.jpg');
                             setReceiptIsPdf(false);
                             setReconciliationResult(null);
@@ -1671,6 +1688,11 @@ ${weeksLines || '  (No hay semanas registradas)'}
                         onChange={async (e) => {
                           const f = e.target.files?.[0];
                           if (f) {
+                            if (f.size > 25 * 1024 * 1024) {
+                              alert('El archivo supera los 25 MB. Por favor elige un archivo más liviano.');
+                              e.target.value = '';
+                              return;
+                            }
                             setReceiptFileName(f.name || 'foto.jpg');
                             setReceiptIsPdf(false);
                             setReconciliationResult(null);
