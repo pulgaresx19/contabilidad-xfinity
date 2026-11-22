@@ -2446,17 +2446,17 @@ export default function UberDriverView({
           {/* Saldo Diario / Ganancia del Día */}
           <div
             onClick={handleOpenDayJobsModal}
-            className="h-9 px-2.5 sm:px-3 min-w-[88px] sm:min-w-[96px] rounded-2xl bg-[#0f1722]/95 backdrop-blur-2xl border border-emerald-500/30 hover:border-emerald-500/60 shadow-xl active:scale-95 transition flex items-center gap-2 cursor-pointer select-none group shrink-0"
+            className="h-9 pl-2 pr-2.5 sm:pl-2.5 sm:pr-3 min-w-[88px] sm:min-w-[96px] rounded-2xl bg-[#0f1722]/95 backdrop-blur-2xl border border-emerald-500/30 hover:border-emerald-500/60 shadow-xl active:scale-95 transition flex items-center justify-between gap-1.5 sm:gap-2 cursor-pointer select-none group shrink-0"
             title={`Saldo del día (${dayCompleted.length} completados): $${dayEarnings.toFixed(2)}. Toca para ver travesía y lista.`}
           >
             <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-[10.5px] font-black shrink-0 font-mono">
               $
             </div>
-            <div className="flex flex-col justify-center leading-none min-w-[5.5ch]">
-              <span className="text-[7.5px] sm:text-[8px] uppercase tracking-wider text-slate-400 font-bold group-hover:text-emerald-400/80 transition">
-                {isViewingToday ? 'Hoy' : 'Total'}
+            <div className="flex-1 flex flex-col justify-center leading-none min-w-[5.5ch]">
+              <span className="w-full text-center text-[7.5px] sm:text-[8px] uppercase tracking-wider text-slate-400 font-bold group-hover:text-emerald-400/80 transition whitespace-nowrap">
+                Recaudado
               </span>
-              <span className="text-xs sm:text-[13px] font-black font-mono text-emerald-400 tracking-tight whitespace-nowrap">
+              <span className="w-full text-right text-xs sm:text-[13px] font-black font-mono text-emerald-400 tracking-tight whitespace-nowrap mt-0.5">
                 ${dayEarnings % 1 === 0 ? dayEarnings.toFixed(0) : dayEarnings.toFixed(2)}
               </span>
             </div>
