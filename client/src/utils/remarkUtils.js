@@ -39,9 +39,9 @@ export function cleanRawNotes(rawText) {
     .replace(/(?:P#?|TEL|PHONE|CELL)[:\s]*[0-9\s().-]{7,15}/gi, ' ')
     // Eliminar metraje de caída (DROP:..., 0ROP:..., etc.)
     .replace(/(?:DR[O0]{1,2}P|DROP)[:\s->.]*[0-9]+(?:[.,]\d+)?(?:\s*FT)?/gi, ' ')
-    // Eliminar tipo de cable (Type: RG-6, Type: RG-11, RG-6, RG11)
-    .replace(/(?:Type|Cable)[:\s]*(?:RG[- ]?(?:6|11|M|II))/gi, ' ')
-    .replace(/\bRG[- ]?(?:6|11)\b/gi, ' ')
+    // Eliminar tipo de cable (Type: RG-6, Type: RG-11, Type: EPON, RG-6, RG11, EPON)
+    .replace(/(?:Type|Cable)[:\s]*(?:RG[- ]?(?:6|11|M|II)|EPON)\b/gi, ' ')
+    .replace(/\b(?:RG[- ]?(?:6|11)|EPON)\b/gi, ' ')
     // Eliminar tipo de perforación (BORE:DW:1, BORE:SW:1, BORE:RD:2, BORE:SW:1,DW:1, BORE:N,CND:NU)
     .replace(/BORE[:\s]*(?:[A-Z]{2}[:\s]*\d+(?:,\s*[A-Z]{2,3}[:\s]*[A-Z0-9]+)*|N(?:,\s*CND[:\s]*[A-Z0-9]+)?\b)/gi, ' ')
     .replace(/\b(?:DW|SW|DV|SV|RD)[:\s]*[12](?:,\s*(?:DW|SW|DV|SV|RD)[:\s]*[12])*\b/gi, ' ')
@@ -559,6 +559,96 @@ export const BADGE_DEFINITIONS = {
     aiPattern: 'Texto redactado por despachadores o clientes filtrado por IA',
     description: 'Instrucciones específicas escritas por despacho (código de candado, ubicación del pedestal, advertencias especiales).',
     fieldTips: 'Lee atentamente el texto completo para seguir las indicaciones precisas del cliente o de la empresa.'
+  },
+  'bore-dw': {
+    key: 'bore-dw',
+    icon: '🚗',
+    title: 'Driveway Bore (+$30)',
+    dispatchCode: 'BORE: DW:1 / BORE: DW',
+    category: 'Perforaciones y Cruces',
+    colorClasses: {
+      badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+      glow: 'shadow-cyan-500/20',
+      accent: 'text-cyan-400'
+    },
+    aiPattern: 'Sigla DW o BORE:DW:1 en especificaciones de despacho',
+    description: 'Cruce subterráneo bajo entrada vehicular de concreto o asfalto. Es la perforación remunerada con bono directo.',
+    fieldTips: 'Perfora con la máquina o tuneladora por debajo de la losa de concreto. Este cruce devenga un bono extra de +$30 en tu tarifa.'
+  },
+  'bore-sw': {
+    key: 'bore-sw',
+    icon: '🚶',
+    title: 'Sidewalk Bore (Acera)',
+    dispatchCode: 'BORE: SW:1 / BORE: SW',
+    category: 'Perforaciones y Cruces',
+    colorClasses: {
+      badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+      glow: 'shadow-amber-500/20',
+      accent: 'text-amber-400'
+    },
+    aiPattern: 'Sigla SW o BORE:SW:1 en columna BORE',
+    description: 'Perforación o cruce bajo acera/vereda peatonal. Requiere pasar el cable por debajo del concreto a tarifa base sin bono.',
+    fieldTips: 'Pasa el cable por debajo de la acera con barra o pala de tiro. Se liquida a la tarifa base ($100).'
+  },
+  'bore-both': {
+    key: 'bore-both',
+    icon: '🛣️',
+    title: 'Driveway + Acera (+$30)',
+    dispatchCode: 'BORE: SW:1,DW:1',
+    category: 'Perforaciones y Cruces',
+    colorClasses: {
+      badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+      glow: 'shadow-cyan-500/20',
+      accent: 'text-cyan-400'
+    },
+    aiPattern: 'Combinación de DW y SW en el mismo trabajo',
+    description: 'La orden requiere cruzar tanto la entrada vehicular (driveway) como la acera peatonal (sidewalk).',
+    fieldTips: 'Realiza ambas perforaciones. Devenga el bono completo de +$30 por el cruce vehicular.'
+  },
+  'obs-dgfen': {
+    key: 'obs-dgfen',
+    icon: '🚧',
+    title: 'Cerca Invisible / Dog Fence (DGFEN)',
+    dispatchCode: 'Obstacles: DGFEN',
+    category: 'Obstáculos Subterráneos',
+    colorClasses: {
+      badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+      glow: 'shadow-amber-500/20',
+      accent: 'text-amber-400'
+    },
+    aiPattern: 'Código DGFEN / DG en columna Obstacles',
+    description: 'El cliente tiene una cerca invisible eléctrica subterránea para mascotas. Puede cortarse accidentalmente al abrir zanja.',
+    fieldTips: 'Avisa al cliente antes de zanjear, pregunta dónde corre el lazo perimetral y excava manualmente con cuidado en los cruces.'
+  },
+  'bore-rd': {
+    key: 'bore-rd',
+    icon: '🛣️',
+    title: 'Road Bore / Cruce de Calle (B002)',
+    dispatchCode: 'BORE: RD:1 / RD:2',
+    category: 'Perforaciones y Cruces',
+    colorClasses: {
+      badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+      glow: 'shadow-emerald-500/20',
+      accent: 'text-emerald-400'
+    },
+    aiPattern: 'Código RD:1 o RD:2 en columna BORE',
+    description: 'Perforación direccional bajo calle/calzada (Road Bore). Se liquida por pie lineal perforado bajo el código B002 ($2.50/ft por defecto).',
+    fieldTips: 'Registra los pies exactos perforados bajo calle en el campo Road Bore (ft) para reflejar la compensación oficial B002.'
+  },
+  'cable-epon': {
+    key: 'cable-epon',
+    icon: '⚡',
+    title: 'Fibra Óptica (EPON)',
+    dispatchCode: 'Type: EPON / Type: E PON',
+    category: 'Tipo de Acometida',
+    colorClasses: {
+      badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+      glow: 'shadow-amber-500/20',
+      accent: 'text-amber-400'
+    },
+    aiPattern: 'Texto Type:EPON en columna de cable',
+    description: 'Acometida de fibra óptica FTTH de alta velocidad de Comcast Xfinity (EPON). Requiere manejo cuidadoso del radio de curvatura.',
+    fieldTips: 'Maneja el cable de fibra con cuidado especial: evita quiebres pronunciados o tensión excesiva en las esquinas del predio.'
   }
 };
 
@@ -629,5 +719,80 @@ export function getBadgeDetailedInfo(badgeKeyOrType, order = null) {
   return {
     ...def,
     orderContext
+  };
+}
+
+/**
+ * getBoreInfo
+ * Normaliza y clasifica cualquier tipo de perforación/cruce (DW, SW, RD, etc.)
+ * Proporciona etiquetas limpias, bonificaciones y estilos consistentes para toda la app.
+ */
+export function getBoreInfo(boreType) {
+  if (!boreType || boreType === 'N' || boreType === 'NONE') return null;
+  const s = String(boreType).toUpperCase().trim();
+  if (s === 'N' || s === '') return null;
+
+  const hasDW = s.includes('DW') || s.includes('DRIVEWAY');
+  const hasSW = s.includes('SW') || s.includes('SIDEWALK');
+  const hasRD = s.includes('RD') || s.includes('ROAD');
+
+  if (hasDW && hasSW) {
+    return {
+      type: 'DW+SW',
+      label: 'DW + SW',
+      fullLabel: 'DW + SW Bore (+$30)',
+      bonus: 30,
+      hasBonus: true,
+      dotColor: 'bg-cyan-400',
+      badgeTextClass: 'text-slate-200 font-semibold',
+      badgeClass: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
+    };
+  }
+  if (hasDW) {
+    return {
+      type: 'DW',
+      label: 'DW Bore',
+      fullLabel: 'DW Bore (+$30)',
+      bonus: 30,
+      hasBonus: true,
+      dotColor: 'bg-cyan-400',
+      badgeTextClass: 'text-slate-200 font-semibold',
+      badgeClass: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
+    };
+  }
+  if (hasSW) {
+    return {
+      type: 'SW',
+      label: 'SW Bore',
+      fullLabel: 'SW Bore (Acera)',
+      bonus: 0,
+      hasBonus: false,
+      dotColor: 'bg-amber-400/90',
+      badgeTextClass: 'text-slate-200 font-semibold',
+      badgeClass: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
+    };
+  }
+  if (hasRD) {
+    return {
+      type: 'RD',
+      label: 'RD Bore',
+      fullLabel: 'RD Bore (Calle)',
+      bonus: 0,
+      hasBonus: false,
+      dotColor: 'bg-purple-400',
+      badgeTextClass: 'text-slate-200 font-semibold',
+      badgeClass: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
+    };
+  }
+
+  return {
+    type: 'OTHER',
+    label: s,
+    fullLabel: `Bore: ${s}`,
+    bonus: 0,
+    hasBonus: false,
+    dotColor: 'bg-slate-400',
+    badgeTextClass: 'text-slate-200 font-semibold',
+    badgeClass: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
   };
 }

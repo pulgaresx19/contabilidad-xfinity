@@ -169,6 +169,12 @@ ${jobList || '  (Sin órdenes registradas)'}
 
   useEffect(() => {
     fetchMonthlyData(selectedMonth);
+  }, [selectedMonth, orders]);
+
+  useEffect(() => {
+    const handleSettingsUpdated = () => fetchMonthlyData(selectedMonth);
+    window.addEventListener('xfinity-settings-updated', handleSettingsUpdated);
+    return () => window.removeEventListener('xfinity-settings-updated', handleSettingsUpdated);
   }, [selectedMonth]);
 
   const handlePrevMonth = () => {

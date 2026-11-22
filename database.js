@@ -8,6 +8,173 @@ const db = new Database(dbPath);
 // Enable WAL mode for high performance
 db.pragma('journal_mode = WAL');
 
+// Tarifario oficial y motor de cálculo de tasas según Empire Cable / Comcast Xfinity
+const DEFAULT_RATE_CARD = {
+  B003: {
+    code: 'B003',
+    name: "Drop Bury In Conduit up to 300' (Sidewalk and Drive Included)",
+    price: 100.00,
+    category: 'base',
+    unit: 'orden'
+  },
+  '873': {
+    code: '873',
+    name: 'Drop Bury Direct Bury Coax or Fiber (Entierro directo sin conduit)',
+    price: 45.00,
+    category: 'base',
+    unit: 'orden'
+  },
+  D20: {
+    code: 'D20',
+    name: 'Extra Driveways up to two (Bono cruce adicional de entrada)',
+    price: 30.00,
+    category: 'extra',
+    unit: 'cruce'
+  },
+  B002: {
+    code: 'B002',
+    name: 'Road Bore Conduit (Perforación bajo carretera)',
+    price: 2.50,
+    unit: 'pie',
+    category: 'extra'
+  },
+  B005: {
+    code: 'B005',
+    name: 'Asphalt Cut 50ft max (Corte en asfalto)',
+    price: 10.00,
+    category: 'corte',
+    unit: 'corte'
+  },
+  B006: {
+    code: 'B006',
+    name: 'Concrete Cut 50ft max (Corte en concreto)',
+    price: 11.00,
+    category: 'corte',
+    unit: 'corte'
+  },
+  tiers: [
+    { code: 'B003',   minFt: 0,    maxFt: 300,  price: 100.00, label: "Hasta 300' (Base)", fullDesc: "Drop Bury In Conduit up to 300' (Sidewalk and Drive Included)" },
+    { code: 'B003.1', minFt: 301,  maxFt: 400,  price: 125.00, label: "301' – 400' (+$25)", fullDesc: "601-874 EPON FIBER Drop Bury with Conduit (301' – 400')" },
+    { code: 'B003.2', minFt: 401,  maxFt: 500,  price: 150.00, label: "401' – 500' (+$25)", fullDesc: "601-875 EPON FIBER Drop Bury with Conduit (401' – 500')" },
+    { code: 'B003.3', minFt: 501,  maxFt: 600,  price: 180.00, label: "501' – 600' (+$30)", fullDesc: "601-876 EPON FIBER Drop Bury with Conduit (501' – 600')" },
+    { code: 'B003.4', minFt: 601,  maxFt: 700,  price: 220.00, label: "601' – 700' (+$40)", fullDesc: "601-877 EPON FIBER Drop Bury with Conduit (601' – 700')" },
+    { code: 'B003.5', minFt: 701,  maxFt: 800,  price: 250.00, label: "701' – 800' (+$30)", fullDesc: "601-878 EPON FIBER Drop Bury with Conduit (701' – 800')" },
+    { code: 'B003.6', minFt: 801,  maxFt: 900,  price: 280.00, label: "801' – 900' (+$30)", fullDesc: "601-879 EPON FIBER Drop Bury with Conduit (801' – 900')" },
+    { code: 'B003.7', minFt: 901,  maxFt: 1000, price: 310.00, label: "901' – 1000' (+$30)", fullDesc: "601-D10 EPON FIBER Drop Bury with Conduit (901' – 1000')" },
+    { code: 'B003.8', minFt: 1001, maxFt: 1100, price: 340.00, label: "1001' – 1100' (+$30)", fullDesc: "601-D15 EPON FIBER Drop Bury with Conduit (1001' – 1100')" },
+    { code: 'B003.9', minFt: 1101, maxFt: 1200, price: 400.00, label: "1101' – 1200' (+$60)", fullDesc: "601-D20 EPON FIBER Drop Bury with Conduit (1101' – 1200')" }
+  ]
+};
+
+function normalizeRateCard(input) {
+  if (!input) return DEFAULT_RATE_CARD;
+  if (typeof input === 'string') {
+    try {
+      const parsed = JSON.parse(input);
+      if (parsed && typeof parsed === 'object' && parsed.B003 && parsed.D20) return parsed;
+    } catch (e) {
+      return DEFAULT_RATE_CARD;
+    }
+  }
+  if (input && typeof input === 'object' && input.B003 && input.D20) return input;
+  return DEFAULT_RATE_CARD;
+}
+
+function calcOrderRate(order = {}, rateCard = DEFAULT_RATE_CARD) {
+  const card = normalizeRateCard(rateCard);
+  const footage = parseFloat(order.drop_footage ?? order.footage ?? 0) || 0;
+  const bore = String(order.bore_type ?? order.bore ?? '').toUpperCase();
+  const isDirectBury = Boolean(order.is_direct_bury || order.isDirectBury);
+  const matchedCodes = [];
+  const basePrice = parseFloat(card.B003?.price) || 100.00;
+  let footageExtra = 0;
+
+  if (isDirectBury) {
+    const directPrice = parseFloat(card['873']?.price) || 45.00;
+    matchedCodes.push({
+      code: '873',
+      price: directPrice,
+      label: 'Drop Direct Bury (Entierro directo sin conduit)'
+    });
+  } else {
+    // 1. Primera línea: Trabajo Base en Conduit (B003)
+    matchedCodes.push({
+      code: 'B003',
+      price: basePrice,
+      label: "Drop Bury en Conduit (Base hasta 300')"
+    });
+
+    // 2. Si excede los 300 pies: se desglosa el código de tramo de metraje extra correspondiente
+    // Usamos Math.ceil para evitar huecos decimales (ej. 300.5 ft entra en 301' – 400')
+    if (footage > 300) {
+      const tiers = Array.isArray(card.tiers) && card.tiers.length > 0 ? card.tiers : DEFAULT_RATE_CARD.tiers;
+      const effectiveFootage = Math.ceil(footage);
+      let matchedTier = null;
+      for (const t of tiers) {
+        if (effectiveFootage >= t.minFt && effectiveFootage <= t.maxFt) {
+          matchedTier = t;
+          break;
+        }
+      }
+
+      if (!matchedTier) {
+        if (footage > 1200) {
+          const lastTier = tiers[tiers.length - 1];
+          const extraHundreds = Math.ceil((footage - 1200) / 100);
+          const fullTierPrice = (parseFloat(lastTier?.price) || 400.00) + extraHundreds * 30;
+          footageExtra = Math.max(0, fullTierPrice - basePrice);
+          matchedCodes.push({
+            code: lastTier?.code || 'B003.9',
+            price: footageExtra,
+            label: `Metraje Extra (>${lastTier?.maxFt || 1200}')`
+          });
+        }
+      } else if (matchedTier.code !== 'B003') {
+        const fullTierPrice = parseFloat(matchedTier.price) || basePrice;
+        footageExtra = Math.max(0, fullTierPrice - basePrice);
+        matchedCodes.push({
+          code: matchedTier.code,
+          price: footageExtra,
+          label: `Metraje Extra (${matchedTier.label || `${matchedTier.minFt}' – ${matchedTier.maxFt}'`})`
+        });
+      }
+    }
+  }
+
+  // Extra Driveway Bore (D20)
+  if (/DW/i.test(bore)) {
+    const dwPrice = parseFloat(card.D20?.price) || 30.00;
+    matchedCodes.push({
+      code: 'D20',
+      price: dwPrice,
+      label: 'Extra Driveways (Cruce de entrada vehicular)'
+    });
+  }
+
+  // Road Bore (B002) - Si se especifica metraje de perforación bajo calle
+  const rdFt = parseFloat(order.road_bore_ft) || 0;
+  if (rdFt > 0) {
+    const rdUnitPrice = parseFloat(card.B002?.price) || 2.50;
+    const rdTotal = rdFt * rdUnitPrice;
+    matchedCodes.push({
+      code: 'B002',
+      price: rdTotal,
+      label: `Road Bore (${rdFt} ft @ $${rdUnitPrice}/ft)`
+    });
+  }
+
+  const total = matchedCodes.reduce((sum, c) => sum + c.price, 0);
+  const breakdown = matchedCodes.map(c => `${c.code} ($${c.price.toFixed(2)})`).join(' + ');
+
+  return {
+    total: parseFloat(total.toFixed(2)),
+    baseAmount: isDirectBury ? (parseFloat(card['873']?.price) || 45) : parseFloat((basePrice + footageExtra).toFixed(2)),
+    footageExtra: parseFloat(footageExtra.toFixed(2)),
+    matchedCodes,
+    breakdown
+  };
+}
+
 // Ensure tables exist
 function initDb() {
   db.exec(`
@@ -120,6 +287,9 @@ function initDb() {
     db.exec("ALTER TABLE work_orders ADD COLUMN route_order INTEGER DEFAULT 0");
   } catch (e) {}
   try {
+    db.exec("ALTER TABLE work_orders ADD COLUMN road_bore_ft REAL DEFAULT 0");
+  } catch (e) {}
+  try {
     db.exec("ALTER TABLE dispatch_sheets ADD COLUMN photo_data TEXT");
   } catch (e) {}
   try {
@@ -143,6 +313,14 @@ function initDb() {
     );
   `);
 
+  // Performance indexes for frequent queries
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_work_orders_date ON work_orders(work_date);
+    CREATE INDEX IF NOT EXISTS idx_work_orders_status ON work_orders(status);
+    CREATE INDEX IF NOT EXISTS idx_job_photos_order ON job_photos(work_order_id);
+    CREATE INDEX IF NOT EXISTS idx_dispatch_sheets_date ON dispatch_sheets(sheet_date);
+  `);
+
   // Default settings if not already set
   const getSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
   const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
@@ -150,8 +328,12 @@ function initDb() {
   if (!getSetting.get('tech_default')) {
     insertSetting.run('tech_default', 'Javier (P0G1)');
   }
-  insertSetting.run('base_rate', '100.00'); // Base pay: $100 por trabajo
-  insertSetting.run('bore_dw_bonus', '30.00'); // Driveway bore: $30
+  if (!getSetting.get('base_rate')) {
+    insertSetting.run('base_rate', '100.00'); // Base pay: $100 por trabajo
+  }
+  if (!getSetting.get('bore_dw_bonus')) {
+    insertSetting.run('bore_dw_bonus', '30.00'); // Driveway bore: $30
+  }
   if (!getSetting.get('cutoff_day')) {
     insertSetting.run('cutoff_day', '0'); // 0 = Domingo (Lunes a Domingo por defecto)
   }
@@ -160,6 +342,9 @@ function initDb() {
   }
   if (!getSetting.get('footage_extra_rate')) {
     insertSetting.run('footage_extra_rate', '25.00'); // +$25 por cada 100 ft extra
+  }
+  if (!getSetting.get('rate_card')) {
+    insertSetting.run('rate_card', JSON.stringify(DEFAULT_RATE_CARD));
   }
   // Clean up obsolete settings
   try {
@@ -190,8 +375,8 @@ function cleanRawNotes(rawText) {
     .replace(/\bCALLFIRST\b/gi, ' ')
     .replace(/(?:P#?|TEL|PHONE|CELL)[:\s]*[0-9\s().-]{7,15}/gi, ' ')
     .replace(/(?:DR[O0]{1,2}P|DROP)[:\s->.]*[0-9]+(?:[.,]\d+)?(?:\s*FT)?/gi, ' ')
-    .replace(/(?:Type|Cable)[:\s]*(?:RG[- ]?(?:6|11|M|II))/gi, ' ')
-    .replace(/\bRG[- ]?(?:6|11)\b/gi, ' ')
+    .replace(/(?:Type|Cable)[:\s]*(?:RG[- ]?(?:6|11|M|II)|EPON)\b/gi, ' ')
+    .replace(/\b(?:RG[- ]?(?:6|11)|EPON)\b/gi, ' ')
     .replace(/BORE[:\s]*(?:[A-Z]{2}[:\s]*\d+(?:,\s*[A-Z]{2,3}[:\s]*[A-Z0-9]+)*|N(?:,\s*CND[:\s]*[A-Z0-9]+)?\b)/gi, ' ')
     .replace(/\b(?:DW|SW|DV|SV|RD)[:\s]*[12](?:,\s*(?:DW|SW|DV|SV|RD)[:\s]*[12])*\b/gi, ' ')
     .replace(/\bCND[:\s]*[A-Z0-9]+\b/gi, ' ')
@@ -265,7 +450,9 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
           if (!isNaN(val) && val > 0) drop_footage = val;
         } else if (up.startsWith('TYPE:')) {
           const typeStr = t.substring(5).trim().toUpperCase();
-          cable_type = typeStr.includes('11') ? 'RG-11' : 'RG-6';
+          if (typeStr.includes('EPON')) cable_type = 'EPON';
+          else if (typeStr.includes('11')) cable_type = 'RG-11';
+          else cable_type = 'RG-6';
         } else if (up.startsWith('BORE:')) {
           const bStr = t.substring(5).trim().toUpperCase();
           if (bStr.includes('DW') && bStr.includes('SW')) bore_type = 'SW:1,DW:1';
@@ -295,12 +482,14 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
       }
     }
 
-    let rate = 100;
-    if (bore_type.includes('DW')) rate += 30;
-    if (drop_footage > 300) {
-      const extraBlocks = Math.floor((drop_footage - 300) / 100);
-      if (extraBlocks > 0) rate += extraBlocks * 25;
-    }
+    let currentRateCard = DEFAULT_RATE_CARD;
+    try {
+      const row = db.prepare("SELECT value FROM settings WHERE key = 'rate_card'").get();
+      if (row && row.value) currentRateCard = normalizeRateCard(row.value);
+    } catch (e) {}
+
+    const rateResult = calcOrderRate({ drop_footage, bore_type, cable_type }, currentRateCard);
+    const rate = rateResult.total;
 
     return {
       work_date,
@@ -475,7 +664,9 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
 
   // Cable Type
   let cableType = 'RG-6';
-  if (/RG[- ]?(?:11|M\b|II\b|1[1lI])/i.test(postJobText)) {
+  if (/EPON/i.test(postJobText)) {
+    cableType = 'EPON';
+  } else if (/RG[- ]?(?:11|M\b|II\b|1[1lI])/i.test(postJobText)) {
     cableType = 'RG-11';
   }
 
@@ -503,12 +694,14 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
   }
 
   // Rate calculation
-  let rate = 100;
-  if (boreType === 'DW:1' || boreType.includes('DW')) rate += 30;
-  if (dropFootage > 300) {
-    const extraBlocks = Math.floor((dropFootage - 300) / 100);
-    if (extraBlocks > 0) rate += extraBlocks * 25;
-  }
+  let currentRateCard = DEFAULT_RATE_CARD;
+  try {
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'rate_card'").get();
+    if (row && row.value) currentRateCard = normalizeRateCard(row.value);
+  } catch (e) {}
+
+  const rateResult = calcOrderRate({ drop_footage: dropFootage, bore_type: boreType, cable_type: cableType }, currentRateCard);
+  const rate = rateResult.total;
 
   // Obstacles
   let obstacles = 'N';
@@ -540,7 +733,14 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
     bore_type: boreType,
     is_temp: /TEMP[:\s.\-_]*Y/i.test(postJobText) ? 1 : 0,
     obstacles,
-    premise_access: /RQHM/i.test(postJobText) ? 'RQHM' : /DOG/i.test(postJobText) ? 'DOG' : /(?:GATE|LOCK)/i.test(postJobText) ? 'GATE' : /CALL/i.test(postJobText) ? 'CALL' : 'N',
+    premise_access: (() => {
+      const paText = postJobText.replace(/CALL\s*FIRST/ig, '');
+      if (/RQHM/i.test(paText)) return 'RQHM';
+      if (/DOG/i.test(paText)) return 'DOG';
+      if (/(?:GATE|LOCK)/i.test(paText)) return 'GATE';
+      if (/\bCALL\b/i.test(paText)) return 'CALL';
+      return 'N';
+    })(),
     neighbor_notice: (() => {
       const m = postJobText.match(/\b(?:NBR|NB)[:\s]*([A-Za-z0-9]+)\b/i);
       if (m) return m[1].toUpperCase();
@@ -601,5 +801,8 @@ initDb();
 module.exports = {
   db,
   parseDispatchLine,
-  cleanRawNotes
+  cleanRawNotes,
+  calcOrderRate,
+  DEFAULT_RATE_CARD,
+  normalizeRateCard
 };

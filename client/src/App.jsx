@@ -2,17 +2,19 @@ import React, { useState, useEffect } from 'react';
 import BottomNav from './components/BottomNav';
 import TodayView from './components/TodayView';
 import HistoryView from './components/HistoryView';
-import MonthlyView from './components/MonthlyView';
 import ProfileView from './components/ProfileView';
 import ScanModal from './components/ScanModal';
 import PhotoModal from './components/PhotoModal';
 import SettingsModal from './components/SettingsModal';
-import { Cable, ShieldCheck, Settings, Sun, Moon } from 'lucide-react';
+import PinLockScreen from './components/PinLockScreen';
+import { Cable, ShieldCheck, Settings } from 'lucide-react';
 import { useTheme } from './context/ThemeContext';
 import { getLocalDateStr } from './utils/dateUtils';
+import { isAppUnlocked } from './utils/pinAuth';
 
 export default function App() {
   const { actualTheme, toggleTheme } = useTheme();
+  const [appUnlocked, setAppUnlocked] = useState(() => isAppUnlocked());
   const [activeTab, setActiveTab] = useState('today'); // 'today' | 'history' | 'profile'
   const [orders, setOrders] = useState([]);
   const [summaryData, setSummaryData] = useState(null);
@@ -201,16 +203,24 @@ export default function App() {
 
   const handlePhotoUpdated = async () => {
     if (selectedPhotoOrder) {
-      const res = await fetch(`/api/orders/${selectedPhotoOrder.id}`);
-      if (res.ok) {
-        const updated = await res.json();
-        setSelectedPhotoOrder(updated);
+      try {
+        const res = await fetch(`/api/orders/${selectedPhotoOrder.id}`);
+        if (res.ok) {
+          const updated = await res.json();
+          setSelectedPhotoOrder(updated);
+        }
+      } catch (err) {
+        console.error('Error refreshing selected photo order:', err);
       }
     }
     refreshAll();
   };
 
   const pendingCount = orders.filter(o => o.status === 'Pendiente').length;
+
+  if (!appUnlocked) {
+    return <PinLockScreen onUnlocked={() => setAppUnlocked(true)} />;
+  }
 
   return (
     <div className="fixed inset-0 w-full h-full bg-slate-900 text-slate-100 flex flex-col items-center overflow-hidden font-sans select-none selection:bg-cyan-500 selection:text-slate-950">

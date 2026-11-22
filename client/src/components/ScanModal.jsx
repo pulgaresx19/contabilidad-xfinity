@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Camera, Check, AlertCircle, Trash2, Plus, X, Eye,
-  Image as ImageIcon, MapPin, Ruler, Maximize2, Phone, CheckCircle2, Sparkles
+  Image as ImageIcon, MapPin, Ruler, Maximize2, Phone, CheckCircle2, Sparkles,
+  ChevronDown, ChevronRight
 } from 'lucide-react';
 import { getLocalDateStr, normalizeDateStr } from '../utils/dateUtils';
 import { interactWithAuraCore } from '../services/auraService';
@@ -10,10 +11,12 @@ import { compressImage, detectPriorityRowIndices } from '../services/imageUtils'
 import ZoomableImageViewer from './ZoomableImageViewer';
 import BadgeDetailModal from './BadgeDetailModal';
 import AiDeductionGuideModal from './AiDeductionGuideModal';
+import { calcOrderRate as computeOrderRate, normalizeRateCard, DEFAULT_RATE_CARD } from '../utils/rateUtils';
 
 export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech }) {
   const [sheetDate, setSheetDate] = useState(() => getLocalDateStr());
   const [techId, setTechId] = useState(defaultTech || 'Javier (P0G1)');
+  const [rateCard, setRateCard] = useState(DEFAULT_RATE_CARD);
   const [rateConfig, setRateConfig] = useState({
     base_rate: 100,
     bore_dw_bonus: 30,
@@ -35,6 +38,11 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
   const [showAiGuideModal, setShowAiGuideModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
+  const [expandedRateMap, setExpandedRateMap] = useState({});
+
+  const toggleExpandRate = (idx) => {
+    setExpandedRateMap((prev) => ({ ...prev, [idx]: !prev[idx] }));
+  };
 
   // File input refs
   const cameraInputRef = useRef(null);
@@ -55,6 +63,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
     setScanStatus('idle');
     setSaving(false);
     setExtractedOrders([]);
+    setExpandedRateMap({});
     setRawAiText('');
     setShowRawText(false);
     setShowFullPhoto(false);
@@ -71,6 +80,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
         .then((r) => (r.ok ? r.json() : null))
         .then((s) => {
           if (s) {
+            if (s.rate_card) setRateCard(normalizeRateCard(s.rate_card));
             setRateConfig({
               base_rate: parseFloat(s.base_rate) || 100,
               bore_dw_bonus: parseFloat(s.bore_dw_bonus) || 30,
@@ -95,18 +105,14 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
   if (!isOpen) return null;
 
-  // Rate calculator helper (synced with Ajustes)
-  const calcOrderRate = (footage, bore) => {
-    let rate = rateConfig.base_rate;
-    if (bore && typeof bore === 'string' && /DW/i.test(bore)) {
-      rate += rateConfig.bore_dw_bonus;
-    }
-    const num = parseFloat(footage) || 0;
-    if (num > rateConfig.footage_base) {
-      const extraBlocks = Math.floor((num - rateConfig.footage_base) / 100);
-      if (extraBlocks > 0) rate += extraBlocks * rateConfig.footage_extra_rate;
-    }
-    return rate;
+  // Rate calculator helper (synced with Tarifario de Ajustes)
+  const calcOrderRate = (footage, bore, isDirectBury = false, roadFt = 0) => {
+    return computeOrderRate({
+      drop_footage: footage,
+      bore_type: bore,
+      is_direct_bury: isDirectBury,
+      road_bore_ft: roadFt
+    }, rateCard).total;
   };
 
   const handleOpenCamera = () => {
@@ -135,6 +141,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
     setScanStatus('scanning');
     setMessage(null);
     setExtractedOrders([]);
+    setExpandedRateMap({});
     setRawAiText('');
     setShowRawText(false);
 
@@ -245,14 +252,16 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
           const detectedPremise = (() => {
             if (o.premise_access && o.premise_access !== 'N') return String(o.premise_access).toUpperCase();
-            if (/RQHM/i.test(rawNotesStr)) return 'RQHM';
-            if (/DOG/i.test(rawNotesStr)) return 'DOG';
-            if (/(?:GATE|LOCK)/i.test(rawNotesStr)) return 'GATE';
-            if (/CALL/i.test(rawNotesStr)) return 'CALL';
+            const paNotes = rawNotesStr.replace(/CALL\s*FIRST/ig, '');
+            if (/RQHM/i.test(paNotes)) return 'RQHM';
+            if (/DOG/i.test(paNotes)) return 'DOG';
+            if (/(?:GATE|LOCK)/i.test(paNotes)) return 'GATE';
+            if (/\bCALL\b/i.test(paNotes)) return 'CALL';
             return o.premise_access || 'N';
           })();
 
           const isPriorityRow = Boolean(o.is_priority || priorityRowIndices.includes(idx));
+          const parsedRoadFt = parseFloat(o.road_bore_ft) || 0;
 
           return {
             ...o,
@@ -265,21 +274,22 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
             zip_code: String(o.zip_code || '').trim(),
             phone: String(o.phone || '').trim(),
             drop_footage: parseFloat(o.drop_footage) || 0,
-            cable_type: o.cable_type === 'RG-11' ? 'RG-11' : 'RG-6',
+            cable_type: /EPON|FIBER|FIBRA|FTTH|OPTIC/i.test(String(o.cable_type || '')) ? 'EPON' : /11/i.test(String(o.cable_type || '')) ? 'RG-11' : 'RG-6',
             bore_type: o.bore_type || 'N',
+            road_bore_ft: parsedRoadFt,
             obstacles: (() => {
               const rawObs = String(o.obstacles || '').toUpperCase();
               const obsList = [];
-              if (/LANDSC|LANS|LANDS|^LA$|^L$/i.test(rawObs) || /LANS/i.test(rawNotesStr)) obsList.push('LANDSC');
+              if (/LANDSC|LANS|LANDS|\bLA\b|\bL\b/i.test(rawObs) || /LANDSC|LANDS|LANS/i.test(rawNotesStr)) obsList.push('LANDSC');
               if (/SPRKLR|SPRKL|SPRKR/i.test(rawObs) || /SPRKLR|SPRKL/i.test(rawNotesStr)) obsList.push('SPRKL');
-              if (/DGFEN|\bDG\b|^DG$/i.test(rawObs) || /DGFEN/i.test(rawNotesStr)) obsList.push('DGFEN');
+              if (/DGFEN|\bDG\b/i.test(rawObs) || /DGFEN/i.test(rawNotesStr)) obsList.push('DGFEN');
               if (/PRIVLITE|PRIV/i.test(rawObs) || /PRIVLITE/i.test(rawNotesStr)) obsList.push('PRIVLITE');
               return obsList.length > 0 ? obsList.join(',') : (o.obstacles || 'N');
             })(),
             is_temp: o.is_temp ? 1 : (/TEMP[:\s.\-_]*Y/i.test(rawNotesStr) ? 1 : 0),
             premise_access: detectedPremise,
             neighbor_notice: detectedNeighbor,
-            rate_calculated: calcOrderRate(o.drop_footage, o.bore_type),
+            rate_calculated: calcOrderRate(o.drop_footage, o.bore_type, false, parsedRoadFt),
             status: 'Pendiente',
             payment_status: 'Pendiente',
             raw_notes: cleanRawNotes(rawNotesStr) || (rawNotesStr && !/^(?:N|NO|NONE|NULL)$/i.test(rawNotesStr.trim()) ? rawNotesStr.trim() : '')
@@ -301,10 +311,16 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
     setExtractedOrders((prev) => {
       const next = [...prev];
       const updated = { ...next[index], [field]: value };
-      if (field === 'drop_footage' || field === 'bore_type') {
+      if (field === 'drop_footage' || field === 'bore_type' || field === 'road_bore_ft') {
+        const nextBore = field === 'bore_type' ? value : updated.bore_type;
+        const isRd = String(nextBore || '').includes('RD');
+        const nextRoadFt = isRd ? (parseFloat(field === 'road_bore_ft' ? value : updated.road_bore_ft) || 0) : 0;
+        if (!isRd) updated.road_bore_ft = 0;
         updated.rate_calculated = calcOrderRate(
           field === 'drop_footage' ? value : updated.drop_footage,
-          field === 'bore_type' ? value : updated.bore_type
+          nextBore,
+          false,
+          nextRoadFt
         );
       }
       next[index] = updated;
@@ -349,16 +365,21 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
     setMessage(null);
 
     try {
-      const ordersToSave = extractedOrders.map((o) => ({
-        ...o,
-        work_date: normalizeDateStr(o.work_date || sheetDate) || sheetDate,
-        tech_id: String(o.tech_id || techId || defaultTech || 'Javier (P0G1)').trim(),
-        job_id: String(o.job_id || '').trim(),
-        drop_footage: parseFloat(o.drop_footage) || 0,
-        rate_calculated: calcOrderRate(o.drop_footage, o.bore_type),
-        status: 'Pendiente',
-        payment_status: 'Pendiente'
-      }));
+      const ordersToSave = extractedOrders.map((o) => {
+        const isRd = String(o.bore_type || '').includes('RD');
+        const rdFt = isRd ? (parseFloat(o.road_bore_ft) || 0) : 0;
+        return {
+          ...o,
+          work_date: normalizeDateStr(o.work_date || sheetDate) || sheetDate,
+          tech_id: String(o.tech_id || techId || defaultTech || 'Javier (P0G1)').trim(),
+          job_id: String(o.job_id || '').trim(),
+          drop_footage: parseFloat(o.drop_footage) || 0,
+          road_bore_ft: rdFt,
+          rate_calculated: calcOrderRate(o.drop_footage, o.bore_type, false, rdFt),
+          status: 'Pendiente',
+          payment_status: 'Pendiente'
+        };
+      });
 
       const res = await fetch('/api/batch-import', {
         method: 'POST',
@@ -810,12 +831,16 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
         {/* Lista de Filas en el Recuadro */}
         <div className="space-y-2 py-2 flex-1 min-h-0">
-          {extractedOrders.map((o, idx) => (
+          {extractedOrders.map((o, idx) => {
+            const orderRateInfo = computeOrderRate(o, rateCard);
+            const isExpanded = Boolean(expandedRateMap[idx]);
+
+            return (
             <div
               key={idx}
               className="border rounded-xl p-2.5 space-y-1.5 transition shadow-xs bg-[#141d28] border-white/10 hover:border-cyan-500/40"
             >
-              {/* Fila 1: Número, Job ID y Tarifa */}
+              {/* Fila 1: Número, Job ID, Desglose y Tarifa */}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-md text-[10px] font-mono font-bold flex items-center justify-center shrink-0 border bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
@@ -834,9 +859,24 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  <div className="flex items-center gap-0.5 px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 font-mono font-black text-emerald-400 text-xs">
+                  {/* Botón para expandir/ver desglose detallado de deducción */}
+                  <button
+                    type="button"
+                    onClick={() => toggleExpandRate(idx)}
+                    className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition cursor-pointer active:scale-95 ${
+                      isExpanded
+                        ? 'bg-cyan-500/25 text-cyan-300 border-cyan-500/50 shadow-xs'
+                        : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
+                    }`}
+                    title="Ver desglose detallado de la deducción de la IA"
+                  >
+                    <span className="font-mono text-[9px] uppercase tracking-wider">Desglose</span>
+                    {isExpanded ? <ChevronDown className="h-3 w-3 text-cyan-400" /> : <ChevronRight className="h-3 w-3 text-slate-400" />}
+                  </button>
+
+                  <div className="flex items-center gap-0.5 px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 font-mono font-black text-emerald-400 text-xs shadow-xs">
                     <span>$</span>
-                    <span>{o.rate_calculated || 100}</span>
+                    <span>{o.rate_calculated || orderRateInfo.total}</span>
                   </div>
                   <button
                     type="button"
@@ -848,6 +888,52 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                   </button>
                 </div>
               </div>
+
+              {/* Panel Desplegable: Desglose Lineal Detallado de la IA */}
+              {isExpanded && (
+                <div className="bg-[#0b1017] border border-cyan-500/30 rounded-xl p-2.5 space-y-1.5 animate-fade-in text-xs shadow-inner">
+                  <div className="flex items-center justify-between pb-1 border-b border-white/10">
+                    <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1">
+                      <Sparkles className="h-3 w-3" />
+                      <span>Desglose Oficial de Tarifa (IA)</span>
+                    </span>
+                    <span className="text-[9.5px] font-mono text-slate-400">
+                      {o.cable_type === 'EPON' ? 'EPON (Fibra)' : (o.cable_type || 'RG-6')} • {o.drop_footage || 0} ft
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    {orderRateInfo.matchedCodes.map((codeItem, cIdx) => (
+                      <div key={`${codeItem.code}-${cIdx}`} className="flex items-center justify-between py-1 px-2 rounded-lg bg-[#141d29]/80 border border-white/5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`px-1.5 py-0.5 rounded font-mono font-black text-[9.5px] border ${
+                            cIdx === 0
+                              ? 'bg-blue-950 text-blue-300 border-blue-800'
+                              : codeItem.code === 'D20'
+                              ? 'bg-cyan-950 text-cyan-300 border-cyan-800'
+                              : 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                          }`}>
+                            {codeItem.code}
+                          </span>
+                          <span className="text-slate-200 text-[10.5px] font-medium truncate">
+                            {codeItem.label}
+                          </span>
+                        </div>
+                        <span className="font-mono font-black text-emerald-400 text-xs shrink-0 ml-2">
+                          {cIdx > 0 ? `+$${codeItem.price.toFixed(2)}` : `$${codeItem.price.toFixed(2)}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-white/10 font-bold px-1">
+                    <span className="text-slate-300 text-[10.5px]">Total Compensación:</span>
+                    <span className="font-mono text-emerald-400 font-black text-xs">
+                      ${orderRateInfo.total.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Fila 2: Ubicación Lineal (Dirección, Ciudad con diseño ejecutivo y ZIP) */}
               <div className="flex items-center gap-1.5 bg-[#0b1017] border border-white/10 rounded-xl p-1 text-xs transition focus-within:border-cyan-500/40">
@@ -903,11 +989,11 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                   title="Tipo de Perforación (Bore)"
                 >
                   <option value="N">Sin Bore ($0)</option>
-                  <option value="DW:1">Driveway (+${rateConfig.bore_dw_bonus})</option>
-                  <option value="SW:1,DW:1">SW + DW (+${rateConfig.bore_dw_bonus})</option>
+                  <option value="DW:1">Driveway (+${rateCard?.D20?.price ?? rateConfig.bore_dw_bonus})</option>
+                  <option value="SW:1,DW:1">SW + DW (+${rateCard?.D20?.price ?? rateConfig.bore_dw_bonus})</option>
                   <option value="SW:1">Sidewalk ($0)</option>
-                  <option value="RD:2">Road Bore ($0)</option>
-                  <option value="RD:1">Road Bore 1 ($0)</option>
+                  <option value="RD:1">Road Bore 1 (${(rateCard?.B002?.price ?? 2.5).toFixed(2)}/ft B002)</option>
+                  <option value="RD:2">Road Bore 2 (${(rateCard?.B002?.price ?? 2.5).toFixed(2)}/ft B002)</option>
                 </select>
 
                 {/* Teléfono del Cliente */}
@@ -924,18 +1010,21 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
 
                 {/* Cable Selector */}
                 <div className="flex bg-[#0b1017] p-0.5 rounded-lg border border-white/10 shrink-0">
-                  {['RG-6', 'RG-11'].map((cab) => (
+                  {['RG-6', 'RG-11', 'EPON'].map((cab) => (
                     <button
                       key={cab}
                       type="button"
                       onClick={() => updateOrderField(idx, 'cable_type', cab)}
                       className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
                         o.cable_type === cab
-                          ? 'bg-cyan-500 text-slate-950 font-black'
+                          ? cab === 'EPON'
+                            ? 'bg-amber-400 text-slate-950 font-black shadow-xs'
+                            : 'bg-cyan-500 text-slate-950 font-black shadow-xs'
                           : 'text-slate-400 hover:text-white'
                       }`}
+                      title={cab === 'EPON' ? 'Fibra Óptica (EPON)' : cab}
                     >
-                      {cab}
+                      {cab === 'EPON' ? 'Fibra' : cab}
                     </button>
                   ))}
                 </div>
@@ -954,12 +1043,32 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                     className="w-12 bg-transparent text-amber-300 font-mono font-bold focus:outline-none text-[10.5px]"
                   />
                   <span className="text-slate-500 font-mono">ft</span>
-                  {o.drop_footage > rateConfig.footage_base && (
-                    <span className="text-[9px] text-emerald-400 font-bold font-mono">
-                      (+${Math.floor((o.drop_footage - rateConfig.footage_base) / 100) * rateConfig.footage_extra_rate})
-                    </span>
-                  )}
+                  {(() => {
+                    const tierExtra = computeOrderRate(o, rateCard).footageExtra || 0;
+                    return tierExtra > 0 ? (
+                      <span className="text-[9px] text-emerald-400 font-bold font-mono">
+                        (+${tierExtra})
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
+
+                {/* Si tiene Road Bore (RD), mostrar input rápido de pies bajo calle */}
+                {String(o.bore_type || '').includes('RD') && (
+                  <div className="flex items-center gap-1 bg-cyan-950/50 border border-cyan-500/40 rounded-lg px-1.5 py-0.5 shrink-0" title="Pies bajo calle (B002)">
+                    <span className="text-[9px] font-bold text-cyan-300 font-mono">RD</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      placeholder="ft"
+                      value={o.road_bore_ft || ''}
+                      onChange={(e) => updateOrderField(idx, 'road_bore_ft', e.target.value)}
+                      className="w-10 bg-transparent text-emerald-300 font-mono font-bold focus:outline-none text-[10px]"
+                    />
+                    <span className="text-slate-400 font-mono text-[9px]">ft</span>
+                  </div>
+                )}
 
                 {/* Badges de Campo: Solo Iconos de lo detectado con Modal Informativo al pulsar */}
                 <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
@@ -1028,7 +1137,8 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                 </div>
               </div>
             </div>
-          ))}
+          );
+        })}
         </div>
       </div>
     );

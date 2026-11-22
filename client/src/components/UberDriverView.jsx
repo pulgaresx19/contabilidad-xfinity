@@ -13,7 +13,7 @@ import {
 import { formatDateFriendly, normalizeDateStr, formatRouteDuration } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox, detectOrderState, buildNavigationUrl, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
 import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
-import { getOrderRemark, getOrderFieldBadges } from '../utils/remarkUtils';
+import { getOrderRemark, getOrderFieldBadges, getBoreInfo } from '../utils/remarkUtils';
 import { useTheme } from '../context/ThemeContext';
 
 const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
@@ -445,8 +445,11 @@ export default function UberDriverView({
   }, []);
 
   // 2. AUTOMATIC MAPBOX GEOCODING OF MISSING ORDERS
+  const attemptedGeocodeIdsRef = useRef(new Set());
   useEffect(() => {
-    const missing = activeOrders.filter(o => !o.latitude || !o.longitude);
+    const missing = activeOrders.filter(
+      o => (!o.latitude || !o.longitude) && !attemptedGeocodeIdsRef.current.has(o.id)
+    );
     if (missing.length === 0) return;
 
     let isCancelled = false;
@@ -454,13 +457,11 @@ export default function UberDriverView({
     const runAutoGeocode = async () => {
       for (const ord of missing) {
         if (isCancelled) break;
+        attemptedGeocodeIdsRef.current.add(ord.id);
         try {
           const geo = await geocodeAddressWithMapbox(ord.address, ord.city, ord.zip_code);
           if (geo && geo.latitude && geo.longitude) {
             const isApprox = Boolean(geo.isApproximate);
-            ord.latitude = geo.latitude;
-            ord.longitude = geo.longitude;
-            ord.is_approx_geo = isApprox;
 
             // Actualizar el estado reactivo inmediatamente para que aparezcan los marcadores de todos los trabajos en el mapa
             setLiveOrders(prev => (prev || []).map(o => o.id === ord.id ? { ...o, latitude: geo.latitude, longitude: geo.longitude, is_approx_geo: isApprox } : o));
@@ -1624,6 +1625,8 @@ export default function UberDriverView({
     if (typeof window !== 'undefined') window.__mapInstance = map;
 
     return () => {
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      if (travesiaAbortControllerRef.current) travesiaAbortControllerRef.current.abort();
       map.off('dragstart', handleUserInteraction);
       map.off('zoomstart', handleUserInteraction);
       map.off('rotatestart', handleUserInteraction);
@@ -2314,7 +2317,7 @@ export default function UberDriverView({
   const activePhotosCount = (activePhotos && activePhotos.length > 0) ? activePhotos.length : selectedPhotosCount;
   const isSelectedShared = selectedOrder ? Boolean(selectedOrder.whatsapp_shared || localSharedMap[selectedOrder.id]) : false;
   const selectedRemark = selectedOrder ? getOrderRemark(selectedOrder) : null;
-  const hasDrivewayBore = Boolean(selectedOrder?.bore_type && selectedOrder.bore_type !== 'N' && (selectedOrder.bore_type.includes('DW') || selectedOrder.bore_type.length > 0));
+  const boreInfo = selectedOrder ? getBoreInfo(selectedOrder.bore_type) : null;
   const isCallFirst = Boolean(selectedOrder && (selectedOrder.call_first === 1 || selectedOrder.call_first === true || (typeof selectedOrder.raw_notes === 'string' && /callfirst/i.test(selectedOrder.raw_notes))));
 
   const tripMiles = useMemo(() => {
@@ -2337,18 +2340,21 @@ export default function UberDriverView({
   const tripSummary = activeRouteInfo?.summary || selectedOrder?.city || 'Skokie';
   const techInitial = selectedOrder?.tech_id ? selectedOrder.tech_id.trim().charAt(0).toUpperCase() : 'J';
 
-  const formattedHudDate = useMemo(() => {
-    if (!activeDate) return '';
+  const { formattedHudDateFull, formattedHudDateShort } = useMemo(() => {
+    if (!activeDate) return { formattedHudDateFull: '', formattedHudDateShort: '' };
     const norm = normalizeDateStr(activeDate);
     const parts = norm.split('-');
-    if (parts.length !== 3) return activeDate;
+    if (parts.length !== 3) return { formattedHudDateFull: activeDate, formattedHudDateShort: activeDate };
     const y = parseInt(parts[0], 10);
     const m = parseInt(parts[1], 10);
     const d = parseInt(parts[2], 10);
     const date = new Date(y, m - 1, d, 12, 0, 0);
     const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
     const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    return `${days[date.getDay()]}, ${d} ${months[date.getMonth()]} ${y}`;
+    return {
+      formattedHudDateFull: `${days[date.getDay()]}, ${d} ${months[date.getMonth()]} ${y}`,
+      formattedHudDateShort: `${d} ${months[date.getMonth()]}`
+    };
   }, [activeDate]);
 
   const originInfo = useMemo(() => getOriginPoint(selectedOrder), [selectedOrder, userLocation, orders]);
@@ -2403,7 +2409,8 @@ export default function UberDriverView({
             />
 
             <span className="text-xs font-black text-white truncate tracking-tight font-mono">
-              {formattedHudDate}
+              <span className="hidden sm:inline">{formattedHudDateFull}</span>
+              <span className="inline sm:hidden">{formattedHudDateShort}</span>
             </span>
 
             {isViewingToday ? (
@@ -2457,7 +2464,7 @@ export default function UberDriverView({
           {/* Saldo Diario / Ganancia del Día */}
           <div
             onClick={handleOpenDayJobsModal}
-            className="h-9 px-2 sm:px-2.5 rounded-2xl bg-[#0f1722]/95 backdrop-blur-2xl border border-emerald-500/30 hover:border-emerald-500/60 shadow-xl active:scale-95 transition flex items-center gap-1.5 cursor-pointer select-none group"
+            className="h-9 px-2 sm:px-2.5 rounded-2xl bg-[#0f1722]/95 backdrop-blur-2xl border border-emerald-500/30 hover:border-emerald-500/60 shadow-xl active:scale-95 transition flex items-center gap-1.5 cursor-pointer select-none group shrink-0"
             title={`Saldo del día (${dayCompleted.length} completados): $${dayEarnings.toFixed(2)}. Toca para ver travesía y lista.`}
           >
             <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-[10.5px] font-black shrink-0 font-mono">
@@ -2467,7 +2474,7 @@ export default function UberDriverView({
               <span className="text-[7.5px] sm:text-[8px] uppercase tracking-wider text-slate-400 font-bold group-hover:text-emerald-400/80 transition">
                 {isViewingToday ? 'Hoy' : 'Total'}
               </span>
-              <span className="text-xs sm:text-[13px] font-black font-mono text-emerald-400 tracking-tight">
+              <span className="text-xs sm:text-[13px] font-black font-mono text-emerald-400 tracking-tight whitespace-nowrap">
                 ${dayEarnings % 1 === 0 ? dayEarnings.toFixed(0) : dayEarnings.toFixed(2)}
               </span>
             </div>
@@ -2578,43 +2585,43 @@ export default function UberDriverView({
           <div className="flex-1 flex flex-col justify-between overflow-hidden px-3.5 pb-3">
             
             {/* ROW 1: TOP BAR WITH ACTION/PHONE + [ ← PARADA X DE Y → ] + EXPAND */}
-            <div className="flex items-center justify-between gap-2 pt-0.5">
+            <div className="flex items-center justify-between gap-1 sm:gap-2 pt-0.5">
               {/* Left Action: Circular GPS en la esquina, al lado Llamar */}
-              <div className="flex items-center gap-1.5 justify-start">
+              <div className="flex items-center gap-1 sm:gap-1.5 justify-start shrink-0">
                 <a
                   href={getNavUrl(selectedOrder)}
                   target="_blank"
                   rel="noreferrer"
-                  className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm shrink-0"
                   title="Abrir navegación GPS (Google Maps / Apple Maps)"
                 >
-                  <Navigation className="h-4 w-4 fill-cyan-400/20 text-cyan-400" />
+                  <Navigation className="h-3.5 w-3.5 sm:h-4 sm:w-4 fill-cyan-400/20 text-cyan-400" />
                 </a>
                 {selectedOrder.phone && (
                   <a
                     href={`tel:${selectedOrder.phone}`}
-                    className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm shrink-0"
                     title={`Llamar: ${selectedOrder.phone}`}
                   >
-                    <Phone className="h-4 w-4" />
+                    <Phone className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </a>
                 )}
               </div>
 
               {/* Center: Chevrons + Vibrant Pill Badge (PARADA X DE Y) */}
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-0.5 sm:gap-1.5 shrink-0 justify-center">
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); handlePrevJob(); }}
-                  className="p-1 text-slate-400 hover:text-white transition active:scale-90"
+                  className="p-1 text-slate-400 hover:text-white transition active:scale-90 cursor-pointer shrink-0"
                   title="Trabajo anterior"
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </button>
 
                 <div 
                   onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
-                  className="px-3.5 py-1 rounded-full bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/25 text-[10px] font-black tracking-wider uppercase cursor-pointer transition select-none shadow-xs"
+                  className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/25 text-[9px] sm:text-[10px] font-black tracking-tight sm:tracking-wider uppercase cursor-pointer transition select-none shadow-xs whitespace-nowrap shrink-0"
                 >
                   PARADA {currentStopNumber} DE {activeOrders.length}
                 </div>
@@ -2622,28 +2629,28 @@ export default function UberDriverView({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); handleNextJob(); }}
-                  className="p-1 text-slate-400 hover:text-white transition active:scale-90"
+                  className="p-1 text-slate-400 hover:text-white transition active:scale-90 cursor-pointer shrink-0"
                   title="Siguiente trabajo"
                 >
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </button>
               </div>
 
               {/* Right Action: Circular Mensaje (SMS) y Circular Expand/Collapse Chevron Button */}
-              <div className="flex items-center gap-1.5 justify-end">
+              <div className="flex items-center gap-1 sm:gap-1.5 justify-end shrink-0">
                 {selectedOrder.phone && (
                   <a
                     href={getCustomerSmsUrl(selectedOrder.phone, selectedOrder.address, techName || selectedOrder.tech_id)}
-                    className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm"
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 shadow-sm shrink-0"
                     title={`Enviar SMS con aviso al cliente (${selectedOrder.phone})`}
                   >
-                    <MessageSquare className="h-4 w-4" />
+                    <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </a>
                 )}
                 <button
                   type="button"
                   onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
-                  className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95 shadow-sm cursor-pointer"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95 shadow-sm cursor-pointer shrink-0"
                   title={drawerState === 'expanded' ? "Colapsar tarjeta" : "Ver detalles completos"}
                 >
                   <ChevronUp className={`h-4 w-4 transition-transform duration-300 ${drawerState === 'expanded' ? 'rotate-180' : ''}`} />
@@ -2692,11 +2699,16 @@ export default function UberDriverView({
                 <div className="text-xs font-bold text-white truncate leading-tight flex items-center gap-1.5">
                   <span>{selectedOrder.drop_footage || 0} ft</span>
                   <span className="text-slate-500">•</span>
-                  <span className="text-slate-300">{selectedOrder.cable_type || 'RG-6'}</span>
-                  {hasDrivewayBore && (
+                  <span className={selectedOrder.cable_type === 'EPON' ? 'text-amber-400 font-bold' : 'text-slate-300'}>
+                    {selectedOrder.cable_type || 'RG-6'}
+                  </span>
+                  {boreInfo && (
                     <>
                       <span className="text-slate-500">•</span>
-                      <span className="text-cyan-400 font-semibold">Driveway</span>
+                      <span className="text-slate-300 font-medium inline-flex items-center gap-1">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${boreInfo.dotColor}`} />
+                        <span>{boreInfo.label}</span>
+                      </span>
                     </>
                   )}
                   {isCallFirst && (
@@ -3022,7 +3034,7 @@ export default function UberDriverView({
                   <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
                     <span className="text-slate-400 font-medium">Metraje</span>
                     <span className="text-amber-300 font-mono font-bold text-[11px]">
-                      {selectedOrder.drop_footage || 0} ft {hasDrivewayBore ? '• Bore DW' : ''}
+                      {selectedOrder.drop_footage || 0} ft {boreInfo?.hasBonus ? '• Bore DW' : ''}{Number(selectedOrder.road_bore_ft) > 0 ? ` • Road Bore ${selectedOrder.road_bore_ft} ft` : ''}
                     </span>
                   </div>
 
@@ -3127,21 +3139,20 @@ export default function UberDriverView({
                                   <span>•</span>
                                   <span>{ord.drop_footage || 0} ft</span>
                                   <span>•</span>
-                                  <span className="text-slate-300">{ord.cable_type || 'RG-6'}</span>
-                                  {Boolean(
-                                    ord.bore_type && (
-                                      ord.bore_type.includes('DW') || 
-                                      ord.bore_type.toLowerCase().includes('driveway') || 
-                                      ord.bore_type === 'Y'
-                                    )
-                                  ) && (
-                                    <>
-                                      <span>•</span>
-                                      <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md shrink-0">
-                                        DW
-                                      </span>
-                                    </>
-                                  )}
+                                  <span className={ord.cable_type === 'EPON' ? 'text-amber-400 font-bold' : 'text-slate-300'}>{ord.cable_type || 'RG-6'}</span>
+                                  {(() => {
+                                    const b = getBoreInfo(ord.bore_type);
+                                    if (!b) return null;
+                                    return (
+                                      <>
+                                        <span>•</span>
+                                        <span className="text-[9px] font-medium text-slate-300 inline-flex items-center gap-1">
+                                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${b.dotColor}`} />
+                                          <span>{b.label}</span>
+                                        </span>
+                                      </>
+                                    );
+                                  })()}
                                 </div>
 
                                 <div className="text-[10px] text-slate-300 font-sans truncate mt-0.5">
@@ -3525,21 +3536,20 @@ export default function UberDriverView({
                               <span>•</span>
                               <span>{ord.drop_footage || 0} ft</span>
                               <span>•</span>
-                              <span className="text-slate-300">{ord.cable_type || 'RG-6'}</span>
-                              {Boolean(
-                                ord.bore_type && (
-                                  ord.bore_type.includes('DW') || 
-                                  ord.bore_type.toLowerCase().includes('driveway') || 
-                                  ord.bore_type === 'Y'
-                                )
-                              ) && (
-                                <>
-                                  <span>•</span>
-                                  <span className="text-[9px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.2 rounded-md shrink-0">
-                                    DW
-                                  </span>
-                                </>
-                              )}
+                              <span className={ord.cable_type === 'EPON' ? 'text-amber-400 font-bold' : 'text-slate-300'}>{ord.cable_type || 'RG-6'}</span>
+                              {(() => {
+                                const b = getBoreInfo(ord.bore_type);
+                                if (!b) return null;
+                                return (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-[9px] font-medium text-slate-300 inline-flex items-center gap-1">
+                                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${b.dotColor}`} />
+                                      <span>{b.label}</span>
+                                    </span>
+                                  </>
+                                );
+                              })()}
                             </div>
                             <div className="text-[10px] text-slate-300 font-sans truncate mt-0.5">
                               {getOrderRemark(ord)}

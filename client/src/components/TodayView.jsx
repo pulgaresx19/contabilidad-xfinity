@@ -9,16 +9,16 @@ import {
 import AddJobModal from './AddJobModal';
 import EditJobModal from './EditJobModal';
 import ShareReportModal from './ShareReportModal';
-import DayMapView from './DayMapView';
 import UberDriverView from './UberDriverView';
 import LiveCameraModal from './LiveCameraModal';
 import { stampPhotoWithWatermark } from '../utils/watermark';
 import { getLocalDateStr, normalizeDateStr, formatDateFriendly } from '../utils/dateUtils';
 import { buildNavigationUrl } from '../utils/mapboxGeocode';
 import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
-import { getOrderRemark, getOrderFieldBadges } from '../utils/remarkUtils';
+import { getOrderRemark, getOrderFieldBadges, getBoreInfo } from '../utils/remarkUtils';
 import ZoomableImageViewer from './ZoomableImageViewer';
 import { parseAdjustmentItems, formatAdjustmentReason, calculateNetAdjustment } from '../utils/adjustmentUtils';
+import { calcOrderRate, normalizeRateCard, DEFAULT_RATE_CARD } from '../utils/rateUtils';
 
 export default function TodayView({ 
   orders, 
@@ -137,7 +137,7 @@ export default function TodayView({
         if (isMounted) setDaySheetPhoto(null);
       });
     return () => { isMounted = false; };
-  }, [activeDate]);
+  }, [activeDate, orders.length]);
 
   // 1. FILTER ORDERS EXCLUSIVELY FOR THE ACTIVE DAY & SORT BY ROUTE_ORDER
   const dayOrders = useMemo(() => {
@@ -162,30 +162,26 @@ export default function TodayView({
     return true;
   });
 
-  // Base calculation without manual adjustment (uses configured tariff settings with safe fallback)
-  const getOrderBaseCalculation = (order) => {
-    let baseRate = 100;
-    let dwRate = 30;
-    let footageBase = 300;
-    let footageExtraRate = 25;
+  // Base calculation without manual adjustment (uses active rate_card with safe fallback)
+  const getActiveRateCard = () => {
     try {
       const cached = JSON.parse(localStorage.getItem('xfinity_cached_settings') || '{}');
-      if (cached.base_rate !== undefined) baseRate = parseFloat(cached.base_rate) || 100;
-      if (cached.bore_dw_bonus !== undefined) dwRate = parseFloat(cached.bore_dw_bonus) || 30;
-      if (cached.footage_base !== undefined) footageBase = parseFloat(cached.footage_base) || 300;
-      if (cached.footage_extra_rate !== undefined) footageExtraRate = parseFloat(cached.footage_extra_rate) || 25;
+      if (cached.rate_card) return normalizeRateCard(cached.rate_card);
     } catch (_) {}
+    return DEFAULT_RATE_CARD;
+  };
 
-    if (!order) return { base: baseRate, dwBonus: 0, footageBonus: 0, autoSubtotal: baseRate };
-    let base = baseRate;
-    let dwBonus = (order.bore_type && order.bore_type.includes('DW')) ? dwRate : 0;
-    let footageBonus = 0;
-    if (order.drop_footage > footageBase) {
-      const extraBlocks = Math.floor((order.drop_footage - footageBase) / 100);
-      if (extraBlocks > 0) footageBonus = extraBlocks * footageExtraRate;
-    }
-    const autoSubtotal = base + dwBonus + footageBonus;
-    return { base, dwBonus, footageBonus, autoSubtotal };
+  const getOrderBaseCalculation = (order) => {
+    const card = getActiveRateCard();
+    const baseRate = parseFloat(card?.B003?.price) || 100;
+    if (!order) return { base: baseRate, dwBonus: 0, roadBoreBonus: 0, footageBonus: 0, autoSubtotal: baseRate };
+    const res = calcOrderRate(order, card);
+    const dwCode = res.matchedCodes.find(c => c.code === 'D20');
+    const rdCode = res.matchedCodes.find(c => c.code === 'B002');
+    const dwBonus = dwCode ? dwCode.price : 0;
+    const roadBoreBonus = rdCode ? rdCode.price : 0;
+    const footageBonus = res.footageExtra || 0;
+    return { base: baseRate, dwBonus, roadBoreBonus, footageBonus, autoSubtotal: res.total };
   };
 
   const openAdjustModal = (order) => {
@@ -561,10 +557,8 @@ export default function TodayView({
 📅 *Fecha:* ${order.work_date}
 🔢 *Orden #:* ${order.job_id}
 📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}${order.phone ? `\n📞 *Teléfono:* ${order.phone}` : ''}
-❌ *Estado:* NO REALIZADO
-⚠️ *Motivo / Inconveniente:* ${order.cancel_reason || 'Inconveniente en la propiedad'}
-👷 *Técnico:* Javier (P0G1)
-${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})\n` : ''}📸 *Evidencia:* Constancia fotográfica adjunta`;
+⚠️ *Motivo:* ${order.cancel_reason || 'Inconveniente en la propiedad'}
+❌ *Estado:* NO REALIZADO`;
     }
 
     const hasDriveway = Boolean(
@@ -575,12 +569,15 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
       )
     );
 
+    const bInfo = getBoreInfo(order.bore_type);
+    const boreLabel = bInfo ? bInfo.label : 'No';
+
     return `📋 *REPORTE DE TRABAJO*
 📅 *Fecha:* ${order.work_date}
 🔢 *Orden #:* ${order.job_id}
 📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
 📏 *Pies / Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
-🚗 *Driveway:* ${hasDriveway ? 'Sí' : 'No'}
+🚗 *Cruce / Bore:* ${boreLabel}
 ✅ *Estado:* Completado y Verificado`;
   };
 
@@ -1068,30 +1065,34 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                       {/* 2. Tipo de Cable (Segundo) */}
                       <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 text-[10px] font-mono flex items-center gap-1">
                         <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Cable</span>
-                        <span className="font-semibold text-slate-200">{order.cable_type || 'RG-6'}</span>
+                        <span className={order.cable_type === 'EPON' ? 'font-bold text-amber-300' : 'font-semibold text-slate-200'}>
+                          {order.cable_type || 'RG-6'}
+                        </span>
                       </span>
 
-                      {/* 3. Perforación / Driveway Bore */}
-                      {hasDrivewayBore ? (
-                        <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-medium flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
-                          <span>DW Bore</span>
-                          <span className="text-slate-400 font-mono text-[9px]">(+$30)</span>
-                        </span>
-                      ) : order.bore_type && order.bore_type !== 'N' ? (
-                        <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-mono flex items-center gap-1">
-                          <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Bore</span>
-                          <span className="font-semibold text-slate-200">{order.bore_type}</span>
-                        </span>
-                      ) : null}
-
-                      {/* 4. Bono por Metraje Largo (>300 ft) */}
-                      {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
-                        <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-mono font-medium flex items-center gap-1">
-                          <span className="text-emerald-400 font-sans text-[9px] font-bold">+Drop</span>
-                          <span className="font-bold text-slate-200">${Math.floor((order.drop_footage - 300) / 100) * 25}</span>
-                        </span>
-                      )}
+                      {/* 3. Perforación / Bore y Bono Metraje Largo (>300 ft) según Tarifario Oficial */}
+                      {(() => {
+                        const b = getBoreInfo(order.bore_type);
+                        const calc = getOrderBaseCalculation(order);
+                        return (
+                          <>
+                            {b && (
+                              <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-mono flex items-center gap-1">
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${b.dotColor}`} />
+                                <span className="font-semibold text-slate-200">{b.label}</span>
+                                {calc.dwBonus > 0 && <span className="text-slate-400 font-mono text-[9px]">(+${calc.dwBonus})</span>}
+                                {calc.roadBoreBonus > 0 && <span className="text-emerald-400 font-mono text-[9px]">(+${calc.roadBoreBonus.toFixed(2)})</span>}
+                              </span>
+                            )}
+                            {calc.footageBonus > 0 && (
+                              <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-mono font-medium flex items-center gap-1">
+                                <span className="text-emerald-400 font-sans text-[9px] font-bold">+Drop</span>
+                                <span className="font-bold text-slate-200">${calc.footageBonus}</span>
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
 
                       {/* 5. Ajuste Manual de Tarifa */}
                       {order.manual_adjustment !== undefined && Number(order.manual_adjustment) !== 0 && (
@@ -1739,9 +1740,9 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {[
+                    'Cliente cancela o no desea el servicio',
                     'Sin acceso: cliente ausente o reja cerrada',
                     'Perro suelto en patio / Sin acceso seguro',
-                    'Cancelado por el cliente en el sitio',
                     'Conflicto de servicios públicos (Gas/Agua)',
                     'Terreno inundado / Imposible perforar'
                   ].map((reason) => {
@@ -2197,7 +2198,7 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
             await onOrderUpdated();
           }
         }}
-        defaultTech="Javier (P0G1)"
+        defaultTech={techName || 'Javier (P0G1)'}
       />
 
       {/* Modal para Edición Completa / Ficha Técnica de Trabajo */}

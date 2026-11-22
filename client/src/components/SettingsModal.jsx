@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Settings, Save, Check, Calendar, DollarSign, ShieldCheck, Sun, Moon, Monitor, Sparkles, Wifi, MessageSquare, RotateCcw } from 'lucide-react';
+import { X, Settings, Save, Check, Calendar, DollarSign, ShieldCheck, Sun, Moon, Monitor, Sparkles, Wifi, MessageSquare, RotateCcw, ChevronRight, ChevronDown, Lock } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { getAuraCoreUrl, setAuraCoreUrl, resetAuraCoreUrl, checkAuraCoreHealth } from '../services/auraService';
 import { DEFAULT_SMS_TEMPLATE } from '../utils/smsUtils';
+import { DEFAULT_RATE_CARD, normalizeRateCard } from '../utils/rateUtils';
+import { isAuraPinAuthorized, authorizeAuraWithPin } from '../utils/pinAuth';
+import AiDeductionGuideModal from './AiDeductionGuideModal';
 
 const WEEK_DAYS = [
   { id: '1', short: 'Lun', full: 'Lunes', cycle: 'Martes a Lunes' },
@@ -23,14 +26,43 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
     footage_base: '300',
     footage_extra_rate: '25.00',
     cutoff_day: '0',
-    sms_template: DEFAULT_SMS_TEMPLATE
+    sms_template: DEFAULT_SMS_TEMPLATE,
+    rate_card: DEFAULT_RATE_CARD
   });
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [auraUrl, setAuraUrl] = useState(() => getAuraCoreUrl());
+  const [auraPin, setAuraPin] = useState(() => (isAuraPinAuthorized() ? '••••••' : ''));
+  const [auraPinAuthorized, setAuraPinAuthorized] = useState(() => isAuraPinAuthorized());
+  const [auraPinEdited, setAuraPinEdited] = useState(false);
   const [auraHealth, setAuraHealth] = useState(null);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [showTiers, setShowTiers] = useState(false);
 
-  const testAuraConnection = async (customUrl) => {
+  const testAuraConnection = async (customUrl, isInitialOpen = false) => {
+    if (!isInitialOpen && (auraPinEdited || !auraPinAuthorized)) {
+      const cleanAttempt = String(auraPin || '').replace(/•/g, '').trim();
+      if (!authorizeAuraWithPin(cleanAttempt)) {
+        setAuraPinAuthorized(false);
+        setAuraHealth({
+          checking: false,
+          ok: false,
+          error: 'Código PIN incorrecto. Ingresa el PIN válido de 6 cifras abajo para conectar la IA.'
+        });
+        return;
+      }
+      setAuraPinAuthorized(true);
+      setAuraPin('••••••');
+      setAuraPinEdited(false);
+    } else if (isInitialOpen && !isAuraPinAuthorized()) {
+      setAuraHealth({
+        checking: false,
+        ok: false,
+        error: 'Ingresa el código PIN de 6 cifras abajo y presiona Probar para activar la IA.'
+      });
+      return;
+    }
+
     if (customUrl !== undefined) setAuraCoreUrl(customUrl);
     setAuraHealth({ checking: true });
     const res = await checkAuraCoreHealth();
@@ -39,8 +71,12 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
 
   useEffect(() => {
     if (isOpen) {
+      const alreadyAuth = isAuraPinAuthorized();
+      setAuraPinAuthorized(alreadyAuth);
+      setAuraPin(alreadyAuth ? '••••••' : '');
+      setAuraPinEdited(false);
       setAuraUrl(getAuraCoreUrl());
-      testAuraConnection();
+      testAuraConnection(undefined, true);
       fetch('/api/settings')
         .then((res) => res.json())
         .then((data) => {
@@ -56,14 +92,17 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             else if (cutoffVal === 'Monday') cutoffVal = '1';
             else if (!cutoffVal) cutoffVal = '0';
 
+            const card = normalizeRateCard(data.rate_card);
+
             setSettings({
               tech_default: data.tech_default || 'Javier (P0G1)',
-              base_rate: data.base_rate || '100.00',
-              bore_dw_bonus: data.bore_dw_bonus || '30.00',
+              base_rate: data.base_rate || (card.B003?.price != null ? String(card.B003.price) : '100.00'),
+              bore_dw_bonus: data.bore_dw_bonus || (card.D20?.price != null ? String(card.D20.price) : '30.00'),
               footage_base: data.footage_base || '300',
               footage_extra_rate: data.footage_extra_rate || '25.00',
               cutoff_day: String(cutoffVal),
-              sms_template: data.sms_template && String(data.sms_template).trim() ? data.sms_template : DEFAULT_SMS_TEMPLATE
+              sms_template: data.sms_template && String(data.sms_template).trim() ? data.sms_template : DEFAULT_SMS_TEMPLATE,
+              rate_card: card
             });
           }
         })
@@ -74,6 +113,56 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
   if (!isOpen) return null;
 
   const currentOption = WEEK_DAYS.find(o => o.id === String(settings.cutoff_day)) || WEEK_DAYS[6]; // default Domingo (id: '0')
+  const currentCard = normalizeRateCard(settings.rate_card);
+
+  const updateRatePrice = (code, val) => {
+    const num = parseFloat(val) || 0;
+    setSettings((prev) => {
+      const card = { ...normalizeRateCard(prev.rate_card) };
+      if (card[code]) {
+        card[code] = { ...card[code], price: num };
+      }
+      return {
+        ...prev,
+        rate_card: card,
+        base_rate: code === 'B003' ? String(num) : prev.base_rate,
+        bore_dw_bonus: code === 'D20' ? String(num) : prev.bore_dw_bonus
+      };
+    });
+  };
+
+  const updateTierPrice = (idx, val) => {
+    const num = parseFloat(val) || 0;
+    setSettings((prev) => {
+      const card = { ...normalizeRateCard(prev.rate_card) };
+      const tiers = [...(card.tiers || DEFAULT_RATE_CARD.tiers)];
+      if (tiers[idx]) {
+        tiers[idx] = { ...tiers[idx], price: num };
+      }
+      card.tiers = tiers;
+      return { ...prev, rate_card: card };
+    });
+  };
+
+  const handleResetRateCard = async () => {
+    if (!window.confirm('¿Deseas restablecer el tarifario a los valores oficiales de fábrica de Empire Cable ($100 base, $30 extra driveway, $2.50 road bore, etc.)?')) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/settings/reset-rate-card', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setSettings((prev) => ({
+          ...prev,
+          rate_card: data.rate_card || DEFAULT_RATE_CARD,
+          base_rate: '100.00',
+          bore_dw_bonus: '30.00'
+        }));
+      }
+    } catch (err) {
+      console.error('Error restableciendo tarifas:', err);
+    }
+  };
 
   const updateSmsTemplate = (newVal) => {
     setSettings((prev) => {
@@ -96,6 +185,21 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (auraPinEdited) {
+      const cleanAttempt = String(auraPin || '').replace(/•/g, '').trim();
+      if (!authorizeAuraWithPin(cleanAttempt)) {
+        setAuraPinAuthorized(false);
+        setAuraHealth({
+          checking: false,
+          ok: false,
+          error: 'Código PIN de IA incorrecto. Ingresa el PIN correcto de 6 cifras abajo antes de guardar.'
+        });
+        return;
+      }
+      setAuraPinAuthorized(true);
+      setAuraPin('••••••');
+      setAuraPinEdited(false);
+    }
     setLoading(true);
     setSaved(false);
     setAuraCoreUrl(auraUrl);
@@ -111,7 +215,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
           footage_base: settings.footage_base,
           footage_extra_rate: settings.footage_extra_rate,
           cutoff_day: settings.cutoff_day,
-          sms_template: settings.sms_template && String(settings.sms_template).trim() ? settings.sms_template.trim() : DEFAULT_SMS_TEMPLATE
+          sms_template: settings.sms_template && String(settings.sms_template).trim() ? settings.sms_template.trim() : DEFAULT_SMS_TEMPLATE,
+          rate_card: settings.rate_card
         })
       });
 
@@ -247,102 +352,267 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             </div>
           </div>
 
-          {/* 3. TARIFAS DE PAGO (BASE, BORE DW Y METRAJE LARGO) */}
-          <div className="bg-[#16202c]/90 border border-white/10 rounded-2xl p-3.5 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
-                <DollarSign className="h-4 w-4" />
-                <span>Tarifas por Trabajo</span>
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono">3 Conceptos</span>
+          {/* 3. TARIFARIO OFICIAL DE CÓDIGOS DE PAGO (EMPIRE CABLE / XFINITY) */}
+          <div className="bg-[#16202c]/95 border border-white/10 rounded-2xl p-3 sm:p-4 space-y-3.5 shadow-md">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <div>
+                <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <DollarSign className="h-4 w-4" />
+                  <span>Tarifario Oficial de Códigos de Pago</span>
+                </span>
+                <p className="text-[10.5px] text-slate-300 mt-0.5">
+                  Estructura oficial del comprobante de nómina de Empire Cable (100% editable)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleResetRateCard}
+                title="Restablecer tarifas de fábrica"
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10.5px] font-semibold rounded-lg border border-white/10 transition active:scale-95 shadow-sm cursor-pointer"
+              >
+                <RotateCcw className="h-3 w-3 text-cyan-400" />
+                <span>Restablecer</span>
+              </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
-              {/* Tarifa Base */}
-              <div className="space-y-1">
-                <label className="block text-[11px] font-semibold text-slate-300">
-                  Tarifa Base por Trabajo
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2 text-xs text-slate-400 font-mono">$</span>
-                  <input
-                    type="number"
-                    step="1"
-                    required
-                    value={settings.base_rate || ''}
-                    onChange={(e) => setSettings({ ...settings, base_rate: e.target.value })}
-                    className="w-full bg-[#0f1722] border border-white/10 rounded-xl pl-6 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm text-emerald-400 font-black font-mono focus:outline-none focus:border-cyan-500 transition shadow-inner"
-                  />
-                </div>
-                <span className="text-[10px] text-slate-400 block leading-tight">Por cada orden completada</span>
+            {/* TABLA PRINCIPAL: TRABAJOS BASE Y CRUCES */}
+            <div className="overflow-hidden rounded-xl border border-white/10 bg-[#0c131d]">
+              {/* Encabezado de Columnas (Estilo Hoja de Liquidación) */}
+              <div className="grid grid-cols-12 gap-1 px-3 py-2 bg-[#131d2a] text-[9.5px] font-black uppercase tracking-wider text-slate-400 border-b border-white/10">
+                <span className="col-span-3 sm:col-span-2">CÓDIGO</span>
+                <span className="col-span-6 sm:col-span-7">TRABAJO / DESCRIPCIÓN OFICIAL</span>
+                <span className="col-span-3 text-right">PRECIO ($)</span>
               </div>
 
-              {/* Bono Driveway Bore */}
-              <div className="space-y-1">
-                <label className="block text-[11px] font-semibold text-slate-300">
-                  Bono Driveway Bore (DW)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2 text-xs text-slate-400 font-mono">+$</span>
-                  <input
-                    type="number"
-                    step="1"
-                    required
-                    value={settings.bore_dw_bonus || ''}
-                    onChange={(e) => setSettings({ ...settings, bore_dw_bonus: e.target.value })}
-                    className="w-full bg-[#0f1722] border border-white/10 rounded-xl pl-7 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm text-cyan-400 font-black font-mono focus:outline-none focus:border-cyan-500 transition shadow-inner"
-                  />
-                </div>
-                <span className="text-[10px] text-slate-400 block leading-tight">Extra si requiere perforación</span>
-              </div>
-            </div>
-
-            {/* Bono por Metraje Largo (>300 ft) */}
-            <div className="pt-2.5 border-t border-white/10 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-bold text-slate-200 whitespace-nowrap">
-                  Bono por metraje largo
-                </span>
-                <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800 font-bold whitespace-nowrap shrink-0">
-                  +${settings.footage_extra_rate || '25'} cada 100 ft
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="text-[10px] text-slate-400 block mb-0.5 font-medium">Metraje Base Incluido:</label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      step="50"
-                      required
-                      value={settings.footage_base || '300'}
-                      onChange={(e) => setSettings({ ...settings, footage_base: e.target.value })}
-                      className="w-full bg-[#0f1722] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold font-mono focus:outline-none focus:border-cyan-500 shadow-inner"
-                    />
-                    <span className="absolute right-2.5 top-1.5 text-[10px] text-slate-400">ft</span>
+              {/* Filas Lineales */}
+              <div className="divide-y divide-white/5 text-xs">
+                {/* B003 */}
+                <div className="grid grid-cols-12 gap-1 px-3 py-2.5 items-center hover:bg-white/[0.02] transition">
+                  <div className="col-span-3 sm:col-span-2 flex items-center">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-blue-900/60 text-blue-300 border border-blue-700/60">
+                      B003
+                    </span>
+                  </div>
+                  <div className="col-span-6 sm:col-span-7 pr-2">
+                    <span className="text-[11.5px] font-bold text-slate-100 block leading-tight">
+                      Drop Bury In Conduit up to 300'
+                    </span>
+                    <span className="text-[9.5px] text-slate-400 block leading-tight mt-0.5">
+                      Sidewalk and Driveway Included (Tarifa base estándar de trabajo)
+                    </span>
+                  </div>
+                  <div className="col-span-3 flex justify-end">
+                    <div className="relative w-22 sm:w-24">
+                      <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-mono">$</span>
+                      <input
+                        type="number"
+                        step="1"
+                        required
+                        value={currentCard.B003?.price ?? 100}
+                        onChange={(e) => updateRatePrice('B003', e.target.value)}
+                        className="w-full bg-[#16202c] border border-white/10 rounded-lg pl-6 pr-2 py-1 text-xs text-emerald-400 font-black font-mono text-right focus:outline-none focus:border-cyan-500 shadow-inner"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[10px] text-slate-400 block mb-0.5 font-medium">Bono cada 100 ft Extra:</label>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1.5 text-[10px] text-slate-400 font-mono">+$</span>
-                    <input
-                      type="number"
-                      step="5"
-                      required
-                      value={settings.footage_extra_rate || '25.00'}
-                      onChange={(e) => setSettings({ ...settings, footage_extra_rate: e.target.value })}
-                      className="w-full bg-[#0f1722] border border-white/10 rounded-xl pl-6 pr-3 py-1.5 text-xs text-emerald-400 font-bold font-mono focus:outline-none focus:border-cyan-500 shadow-inner"
-                    />
+                {/* 873 */}
+                <div className="grid grid-cols-12 gap-1 px-3 py-2.5 items-center hover:bg-white/[0.02] transition">
+                  <div className="col-span-3 sm:col-span-2 flex items-center">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-slate-800 text-slate-300 border border-slate-700">
+                      873
+                    </span>
+                  </div>
+                  <div className="col-span-6 sm:col-span-7 pr-2">
+                    <span className="text-[11.5px] font-bold text-slate-100 block leading-tight">
+                      Drop Direct Bury Coax or Fiber
+                    </span>
+                    <span className="text-[9.5px] text-slate-400 block leading-tight mt-0.5">
+                      Entierro directo en tierra (sin conduit/tubería)
+                    </span>
+                  </div>
+                  <div className="col-span-3 flex justify-end">
+                    <div className="relative w-22 sm:w-24">
+                      <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-mono">$</span>
+                      <input
+                        type="number"
+                        step="1"
+                        required
+                        value={currentCard['873']?.price ?? 45}
+                        onChange={(e) => updateRatePrice('873', e.target.value)}
+                        className="w-full bg-[#16202c] border border-white/10 rounded-lg pl-6 pr-2 py-1 text-xs text-emerald-400 font-black font-mono text-right focus:outline-none focus:border-cyan-500 shadow-inner"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* D20 */}
+                <div className="grid grid-cols-12 gap-1 px-3 py-2.5 items-center hover:bg-white/[0.02] transition">
+                  <div className="col-span-3 sm:col-span-2 flex items-center">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-cyan-950 text-cyan-300 border border-cyan-700">
+                      D20
+                    </span>
+                  </div>
+                  <div className="col-span-6 sm:col-span-7 pr-2">
+                    <span className="text-[11.5px] font-bold text-slate-100 block leading-tight">
+                      Extra Driveways up to two
+                    </span>
+                    <span className="text-[9.5px] text-slate-400 block leading-tight mt-0.5">
+                      Bono cruce adicional de entrada vehicular (Driveway bore)
+                    </span>
+                  </div>
+                  <div className="col-span-3 flex justify-end">
+                    <div className="relative w-22 sm:w-24">
+                      <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-mono">+$</span>
+                      <input
+                        type="number"
+                        step="1"
+                        required
+                        value={currentCard.D20?.price ?? 30}
+                        onChange={(e) => updateRatePrice('D20', e.target.value)}
+                        className="w-full bg-[#16202c] border border-white/10 rounded-lg pl-7 pr-2 py-1 text-xs text-cyan-400 font-black font-mono text-right focus:outline-none focus:border-cyan-500 shadow-inner"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* B002 */}
+                <div className="grid grid-cols-12 gap-1 px-3 py-2.5 items-center hover:bg-white/[0.02] transition">
+                  <div className="col-span-3 sm:col-span-2 flex items-center">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-purple-950 text-purple-300 border border-purple-700">
+                      B002
+                    </span>
+                  </div>
+                  <div className="col-span-6 sm:col-span-7 pr-2">
+                    <span className="text-[11.5px] font-bold text-slate-100 block leading-tight">
+                      Road Bore conduit
+                    </span>
+                    <span className="text-[9.5px] text-slate-400 block leading-tight mt-0.5">
+                      Perforación bajo calle / carretera (tarifa por pie lineal)
+                    </span>
+                  </div>
+                  <div className="col-span-3 flex justify-end">
+                    <div className="relative w-22 sm:w-24">
+                      <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-mono">$</span>
+                      <input
+                        type="number"
+                        step="0.25"
+                        required
+                        value={currentCard.B002?.price ?? 2.50}
+                        onChange={(e) => updateRatePrice('B002', e.target.value)}
+                        className="w-full bg-[#16202c] border border-white/10 rounded-lg pl-6 pr-2 py-1 text-xs text-purple-400 font-black font-mono text-right focus:outline-none focus:border-cyan-500 shadow-inner"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* B005 */}
+                <div className="grid grid-cols-12 gap-1 px-3 py-2.5 items-center hover:bg-white/[0.02] transition">
+                  <div className="col-span-3 sm:col-span-2 flex items-center">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-amber-950 text-amber-300 border border-amber-700">
+                      B005
+                    </span>
+                  </div>
+                  <div className="col-span-6 sm:col-span-7 pr-2">
+                    <span className="text-[11.5px] font-bold text-slate-100 block leading-tight">
+                      Asphalt Cut 50ft max
+                    </span>
+                    <span className="text-[9.5px] text-slate-400 block leading-tight mt-0.5">
+                      Corte en pavimento de asfalto
+                    </span>
+                  </div>
+                  <div className="col-span-3 flex justify-end">
+                    <div className="relative w-22 sm:w-24">
+                      <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-mono">+$</span>
+                      <input
+                        type="number"
+                        step="1"
+                        required
+                        value={currentCard.B005?.price ?? 10}
+                        onChange={(e) => updateRatePrice('B005', e.target.value)}
+                        className="w-full bg-[#16202c] border border-white/10 rounded-lg pl-7 pr-2 py-1 text-xs text-amber-300 font-black font-mono text-right focus:outline-none focus:border-cyan-500 shadow-inner"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* B006 */}
+                <div className="grid grid-cols-12 gap-1 px-3 py-2.5 items-center hover:bg-white/[0.02] transition">
+                  <div className="col-span-3 sm:col-span-2 flex items-center">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-amber-950 text-amber-300 border border-amber-700">
+                      B006
+                    </span>
+                  </div>
+                  <div className="col-span-6 sm:col-span-7 pr-2">
+                    <span className="text-[11.5px] font-bold text-slate-100 block leading-tight">
+                      Concrete Cut 50ft max
+                    </span>
+                    <span className="text-[9.5px] text-slate-400 block leading-tight mt-0.5">
+                      Corte en pavimento de concreto
+                    </span>
+                  </div>
+                  <div className="col-span-3 flex justify-end">
+                    <div className="relative w-22 sm:w-24">
+                      <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-mono">+$</span>
+                      <input
+                        type="number"
+                        step="1"
+                        required
+                        value={currentCard.B006?.price ?? 11}
+                        onChange={(e) => updateRatePrice('B006', e.target.value)}
+                        className="w-full bg-[#16202c] border border-white/10 rounded-lg pl-7 pr-2 py-1 text-xs text-amber-300 font-black font-mono text-right focus:outline-none focus:border-cyan-500 shadow-inner"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-              <p className="text-[10px] text-slate-400 leading-tight">
-                Al pasar de {settings.footage_base || '300'} ft, se pagan +${settings.footage_extra_rate || '25'} automáticamente por cada 100 ft extra.
-              </p>
             </div>
+
+            {/* TABLA DE METRAJES LARGOS EPON (TIERS B003.1 AL B003.9) */}
+            <div className="overflow-hidden rounded-xl border border-white/10 bg-[#0c131d]">
+              <div className="grid grid-cols-12 gap-1 px-3 py-2 bg-[#131d2a] text-[9.5px] font-black uppercase tracking-wider text-slate-400 border-b border-white/10">
+                <span className="col-span-3 sm:col-span-2">CÓDIGO</span>
+                <span className="col-span-6 sm:col-span-7">ESCALA EPON FIBER (CONDUIT INCLUIDO)</span>
+                <span className="col-span-3 text-right">PRECIO ($)</span>
+              </div>
+
+              <div className="divide-y divide-white/5 text-xs">
+                {(currentCard.tiers || DEFAULT_RATE_CARD.tiers).map((tier, idx) => (
+                  <div key={tier.code} className="grid grid-cols-12 gap-1 px-3 py-2.5 items-center hover:bg-white/[0.02] transition">
+                    <div className="col-span-3 sm:col-span-2 flex items-center">
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-emerald-950/80 text-emerald-300 border border-emerald-800">
+                        {tier.code}
+                      </span>
+                    </div>
+                    <div className="col-span-6 sm:col-span-7 pr-2">
+                      <span className="text-[11.5px] font-bold text-slate-100 block leading-tight">
+                        {tier.fullDesc || tier.name || `EPON FIBER Drop Bury (${tier.minFt}' – ${tier.maxFt}')`}
+                      </span>
+                      <span className="text-[9.5px] text-slate-400 block leading-tight mt-0.5">
+                        Tramo de {tier.minFt}' a {tier.maxFt}' • Sidewalk and Driveway Included
+                      </span>
+                    </div>
+                    <div className="col-span-3 flex justify-end">
+                      <div className="relative w-22 sm:w-24">
+                        <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-mono">$</span>
+                        <input
+                          type="number"
+                          step="5"
+                          required
+                          value={tier.price}
+                          onChange={(e) => updateTierPrice(idx, e.target.value)}
+                          className="w-full bg-[#16202c] border border-white/10 rounded-lg pl-6 pr-2 py-1 text-xs text-emerald-400 font-black font-mono text-right focus:outline-none focus:border-cyan-500 shadow-inner"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-[10px] text-slate-400 leading-snug px-1 italic">
+              * Todos los códigos y textos son idénticos a los del comprobante oficial de Empire Cable. Cualquier cambio que guardes se sincronizará automáticamente con el escáner y la auditoría con IA.
+            </p>
           </div>
 
           {/* 4. DÍA DE CIERRE SEMANAL (SEMANARIO LINEAL) */}
@@ -519,6 +789,46 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
                 Auto
               </button>
             </div>
+
+            {/* Campo de PIN de Autorización IA justo debajo de la URL */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 min-w-0">
+                <Lock className="w-3.5 h-3.5 text-cyan-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="PIN de 6 cifras para autorizar IA"
+                  value={auraPin}
+                  onFocus={() => {
+                    if (auraPin === '••••••') {
+                      setAuraPin('');
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!auraPinEdited && auraPinAuthorized && !auraPin) {
+                      setAuraPin('••••••');
+                    }
+                  }}
+                  onChange={(e) => {
+                    const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    setAuraPin(cleanVal);
+                    setAuraPinEdited(true);
+                  }}
+                  className="w-full bg-[#0f1722] border border-white/10 focus:border-cyan-500 rounded-xl pl-8 pr-2.5 py-1.5 text-xs text-cyan-300 font-mono font-bold tracking-widest placeholder:tracking-normal placeholder:font-normal placeholder-slate-500 focus:outline-none shadow-inner"
+                />
+              </div>
+              <span
+                className={`text-[10px] font-bold px-2.5 py-1 rounded-xl border shrink-0 flex items-center gap-1 ${
+                  auraPinAuthorized && !auraPinEdited
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                    : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                }`}
+              >
+                <ShieldCheck className="w-3 h-3" />
+                <span>{auraPinAuthorized && !auraPinEdited ? 'PIN Validado' : 'Requiere PIN'}</span>
+              </span>
+            </div>
             {auraHealth && !auraHealth.checking && !auraHealth.ok && auraHealth.error && (
               <p className="text-[10px] text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-lg px-2 py-1 leading-snug">
                 {auraHealth.error}
@@ -527,6 +837,33 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
             <p className="text-[10px] text-slate-400 leading-tight">
               Toca <strong className="text-amber-300">Auto</strong> para probar directo con la IA de tu computadora por el túnel QR, o pega tu enlace HTTPS de Vercel cuando esté activo.
             </p>
+
+            {/* Botón para abrir la Guía Completa de Deducciones de la IA */}
+            <div className="pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setIsGuideOpen(true)}
+                className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500/10 hover:from-cyan-500/20 to-blue-500/10 hover:to-blue-500/20 border border-cyan-500/30 hover:border-cyan-400/60 text-cyan-300 text-xs font-bold flex items-center justify-between transition cursor-pointer group shadow-xs active:scale-98"
+                title="Ver guía completa de todo lo que deduce la IA"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition">
+                    <Sparkles className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="text-left min-w-0">
+                    <span className="block text-[11px] font-black text-white truncate">
+                      Guía de Deducciones de la IA
+                    </span>
+                    <span className="block text-[9.5px] text-slate-400 font-medium truncate">
+                      Remarks, accesos, cruces DW/SW, fibra EPON y alertas
+                    </span>
+                  </div>
+                </div>
+                <div className="w-6 h-6 rounded-lg bg-white/5 group-hover:bg-cyan-500/20 flex items-center justify-center text-slate-400 group-hover:text-cyan-300 transition shrink-0 ml-2">
+                  <ChevronRight className="w-4 h-4" />
+                </div>
+              </button>
+            </div>
           </div>
 
           {saved && (
@@ -557,6 +894,12 @@ export default function SettingsModal({ isOpen, onClose, onSettingsSaved }) {
           </button>
         </div>
       </form>
+
+      {/* Modal Guía Completa de Deducciones de la IA */}
+      <AiDeductionGuideModal
+        isOpen={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+      />
     </div>
   );
 }

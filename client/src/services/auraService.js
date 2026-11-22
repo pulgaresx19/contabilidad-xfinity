@@ -1,4 +1,5 @@
 import { compressImage, fileToDataUrl } from './imageUtils';
+import { isAuraPinAuthorized } from '../utils/pinAuth';
 
 const STORAGE_KEY_URL = 'XFINITY_AURACORE_URL';
 
@@ -93,6 +94,15 @@ export async function blobToInlineAudio(blob) {
 
 export async function checkAuraCoreHealth() {
   const baseUrl = getAuraCoreUrl();
+  if (!isAuraPinAuthorized()) {
+    return {
+      ok: false,
+      configured: false,
+      model: '',
+      url: baseUrl,
+      error: 'Ingresa el código PIN de 6 cifras abajo y presiona Probar para autorizar la IA.'
+    };
+  }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 6000);
   try {
@@ -177,6 +187,9 @@ export async function interactWithAuraCore({
   orders = [],
   summaryData = null
 } = {}) {
+  if (!isAuraPinAuthorized()) {
+    throw new Error('Conexión IA bloqueada: valida el PIN de 6 cifras en Ajustes (⚙️) → Auracore IA.');
+  }
   const baseUrl = getAuraCoreUrl();
   const image = imageFile ? await fileToInlineImage(imageFile) : null;
   const audio = audioBlob ? await blobToInlineAudio(audioBlob) : null;

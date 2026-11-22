@@ -1,4 +1,5 @@
 import { initialSeedData } from '../data/seedData';
+import { calcOrderRate, normalizeRateCard, DEFAULT_RATE_CARD } from '../utils/rateUtils';
 
 const DB_NAME = 'ContabilidadXfinityDB';
 const DB_VERSION = 4;
@@ -165,11 +166,28 @@ export async function loadSampleData() {
 // -------------------------------------------------------------
 // HELPER: Date and Week Calculations (Mirrors server logic exactly)
 // -------------------------------------------------------------
+export function parseCutoffDay(val) {
+  if (val === undefined || val === null || val === '') return 0;
+  const num = parseInt(val, 10);
+  if (!isNaN(num) && num >= 0 && num <= 6) return num;
+  const map = {
+    sunday: 0, domingo: 0, sun: 0, dom: 0,
+    monday: 1, lunes: 1, mon: 1, lun: 1,
+    tuesday: 2, martes: 2, tue: 2, mar: 2,
+    wednesday: 3, miercoles: 3, miércoles: 3, wed: 3, mie: 3,
+    thursday: 4, jueves: 4, thu: 4, jue: 4,
+    friday: 5, viernes: 5, fri: 5, vie: 5,
+    saturday: 6, sabado: 6, sábado: 6, sat: 6, sab: 6
+  };
+  return map[String(val).trim().toLowerCase()] ?? 0;
+}
+
 export function parseDateParts(dateStr) {
   if (!dateStr) return new Date();
   const clean = String(dateStr).trim().split('T')[0];
-  if (clean.includes('-')) {
-    const parts = clean.split('-');
+  const sep = clean.includes('-') ? '-' : clean.includes('/') ? '/' : null;
+  if (sep) {
+    const parts = clean.split(sep);
     if (parts.length === 3) {
       if (parts[0].length === 4) {
         return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
@@ -184,7 +202,7 @@ export function parseDateParts(dateStr) {
 
 export function getWeekInfo(dateStr, cutoffSetting = 0) {
   const d = parseDateParts(dateStr);
-  const cutoffDay = parseInt(cutoffSetting, 10) || 0;
+  const cutoffDay = parseCutoffDay(cutoffSetting);
   const currentDay = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
 
   const daysUntilEnd = (cutoffDay - currentDay + 7) % 7;
@@ -235,12 +253,17 @@ export async function getSettings() {
         cutoff_day: '0',
         footage_base: '300',
         footage_extra_rate: '25.00',
+        rate_card: DEFAULT_RATE_CARD,
         sms_template:
           "Xfinity / Comcast Notice for (Dirección): Hi, this is (Operador), your Drop Bury technician. I'll be working outside shortly to bury your exterior cable line. You do not need to be home or come outside—this is just a courtesy notice. Please text back ONLY if you have a locked gate, pets in the yard, or private sprinklers/invisible dog fences. Thank you!"
       };
       if (req.result) {
         req.result.forEach((item) => {
-          result[item.key] = item.value;
+          if (item.key === 'rate_card') {
+            result.rate_card = normalizeRateCard(item.value);
+          } else {
+            result[item.key] = item.value;
+          }
         });
       }
       try {
@@ -260,7 +283,9 @@ export async function updateSettings(newSettings) {
     const tx = db.transaction('settings', 'readwrite');
     const store = tx.objectStore('settings');
     for (const [key, value] of Object.entries(newSettings)) {
-      store.put({ key, value: String(value) });
+      const serialized =
+        value !== null && typeof value === 'object' ? JSON.stringify(value) : String(value);
+      store.put({ key, value: serialized });
     }
     tx.oncomplete = async () => {
       const updated = await getSettings();
@@ -273,33 +298,11 @@ export async function updateSettings(newSettings) {
 // -------------------------------------------------------------
 // ORDERS & RATE CALCULATION
 // -------------------------------------------------------------
-export function calculateOrderRate(order, settings) {
-  const baseRate = parseFloat(settings.base_rate) || 100;
-  const dwBonus = parseFloat(settings.bore_dw_bonus) || 30;
-  const footageBase = parseFloat(settings.footage_base) || 300;
-  const extraRate = parseFloat(settings.footage_extra_rate) || 25;
-
-  let total = baseRate;
-
-  // Driveway Bore Bonus
-  if (order.bore_type && /DW/i.test(order.bore_type)) {
-    total += dwBonus;
-  }
-
-  // Extra Footage Bonus (> 300 ft)
-  const footage = parseFloat(order.drop_footage) || 0;
-  if (footage > footageBase) {
-    const extraBlocks = Math.floor((footage - footageBase) / 100);
-    if (extraBlocks > 0) {
-      total += extraBlocks * extraRate;
-    }
-  }
-
-  // Manual Adjustment
+export function calculateOrderRate(order, settings = {}) {
+  const rateCard = normalizeRateCard(settings?.rate_card);
+  const res = calcOrderRate(order, rateCard);
   const manual = parseFloat(order.manual_adjustment) || 0;
-  total += manual;
-
-  return total;
+  return Math.max(0, parseFloat((res.total + manual).toFixed(2)));
 }
 
 function getLocalTodayStr() {
@@ -438,7 +441,12 @@ export async function createOrder(data) {
   const db = await getDb();
   const settings = await getSettings();
 
-  const calculatedRate = calculateOrderRate(data, settings);
+  const hasExplicitRate =
+    data.rate_calculated !== undefined &&
+    data.rate_calculated !== null &&
+    data.rate_calculated !== '' &&
+    !isNaN(Number(data.rate_calculated));
+  const calculatedRate = hasExplicitRate ? Number(data.rate_calculated) : calculateOrderRate(data, settings);
 
   const orderRecord = {
     work_date: normalizeDateStr(data.work_date) || getLocalTodayStr(),
@@ -453,6 +461,8 @@ export async function createOrder(data) {
     drop_footage: parseFloat(data.drop_footage) || 0,
     cable_type: data.cable_type || 'RG-6',
     bore_type: data.bore_type || 'N',
+    road_bore_ft: parseFloat(data.road_bore_ft) || 0,
+    is_direct_bury: data.is_direct_bury ? 1 : 0,
     is_temp: data.is_temp ? 1 : 0,
     obstacles: data.obstacles || 'N',
     premise_access: data.premise_access || 'N',
@@ -700,6 +710,7 @@ export async function deletePhoto(photoId) {
 // WEEKLY SUMMARY & WEEK CLOSURES
 // -------------------------------------------------------------
 export async function getWeeklySummary(backendReceipts = {}) {
+  const db = await getDb();
   const allOrders = await getOrders();
   const settings = await getSettings();
   const cutoffSetting = settings.cutoff_day || '0';
@@ -727,6 +738,7 @@ export async function getWeeklySummary(backendReceipts = {}) {
         paidEarnings: 0,
         rg6Count: 0,
         rg11Count: 0,
+        eponCount: 0,
         boresCount: 0,
         orders: []
       };
@@ -744,7 +756,7 @@ export async function getWeeklySummary(backendReceipts = {}) {
       } else {
         w.pendingEarnings += val;
       }
-    } else if (order.status === 'No Realizado') {
+    } else if (order.status === 'No Realizado' || order.status === 'Cancelado') {
       w.cancelledCount++;
     } else {
       w.pendingJobsCount++;
@@ -752,6 +764,7 @@ export async function getWeeklySummary(backendReceipts = {}) {
 
     if (order.cable_type === 'RG-11') w.rg11Count++;
     if (order.cable_type === 'RG-6') w.rg6Count++;
+    if (order.cable_type === 'EPON') w.eponCount++;
     if (order.bore_type && order.bore_type !== 'N') w.boresCount++;
 
     w.orders.push(order);
@@ -1014,9 +1027,14 @@ export async function updateWeekStatus(weekKey, paymentStatus, receiptPhoto = un
   const store = tx.objectStore('work_orders');
 
   for (const order of targetOrders) {
-    order.payment_status = targetStatus;
-    order.updated_at = new Date().toISOString();
-    store.put(order);
+    const cleanOrder = { ...order };
+    delete cleanOrder.photos;
+    delete cleanOrder.photos_count;
+    delete cleanOrder.work_photos_count;
+    delete cleanOrder.cancel_photos_count;
+    cleanOrder.payment_status = targetStatus;
+    cleanOrder.updated_at = new Date().toISOString();
+    store.put(cleanOrder);
   }
 
   return new Promise((resolve, reject) => {
@@ -1241,9 +1259,10 @@ export async function getExpenses(monthKey = null) {
 
 export async function createExpense(data) {
   const db = await getDb();
+  const expDate = data.expense_date || getLocalTodayStr();
   const newExp = {
-    month_key: data.month_key || data.expense_date.substring(0, 7),
-    expense_date: data.expense_date || new Date().toISOString().split('T')[0],
+    month_key: data.month_key || expDate.substring(0, 7),
+    expense_date: expDate,
     category: data.category || 'Combustible',
     description: data.description || '',
     amount: parseFloat(data.amount) || 0,

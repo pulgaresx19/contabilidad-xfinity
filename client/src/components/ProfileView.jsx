@@ -7,6 +7,7 @@ import {
 import { exportOrdersToExcel } from '../services/excelExport';
 import { exportAllData, importAllData, clearAllData } from '../services/localDb';
 import { useTheme } from '../context/ThemeContext';
+import { normalizeRateCard } from '../utils/rateUtils';
 
 const CUTOFF_LABELS = {
   '0': 'Domingo (Lunes a Domingo)',
@@ -231,30 +232,28 @@ export default function ProfileView({ techName, summaryData, onRefresh, onOpenSe
           </div>
         </div>
 
-        {/* Active Dynamic Rates Chips (3 Columns: Base, DW Bore, Extra Footage) */}
-        <div className="grid grid-cols-3 gap-2 bg-[#131b26] p-3 rounded-2xl border border-white/8 text-xs">
-          <div>
-            <span className="text-[9.5px] text-slate-400 block font-semibold uppercase tracking-wider">Tarifa Base</span>
-            <span className="text-sm font-black text-emerald-400 font-mono mt-0.5 block">
-              ${Number(settings.base_rate || 100).toFixed(2)}
-            </span>
+        {/* Tarifario Oficial de Códigos & Ajustes */}
+        <div 
+          onClick={() => onOpenSettings && onOpenSettings()}
+          className="flex items-center justify-between bg-[#131b26] hover:bg-[#182332] p-3 rounded-2xl border border-white/8 hover:border-cyan-500/35 text-xs transition cursor-pointer group active:scale-[0.99]"
+          title="Toca para abrir Ajustes del Tarifario Oficial de Códigos"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 rounded-xl shrink-0">
+              <SlidersHorizontal className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-slate-100 block">Tarifario de Códigos</span>
+              <span className="text-[10.5px] text-slate-400 font-mono font-medium truncate block mt-0.5">
+                {(() => {
+                  const rc = normalizeRateCard(settings.rate_card);
+                  return `B003 ($${rc.B003?.price ?? 100}) • D20 ($${rc.D20?.price ?? 30}) • B002 ($${(rc.B002?.price ?? 2.5).toFixed(2)}/ft) • B003.1–B003.9`;
+                })()}
+              </span>
+            </div>
           </div>
 
-          <div>
-            <span className="text-[9.5px] text-slate-400 block font-semibold uppercase tracking-wider">Bono DW Bore</span>
-            <span className="text-sm font-black text-cyan-400 font-mono mt-0.5 block">
-              +${Number(settings.bore_dw_bonus || 30).toFixed(2)}
-            </span>
-          </div>
-
-          <div>
-            <span className="text-[9.5px] text-slate-400 block font-semibold uppercase tracking-wider truncate">
-              &gt;{settings.footage_base || 300} ft Extra
-            </span>
-            <span className="text-sm font-black text-amber-300 font-mono mt-0.5 block">
-              +${Number(settings.footage_extra_rate || 25).toFixed(0)}/100ft
-            </span>
-          </div>
+          <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition shrink-0" />
         </div>
 
         {/* Active Cutoff Day Card + Quick Open Settings */}
@@ -268,18 +267,14 @@ export default function ProfileView({ techName, summaryData, onRefresh, onOpenSe
               <Calendar className="h-4 w-4" />
             </div>
             <div className="min-w-0">
-              <span className="text-[10px] text-slate-400 block font-medium">Día de Cierre de Semana:</span>
-              <span className="font-bold text-amber-300 font-mono text-[11px] truncate block">
+              <span className="text-xs font-bold text-slate-100 block">Día de Cierre de Semana</span>
+              <span className="text-[10.5px] text-slate-400 font-mono font-medium truncate block mt-0.5">
                 {CUTOFF_LABELS[activeCutoffId] || 'Domingo (Lunes a Domingo)'}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1 text-cyan-400 font-bold text-[11px] shrink-0">
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            <span>Ajustar</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </div>
+          <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-amber-400 group-hover:translate-x-0.5 transition shrink-0" />
         </div>
 
         {/* Theme Action */}

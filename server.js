@@ -5,7 +5,7 @@ const fs = require('fs');
 const multer = require('multer');
 const Tesseract = require('tesseract.js');
 const sharp = require('sharp');
-const { db, parseDispatchLine } = require('./database');
+const { db, parseDispatchLine, DEFAULT_RATE_CARD, normalizeRateCard, calcOrderRate } = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -317,42 +317,80 @@ if (!fs.existsSync(expensesDir)) {
 }
 
 // Multer storage configs
+const ALLOWED_UPLOAD_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.bmp', '.pdf']);
+function safeFileFilter(req, file, cb) {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  if (!ext || ALLOWED_UPLOAD_EXTS.has(ext)) return cb(null, true);
+  return cb(new Error(`Tipo de archivo no permitido: ${ext}`));
+}
+
+function getActiveRateCard() {
+  try {
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'rate_card'").get();
+    if (row && row.value) return normalizeRateCard(row.value);
+  } catch (_) {}
+  return DEFAULT_RATE_CARD;
+}
+
+function resolveOrderRate(data) {
+  const raw = data?.rate_calculated;
+  if (raw !== undefined && raw !== null && raw !== '' && !isNaN(Number(raw))) {
+    return Number(raw);
+  }
+  const rateCard = getActiveRateCard();
+  const res = calcOrderRate(data || {}, rateCard);
+  const manual = parseFloat(data?.manual_adjustment) || 0;
+  return Math.max(0, parseFloat((res.total + manual).toFixed(2)));
+}
+
+function safeUnlinkInUploads(relPath) {
+  if (!relPath || typeof relPath !== 'string') return;
+  try {
+    const baseDir = path.resolve(uploadsDir);
+    const resolved = path.resolve(baseDir, relPath);
+    if (!resolved.startsWith(baseDir + path.sep)) return;
+    if (fs.existsSync(resolved)) fs.unlinkSync(resolved);
+  } catch (_) {}
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
+    const rawExt = path.extname(file.originalname || '').toLowerCase();
+    const ext = ALLOWED_UPLOAD_EXTS.has(rawExt) ? rawExt : '.jpg';
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, 'job-' + uniqueSuffix + ext);
   }
 });
-const upload = multer({ storage });
+const upload = multer({ storage, fileFilter: safeFileFilter, limits: { fileSize: 25 * 1024 * 1024 } });
 
 const sheetStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, sheetsDir);
   },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
+    const rawExt = path.extname(file.originalname || '').toLowerCase();
+    const ext = ALLOWED_UPLOAD_EXTS.has(rawExt) ? rawExt : '.jpg';
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, 'sheet-' + uniqueSuffix + ext);
   }
 });
-const uploadSheet = multer({ storage: sheetStorage });
+const uploadSheet = multer({ storage: sheetStorage, fileFilter: safeFileFilter, limits: { fileSize: 25 * 1024 * 1024 } });
 
 const expenseStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, expensesDir);
   },
   filename: (req, file, cb) => {
-    let ext = path.extname(file.originalname || '');
-    if (!ext || ext.length < 2) ext = '.jpg';
+    const rawExt = path.extname(file.originalname || '').toLowerCase();
+    const ext = ALLOWED_UPLOAD_EXTS.has(rawExt) ? rawExt : '.jpg';
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, 'expense-' + uniqueSuffix + ext);
   }
 });
-const uploadExpense = multer({ storage: expenseStorage });
+const uploadExpense = multer({ storage: expenseStorage, fileFilter: safeFileFilter, limits: { fileSize: 25 * 1024 * 1024 } });
 
 // Helper to extract candidate orders from OCR text
 function extractOrdersFromOcrText(text, defaultDate, defaultTech) {
@@ -396,6 +434,7 @@ async function smartScanDispatchSheet(imagePath, defaultDate, defaultTech) {
   const w = meta.width;
   const h = meta.height;
 
+  try {
   // Pass 1: Dynamic Row Detection for table strips / screenshots (< 800px)
   if (h < 800) {
     const { data: rgbBuf, info: rgbInfo } = await rotated.clone().raw().toBuffer({ resolveWithObject: true });
@@ -513,8 +552,9 @@ async function smartScanDispatchSheet(imagePath, defaultDate, defaultTech) {
       if (parsed) ordersList.push(parsed);
     }
   }
-
-  await worker.terminate();
+  } finally {
+    await worker.terminate();
+  }
 
   // Deduplicate orders by normalized address or job_id
   const finalOrders = [];
@@ -759,12 +799,13 @@ app.post('/api/orders', async (req, res) => {
       drop_footage: parseFloat(data.drop_footage) || 0,
       cable_type: data.cable_type || 'RG-6',
       bore_type: data.bore_type || 'N',
+      road_bore_ft: parseFloat(data.road_bore_ft) || 0,
       is_temp: data.is_temp ? 1 : 0,
       obstacles: data.obstacles || 'N',
       premise_access: data.premise_access || 'N',
       neighbor_notice: data.neighbor_notice || 'N',
       raw_notes: data.raw_notes || '',
-      rate_calculated: parseFloat(data.rate_calculated) || (data.bore_type && data.bore_type.includes('DW') ? 130 : 100),
+      rate_calculated: resolveOrderRate(data),
       manual_adjustment: parseFloat(data.manual_adjustment) || 0,
       adjustment_reason: data.adjustment_reason || '',
       status: data.status || 'Pendiente',
@@ -790,6 +831,7 @@ app.post('/api/orders', async (req, res) => {
           drop_footage = @drop_footage,
           cable_type = @cable_type,
           bore_type = @bore_type,
+          road_bore_ft = @road_bore_ft,
           is_temp = @is_temp,
           obstacles = @obstacles,
           premise_access = @premise_access,
@@ -814,13 +856,13 @@ app.post('/api/orders', async (req, res) => {
     const stmt = db.prepare(`
       INSERT INTO work_orders (
         work_date, tech_id, job_id, address, is_priority, city, zip_code, phone,
-        call_first, drop_footage, cable_type, bore_type, is_temp,
+        call_first, drop_footage, cable_type, bore_type, road_bore_ft, is_temp,
         obstacles, premise_access, neighbor_notice, raw_notes, rate_calculated,
         manual_adjustment, adjustment_reason,
         status, payment_status, latitude, longitude, route_order
       ) VALUES (
         @work_date, @tech_id, @job_id, @address, @is_priority, @city, @zip_code, @phone,
-        @call_first, @drop_footage, @cable_type, @bore_type, @is_temp,
+        @call_first, @drop_footage, @cable_type, @bore_type, @road_bore_ft, @is_temp,
         @obstacles, @premise_access, @neighbor_notice, @raw_notes, @rate_calculated,
         @manual_adjustment, @adjustment_reason,
         @status, @payment_status, @latitude, @longitude, @route_order
@@ -864,6 +906,7 @@ app.put('/api/orders/:id', async (req, res) => {
         drop_footage = @drop_footage,
         cable_type = @cable_type,
         bore_type = @bore_type,
+        road_bore_ft = COALESCE(@road_bore_ft, road_bore_ft, 0),
         is_temp = @is_temp,
         obstacles = @obstacles,
         premise_access = @premise_access,
@@ -896,12 +939,13 @@ app.put('/api/orders/:id', async (req, res) => {
       drop_footage: parseFloat(data.drop_footage) || 0,
       cable_type: data.cable_type || 'RG-6',
       bore_type: data.bore_type || 'N',
+      road_bore_ft: data.road_bore_ft !== undefined ? (parseFloat(data.road_bore_ft) || 0) : null,
       is_temp: data.is_temp ? 1 : 0,
       obstacles: data.obstacles || 'N',
       premise_access: data.premise_access || 'N',
       neighbor_notice: data.neighbor_notice || 'N',
       raw_notes: data.raw_notes !== undefined ? data.raw_notes : '',
-      rate_calculated: parseFloat(data.rate_calculated) || 0,
+      rate_calculated: resolveOrderRate(data),
       manual_adjustment: parseFloat(data.manual_adjustment) || 0,
       adjustment_reason: data.adjustment_reason || '',
       status: data.status || 'Completado',
@@ -1092,10 +1136,7 @@ app.delete('/api/orders/:id', (req, res) => {
     const photos = db.prepare('SELECT filename FROM job_photos WHERE work_order_id = ?').all(realId);
     for (const p of photos) {
       if (p.filename) {
-        const filePath = path.join(uploadsDir, p.filename);
-        if (fs.existsSync(filePath)) {
-          try { fs.unlinkSync(filePath); } catch (e) {}
-        }
+        safeUnlinkInUploads(p.filename);
       }
     }
     db.prepare('DELETE FROM job_photos WHERE work_order_id = ?').run(realId);
@@ -1118,7 +1159,7 @@ app.post('/api/orders/:id/photos', upload.array('photos', 10), async (req, res) 
       VALUES (?, ?, ?, ?)
     `);
 
-    for (const file of req.files) {
+    for (const file of (req.files || [])) {
       // Backend auto-compression with sharp: guarantees every stored photo stays crisp and lightweight (~180-280KB)
       const filePath = path.join(uploadsDir, file.filename);
       try {
@@ -1156,8 +1197,7 @@ app.delete('/api/photos/:id', (req, res) => {
   try {
     const photo = db.prepare('SELECT * FROM job_photos WHERE id = ?').get(req.params.id);
     if (photo) {
-      const filePath = path.join(uploadsDir, photo.filename);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      safeUnlinkInUploads(photo.filename);
       db.prepare('DELETE FROM job_photos WHERE id = ?').run(req.params.id);
     }
     res.json({ success: true });
@@ -1208,13 +1248,13 @@ app.post('/api/batch-import', (req, res) => {
     const stmt = db.prepare(`
       INSERT INTO work_orders (
         work_date, tech_id, job_id, address, is_priority, city, zip_code, phone,
-        call_first, drop_footage, cable_type, bore_type, is_temp,
+        call_first, drop_footage, cable_type, bore_type, road_bore_ft, is_temp,
         obstacles, premise_access, neighbor_notice, raw_notes, rate_calculated,
         manual_adjustment, adjustment_reason,
         status, payment_status
       ) VALUES (
         @work_date, @tech_id, @job_id, @address, @is_priority, @city, @zip_code, @phone,
-        @call_first, @drop_footage, @cable_type, @bore_type, @is_temp,
+        @call_first, @drop_footage, @cable_type, @bore_type, @road_bore_ft, @is_temp,
         @obstacles, @premise_access, @neighbor_notice, @raw_notes, @rate_calculated,
         @manual_adjustment, @adjustment_reason,
         @status, @payment_status
@@ -1230,23 +1270,27 @@ app.post('/api/batch-import', (req, res) => {
         drop_footage = excluded.drop_footage,
         cable_type = excluded.cable_type,
         bore_type = excluded.bore_type,
+        road_bore_ft = excluded.road_bore_ft,
         is_temp = excluded.is_temp,
         obstacles = excluded.obstacles,
         premise_access = excluded.premise_access,
         neighbor_notice = excluded.neighbor_notice,
-        rate_calculated = excluded.rate_calculated,
+        rate_calculated = CASE WHEN work_orders.payment_status = 'Cobrado' THEN work_orders.rate_calculated ELSE excluded.rate_calculated END,
         raw_notes = excluded.raw_notes,
-        status = CASE WHEN work_orders.status IN ('Completado', 'No Realizado') THEN work_orders.status ELSE excluded.status END,
+        status = CASE WHEN work_orders.status IN ('Completado', 'No Realizado', 'Cancelado') THEN work_orders.status ELSE excluded.status END,
+        payment_status = CASE WHEN work_orders.payment_status = 'Cobrado' THEN work_orders.payment_status ELSE excluded.payment_status END,
         updated_at = CURRENT_TIMESTAMP
     `);
 
     const transaction = db.transaction((items) => {
       let count = 0;
-      for (const rawItem of items) {
+      for (let i = 0; i < items.length; i++) {
+        const rawItem = items[i] || {};
+        const cleanJobId = String(rawItem.job_id || '').trim() || `SIN-ID-${Date.now()}-${i + 1}`;
         const item = {
           work_date: rawItem.work_date || new Date().toISOString().split('T')[0],
           tech_id: rawItem.tech_id || 'Javier (P0G1)',
-          job_id: String(rawItem.job_id || '').trim(),
+          job_id: cleanJobId,
           address: String(rawItem.address || '').trim(),
           is_priority: rawItem.is_priority ? 1 : 0,
           city: String(rawItem.city || '').trim().toUpperCase(),
@@ -1256,12 +1300,13 @@ app.post('/api/batch-import', (req, res) => {
           drop_footage: parseFloat(rawItem.drop_footage) || 0,
           cable_type: rawItem.cable_type || 'RG-6',
           bore_type: rawItem.bore_type || 'N',
+          road_bore_ft: parseFloat(rawItem.road_bore_ft) || 0,
           is_temp: rawItem.is_temp ? 1 : 0,
           obstacles: rawItem.obstacles || 'N',
           premise_access: rawItem.premise_access || 'N',
           neighbor_notice: rawItem.neighbor_notice || 'N',
           raw_notes: rawItem.raw_notes || '',
-          rate_calculated: parseFloat(rawItem.rate_calculated) || 100,
+          rate_calculated: resolveOrderRate(rawItem),
           manual_adjustment: parseFloat(rawItem.manual_adjustment) || 0,
           adjustment_reason: rawItem.adjustment_reason || '',
           status: rawItem.status || 'Pendiente',
@@ -1352,7 +1397,7 @@ app.get('/api/weekly-summary', (req, res) => {
         } else {
           w.pendingEarnings += val;
         }
-      } else if (order.status === 'No Realizado') {
+      } else if (order.status === 'No Realizado' || order.status === 'Cancelado') {
         w.cancelledCount++;
       } else {
         w.pendingJobsCount++;
@@ -1360,6 +1405,7 @@ app.get('/api/weekly-summary', (req, res) => {
 
       if (order.cable_type === 'RG-11') w.rg11Count++;
       if (order.cable_type === 'RG-6') w.rg6Count++;
+      if (order.cable_type === 'EPON') w.eponCount = (w.eponCount || 0) + 1;
       if (order.bore_type && order.bore_type !== 'N') w.boresCount++;
 
       w.orders.push(order);
@@ -1397,7 +1443,7 @@ app.get('/api/weekly-summary', (req, res) => {
           auditData = receiptsMap[weekKey].audit ? (typeof receiptsMap[weekKey].audit === 'string' ? JSON.parse(receiptsMap[weekKey].audit) : receiptsMap[weekKey].audit) : null;
         } catch (e) {}
 
-        const settlementEarnings = Number(auditData?.totalPay ?? auditData?.subtotal ?? 0);
+        const settlementEarnings = Number(auditData?.reported_total ?? auditData?.totalPay ?? auditData?.subtotal ?? 0);
         const settlementJobs = auditData?.items ? auditData.items.reduce((acc, it) => acc + (it.qty || 0), 0) : 0;
 
         weeksMap[weekKey] = {
@@ -1576,15 +1622,16 @@ app.post('/api/weeks/:key/status', (req, res) => {
 app.post('/api/weeks/:key/reconcile', async (req, res) => {
   try {
     const { key } = req.params;
-    const { file, filename } = req.body; // file: { data, mimeType }
+    const { file, filename } = req.body || {}; // file: { data, mimeType }
     const cutoffSetting = getCutoffDaySetting();
     const allOrders = db.prepare('SELECT * FROM work_orders').all();
-    const activeOrders = [];
+    const completedOrders = [];
+    const nonCancelledOrders = [];
 
     for (const o of allOrders) {
       const weekInfo = getWeekInfo(o.work_date, cutoffSetting);
       if (weekInfo.key === key && o.status !== 'No Realizado' && o.status !== 'Cancelado') {
-        activeOrders.push({
+        const mapped = {
           id: o.id,
           job_id: o.job_id,
           address: o.address,
@@ -1593,14 +1640,20 @@ app.post('/api/weeks/:key/reconcile', async (req, res) => {
           drop_footage: o.drop_footage,
           cable_type: o.cable_type,
           bore_type: o.bore_type,
+          road_bore_ft: o.road_bore_ft || 0,
           rate_calculated: o.rate_calculated,
           manual_adjustment: o.manual_adjustment,
           total_rate: Number(o.rate_calculated || 0)
-        });
+        };
+        nonCancelledOrders.push(mapped);
+        if (o.status === 'Completado') completedOrders.push(mapped);
       }
     }
 
+    const activeOrders = completedOrders.length > 0 ? completedOrders : nonCancelledOrders;
     const expectedTotal = activeOrders.reduce((sum, o) => sum + (o.total_rate || 0), 0);
+
+    const currentRateCard = getActiveRateCard();
 
     // Call AuraCore-AI local endpoint
     const forwardPayload = {
@@ -1608,17 +1661,20 @@ app.post('/api/weeks/:key/reconcile', async (req, res) => {
       filename: filename || 'comprobante.pdf',
       weekKey: key,
       orders: activeOrders,
-      expectedTotal
+      expectedTotal,
+      rateCard: currentRateCard
     };
 
     let auditResponse;
+    let upstreamStatus = 200;
     try {
       const response = await fetch('http://127.0.0.1:3100/api/reconcile-settlement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(forwardPayload),
-        signal: AbortSignal.timeout(45000)
+        signal: AbortSignal.timeout(60000)
       });
+      upstreamStatus = response.status;
       auditResponse = await response.json();
     } catch (err) {
       return res.status(502).json({
@@ -1627,7 +1683,7 @@ app.post('/api/weeks/:key/reconcile', async (req, res) => {
       });
     }
 
-    res.json(auditResponse);
+    res.status(upstreamStatus).json(auditResponse);
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }
@@ -1757,7 +1813,7 @@ app.get('/api/monthly-summary', (req, res) => {
         } else {
           w.pendingEarnings += val;
         }
-      } else if (order.status === 'No Realizado') {
+      } else if (order.status === 'No Realizado' || order.status === 'Cancelado') {
         w.cancelledCount++;
       } else {
         w.pendingJobsCount++;
@@ -1765,6 +1821,7 @@ app.get('/api/monthly-summary', (req, res) => {
 
       if (order.cable_type === 'RG-11') w.rg11Count++;
       if (order.cable_type === 'RG-6') w.rg6Count++;
+      if (order.cable_type === 'EPON') w.eponCount = (w.eponCount || 0) + 1;
       if (order.bore_type && order.bore_type !== 'N') w.boresCount++;
 
       w.orders.push(order);
@@ -1928,10 +1985,11 @@ app.get('/api/expenses', (req, res) => {
 
 app.post('/api/expenses', uploadExpense.any(), async (req, res) => {
   try {
-    const { expense_date, category, description, amount } = req.body;
+    const { expense_date, category, description, amount } = req.body || {};
     const finalDesc = (description && description.trim()) || category || 'Gasto General';
-    if (!amount) {
-      return res.status(400).json({ error: 'El monto es requerido' });
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: 'El monto debe ser un número mayor a 0' });
     }
 
     const dateStr = expense_date || new Date().toISOString().split('T')[0];
@@ -2001,8 +2059,7 @@ app.delete('/api/expenses/:id', (req, res) => {
           photos = [expense.receipt_photo];
         }
         for (const p of photos) {
-          const fullPath = path.join(uploadsDir, p);
-          if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+          safeUnlinkInUploads(p);
         }
       }
       db.prepare('DELETE FROM monthly_expenses WHERE id = ?').run(req.params.id);
@@ -2018,7 +2075,20 @@ app.get('/api/settings', (req, res) => {
   try {
     const rows = db.prepare('SELECT * FROM settings').all();
     const settings = {};
-    for (const r of rows) settings[r.key] = r.value;
+    for (const r of rows) {
+      if (r.key === 'rate_card') {
+        try {
+          settings[r.key] = JSON.parse(r.value);
+        } catch (e) {
+          settings[r.key] = DEFAULT_RATE_CARD;
+        }
+      } else {
+        settings[r.key] = r.value;
+      }
+    }
+    if (!settings.rate_card) {
+      settings.rate_card = DEFAULT_RATE_CARD;
+    }
     res.json(settings);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2030,9 +2100,40 @@ app.post('/api/settings', (req, res) => {
     const updates = req.body;
     const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
     for (const [k, v] of Object.entries(updates)) {
-      stmt.run(k, String(v));
+      if (k === 'rate_card' || typeof v === 'object') {
+        stmt.run(k, JSON.stringify(v));
+      } else {
+        stmt.run(k, String(v));
+      }
     }
+
+    // Si se actualizó el rate_card, mantener sincronizadas las claves legacy
+    if (updates.rate_card) {
+      const card = normalizeRateCard(updates.rate_card);
+      if (card.B003?.price != null) {
+        stmt.run('base_rate', String(card.B003.price));
+      }
+      if (card.D20?.price != null) {
+        stmt.run('bore_dw_bonus', String(card.D20.price));
+      }
+    }
+
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 11a. Reset Rate Card to Factory Defaults
+app.post('/api/settings/reset-rate-card', (req, res) => {
+  try {
+    const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+    stmt.run('rate_card', JSON.stringify(DEFAULT_RATE_CARD));
+    stmt.run('base_rate', '100.00');
+    stmt.run('bore_dw_bonus', '30.00');
+    stmt.run('footage_base', '300');
+    stmt.run('footage_extra_rate', '25.00');
+    res.json({ success: true, rate_card: DEFAULT_RATE_CARD });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2107,15 +2208,15 @@ app.post('/api/backup/restore', (req, res) => {
 
         const stmtOrder = db.prepare(`
           INSERT INTO work_orders (
-            id, work_date, tech_id, job_id, address, city, zip_code, phone,
-            call_first, drop_footage, cable_type, bore_type, is_temp, obstacles,
+            id, work_date, tech_id, job_id, address, is_priority, city, zip_code, phone,
+            call_first, drop_footage, cable_type, bore_type, road_bore_ft, is_temp, obstacles,
             premise_access, neighbor_notice, raw_notes, rate_calculated, status,
             payment_status, created_at, updated_at, cancel_reason, manual_adjustment,
             adjustment_reason, whatsapp_shared, whatsapp_shared_at, latitude, longitude,
             route_order
           ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
@@ -2130,6 +2231,7 @@ app.post('/api/backup/restore', (req, res) => {
             o.tech_id || 'Javier (P0G1)',
             o.job_id || String(Date.now() + Math.floor(Math.random() * 1000)),
             o.address || '',
+            o.is_priority ? 1 : 0,
             o.city || '',
             o.zip_code || '',
             o.phone || '',
@@ -2137,6 +2239,7 @@ app.post('/api/backup/restore', (req, res) => {
             parseFloat(o.drop_footage) || 0,
             o.cable_type || 'RG-6',
             o.bore_type || 'N',
+            parseFloat(o.road_bore_ft) || 0,
             o.is_temp ? 1 : 0,
             o.obstacles || 'N',
             o.premise_access || 'N',
@@ -2178,7 +2281,7 @@ app.post('/api/backup/restore', (req, res) => {
       }
 
       // 3. Monthly Expenses
-      if (Array.isArray(data.expenses) && data.expenses.length > 0) {
+      if (Array.isArray(data.expenses)) {
         db.prepare('DELETE FROM monthly_expenses').run();
         const stmtExpense = db.prepare(`
           INSERT INTO monthly_expenses (id, month_key, expense_date, category, description, amount, receipt_photo, created_at, updated_at)
@@ -2200,11 +2303,11 @@ app.post('/api/backup/restore', (req, res) => {
       }
 
       // 4. Dispatch Sheets
-      if (Array.isArray(data.sheets) && data.sheets.length > 0) {
+      if (Array.isArray(data.sheets)) {
         db.prepare('DELETE FROM dispatch_sheets').run();
         const stmtSheet = db.prepare(`
-          INSERT INTO dispatch_sheets (id, sheet_date, filename, original_name, extracted_text, orders_count, notes, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO dispatch_sheets (id, sheet_date, filename, original_name, extracted_text, orders_count, notes, created_at, photo_data)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const sh of data.sheets) {
           stmtSheet.run(
@@ -2215,13 +2318,14 @@ app.post('/api/backup/restore', (req, res) => {
             sh.extracted_text || sh.ocr_raw_text || '',
             parseInt(sh.orders_count, 10) || 0,
             sh.notes || '',
-            sh.created_at || new Date().toISOString()
+            sh.created_at || new Date().toISOString(),
+            sh.photo_data || null
           );
         }
       }
 
       // 5. Week Receipts (Comprobantes de Cierre Semanal y PDFs)
-      if (Array.isArray(data.week_receipts) && data.week_receipts.length > 0) {
+      if (Array.isArray(data.week_receipts)) {
         try {
           db.prepare('DELETE FROM week_receipts').run();
           const stmtReceipt = db.prepare(`
@@ -2337,8 +2441,7 @@ app.delete('/api/dispatch-sheets/:id', (req, res) => {
   try {
     const sheet = db.prepare('SELECT * FROM dispatch_sheets WHERE id = ?').get(req.params.id);
     if (sheet) {
-      const fullPath = path.join(uploadsDir, sheet.filename);
-      if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+      safeUnlinkInUploads(sheet.filename);
       db.prepare('DELETE FROM dispatch_sheets WHERE id = ?').run(req.params.id);
     }
     res.json({ success: true });
@@ -2389,7 +2492,13 @@ process.on('SIGTERM', () => { killAuraChild(); process.exit(); });
 
 // Same-origin proxy hacia AuraCore-AI local (permite usar el QR/túnel desde iPhone/Android sin CORS ni créditos externos)
 app.use('/auracore', async (req, res) => {
-  if (req.url && req.url.startsWith('/api/config/key')) {
+  let normalizedPath = '/';
+  try {
+    normalizedPath = new URL(req.url || '/', 'http://127.0.0.1').pathname;
+  } catch (_) {
+    normalizedPath = String(req.url || '/');
+  }
+  if (normalizedPath.startsWith('/api/config/key') || normalizedPath.includes('/config/key')) {
     const addr = req.socket?.remoteAddress || '';
     const isLocal = addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
     if (!isLocal) {

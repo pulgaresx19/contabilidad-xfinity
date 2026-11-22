@@ -20,9 +20,9 @@ const PHOTO_STEPS = [
 ];
 
 const QUICK_CANCEL_REASONS = [
+  'Cliente cancela o no desea el servicio',
   'Perro suelto en la propiedad',
   'Cliente no estaba / Sin acceso',
-  'Cliente cancela o no desea servicio',
   'Ducto o canalización obstruida',
   'Problema técnico en Tap / Línea principal',
   'Sin acceso a caja de entrada'

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, Share2, Copy, Check, CheckCheck, Camera, ExternalLink, AlertCircle, AlertTriangle
 } from 'lucide-react';
+import { getBoreInfo } from '../utils/remarkUtils';
 
 export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdated, onShared }) {
   const [reportText, setReportText] = useState('');
@@ -33,10 +34,8 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
 📅 *Fecha:* ${order.work_date}
 🔢 *Orden #:* ${order.job_id}
 📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}${order.phone ? `\n📞 *Teléfono:* ${order.phone}` : ''}
-❌ *Estado:* NO REALIZADO
-⚠️ *Motivo / Inconveniente:* ${order.cancel_reason || 'Inconveniente en la propiedad'}
-👷 *Técnico:* Javier (P0G1)
-${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})\n` : ''}📸 *Evidencia:* Constancia fotográfica adjunta`;
+⚠️ *Motivo:* ${order.cancel_reason || 'Inconveniente en la propiedad'}
+❌ *Estado:* NO REALIZADO`;
     } else {
       // Generar texto inicial del reporte completado (sin tarifas ni saldos)
       const hasDriveway = Boolean(
@@ -47,12 +46,15 @@ ${order.drop_footage ? `📏 *Drop Previsto:* ${order.drop_footage} ft (${order.
         )
       );
 
+      const bInfo = getBoreInfo(order.bore_type);
+      const boreLabel = bInfo ? bInfo.label : 'No';
+
       initialText = `📋 *REPORTE DE TRABAJO*
 📅 *Fecha:* ${order.work_date}
 🔢 *Orden #:* ${order.job_id}
 📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
 📏 *Pies / Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
-🚗 *Driveway:* ${hasDriveway ? 'Sí' : 'No'}
+🚗 *Cruce / Bore:* ${boreLabel}
 ✅ *Estado:* Completado y Verificado`;
     }
 

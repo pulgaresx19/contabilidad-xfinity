@@ -2,6 +2,8 @@ import * as localDb from './localDb';
 import { compressImage, dataUrlToBlob } from './imageUtils';
 import { recognizeDispatchSheet, parseDispatchLine } from './ocrService';
 import { getAuraCoreUrl } from './auraService';
+import { DEFAULT_RATE_CARD, normalizeRateCard } from '../utils/rateUtils';
+import { isAuraPinAuthorized } from '../utils/pinAuth';
 
 // Save reference to native fetch
 const originalFetch = window.fetch;
@@ -96,6 +98,18 @@ export function initApiAdapter() {
       try {
         const cleanUrl = url.split('?')[0];
         const searchParams = new URL(url, window.location.origin).searchParams;
+
+        // --- SETTINGS RESET RATE CARD ---
+        if (cleanUrl === '/api/settings/reset-rate-card' && method === 'POST') {
+          const updated = await localDb.updateSettings({ rate_card: DEFAULT_RATE_CARD });
+          try { localStorage.setItem('xfinity_cached_settings', JSON.stringify(updated)); } catch (_) {}
+          try {
+            if (originalFetch) {
+              await originalFetch('/api/settings/reset-rate-card', { method: 'POST' });
+            }
+          } catch (netErr) {}
+          return jsonResponse({ success: true, rate_card: DEFAULT_RATE_CARD, settings: updated });
+        }
 
         // --- SETTINGS ---
         if (cleanUrl === '/api/settings') {
@@ -194,7 +208,25 @@ export function initApiAdapter() {
             return jsonResponse({ success: true, order: updated });
           }
 
-          // /api/orders/:id/photos
+          // /api/orders/:id/photos (GET & POST)
+          if (subAction === '/photos' && method === 'GET') {
+            const localOrder = await localDb.getOrderById(orderId);
+            const localPhotos = Array.isArray(localOrder?.photos) ? localOrder.photos : [];
+            if (localPhotos.length > 0) {
+              return jsonResponse({ photos: localPhotos });
+            }
+            try {
+              const netRes = await originalFetch(input, init);
+              if (netRes && netRes.ok) {
+                const netData = await netRes.json();
+                if (netData && Array.isArray(netData.photos)) {
+                  return jsonResponse({ photos: netData.photos });
+                }
+              }
+            } catch (_) {}
+            return jsonResponse({ photos: localPhotos });
+          }
+
           if (subAction === '/photos' && method === 'POST') {
             const formData = init.body; // FormData
             let category = 'General';
@@ -223,6 +255,9 @@ export function initApiAdapter() {
                 }
               }
             }
+
+            // Sincronizar también al servidor Express en segundo plano
+            try { originalFetch(input, init).catch(() => {}); } catch (_) {}
 
             return jsonResponse({ success: true, photos: uploadedPhotos });
           }
@@ -292,13 +327,26 @@ export function initApiAdapter() {
         // --- WEEK RECONCILE (Auditoría IA de PDF de cobro directo desde el teléfono) ---
         const weekReconcileMatch = cleanUrl.match(/^\/api\/weeks\/(.+)\/reconcile$/);
         if (weekReconcileMatch && method === 'POST') {
+          if (!isAuraPinAuthorized()) {
+            return jsonResponse({
+              ok: false,
+              error: 'Conexión IA bloqueada: autoriza primero el código PIN de 6 cifras en Ajustes (⚙️) → Auracore IA.'
+            }, 403);
+          }
           const weekKey = decodeURIComponent(weekReconcileMatch[1]);
           const body = typeof init.body === 'string' ? JSON.parse(init.body) : (init.body || {});
           const summary = await localDb.getWeeklySummary();
           const targetWeek = summary.weeks.find((w) => w.key === weekKey);
+          const currentSettings = await localDb.getSettings();
+          const rateCard = normalizeRateCard(currentSettings?.rate_card);
 
-          const activeOrders = (targetWeek?.orders || [])
-            .filter((o) => o.status !== 'No Realizado' && o.status !== 'Cancelado')
+          const completedOrders = (targetWeek?.orders || []).filter((o) => o.status === 'Completado');
+          const nonCancelledOrders = (targetWeek?.orders || []).filter(
+            (o) => o.status !== 'No Realizado' && o.status !== 'Cancelado'
+          );
+          const ordersToAudit = completedOrders.length > 0 ? completedOrders : nonCancelledOrders;
+
+          const activeOrders = ordersToAudit
             .map((o) => ({
               id: o.id,
               job_id: o.job_id,
@@ -308,6 +356,7 @@ export function initApiAdapter() {
               drop_footage: o.drop_footage,
               cable_type: o.cable_type,
               bore_type: o.bore_type,
+              road_bore_ft: o.road_bore_ft || 0,
               rate_calculated: o.rate_calculated,
               manual_adjustment: o.manual_adjustment,
               total_rate: Number(o.rate_calculated || 0)
@@ -319,7 +368,8 @@ export function initApiAdapter() {
             filename: body.filename || 'comprobante.pdf',
             weekKey,
             orders: activeOrders,
-            expectedTotal
+            expectedTotal,
+            rateCard
           };
 
           const auraBase = getAuraCoreUrl();
@@ -633,6 +683,7 @@ export function initApiAdapter() {
         if (sheetDeleteMatch && method === 'DELETE') {
           const sheetId = sheetDeleteMatch[1];
           await localDb.deleteDispatchSheet(sheetId);
+          try { originalFetch(input, init).catch(() => {}); } catch (_) {}
           return jsonResponse({ success: true });
         }
 

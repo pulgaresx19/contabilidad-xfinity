@@ -1,5 +1,6 @@
 import Tesseract from 'tesseract.js';
 import { cleanRawNotes } from '../utils/remarkUtils.js';
+import { calcOrderRate } from '../utils/rateUtils.js';
 
 // Normalizer for address keys (for deduplication)
 function normalizeAddrKey(addr) {
@@ -61,7 +62,9 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
           if (!isNaN(val) && val > 0) drop_footage = val;
         } else if (up.startsWith('TYPE:')) {
           const typeStr = t.substring(5).trim().toUpperCase();
-          cable_type = typeStr.includes('11') ? 'RG-11' : 'RG-6';
+          if (/EPON|FIBER|FIBRA|FTTH|OPTIC/i.test(typeStr)) cable_type = 'EPON';
+          else if (typeStr.includes('11')) cable_type = 'RG-11';
+          else cable_type = 'RG-6';
         } else if (up.startsWith('BORE:')) {
           const bStr = t.substring(5).trim().toUpperCase();
           if (bStr.includes('DW') && bStr.includes('SW')) bore_type = 'SW:1,DW:1';
@@ -91,12 +94,7 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
       }
     }
 
-    let rate = 100;
-    if (bore_type.includes('DW')) rate += 30;
-    if (drop_footage > 300) {
-      const extraBlocks = Math.floor((drop_footage - 300) / 100);
-      if (extraBlocks > 0) rate += extraBlocks * 25;
-    }
+    const rate = calcOrderRate({ drop_footage, bore_type }).total;
 
     return {
       work_date,
@@ -268,9 +266,11 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
     if (!isNaN(val) && val > 0 && val < 2000) dropFootage = val;
   }
 
-  // Cable Type (Always RG-11 or RG-6)
+  // Cable Type (EPON / Fibra, RG-11 or RG-6)
   let cableType = 'RG-6';
-  if (/RG[- ]?(?:11|M\b|II\b|1[1lI])/i.test(postJobText)) {
+  if (/EPON|FIBER|FIBRA|FTTH|OPTIC/i.test(postJobText)) {
+    cableType = 'EPON';
+  } else if (/RG[- ]?(?:11|M\b|II\b|1[1lI])/i.test(postJobText)) {
     cableType = 'RG-11';
   }
 
@@ -297,13 +297,8 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
     phone = rawDigits.length === 11 && rawDigits.startsWith('1') ? rawDigits.slice(1) : rawDigits;
   }
 
-  // Rate calculation
-  let rate = 100;
-  if (boreType === 'DW:1' || boreType.includes('DW')) rate += 30;
-  if (dropFootage > 300) {
-    const extraBlocks = Math.floor((dropFootage - 300) / 100);
-    if (extraBlocks > 0) rate += extraBlocks * 25;
-  }
+  // Rate calculation (usa el motor oficial de tramos B003 - B003.9 y D20)
+  const rate = calcOrderRate({ drop_footage: dropFootage, bore_type: boreType }).total;
 
   // Obstacles
   let obstacles = 'N';
@@ -312,9 +307,9 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
     const obsVal = obsMatch[1].trim().toUpperCase();
     if (obsVal !== 'N' && obsVal.length > 0 && !/^N\s*PREMIS/i.test(obsVal)) {
       const obsList = [];
-      if (/LANDSC|LANS|LANDS|LANDY|^LA$|^L$/i.test(obsVal)) obsList.push('LANDSC');
+      if (/LANDSC|LANS|LANDS|LANDY|\bLA\b|\bL\b/i.test(obsVal)) obsList.push('LANDSC');
       if (/SPRKLR|SPRKL|SPRKR/i.test(obsVal)) obsList.push('SPRKL');
-      if (/DGFEN|\bDG\b|^DG$/i.test(obsVal)) obsList.push('DGFEN');
+      if (/DGFEN|\bDG\b/i.test(obsVal)) obsList.push('DGFEN');
       if (/PRIVLITE|PRIV/i.test(obsVal)) obsList.push('PRIVLITE');
       obstacles = obsList.length > 0 ? obsList.join(',') : obsVal;
     }
@@ -335,7 +330,14 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
     bore_type: boreType,
     is_temp: /TEMP[:\s.\-_]*Y/i.test(postJobText) ? 1 : 0,
     obstacles,
-    premise_access: /RQHM/i.test(postJobText) ? 'RQHM' : /DOG/i.test(postJobText) ? 'DOG' : /(?:GATE|LOCK)/i.test(postJobText) ? 'GATE' : /CALL/i.test(postJobText) ? 'CALL' : 'N',
+    premise_access: (() => {
+      const paText = postJobText.replace(/CALL\s*FIRST/ig, '');
+      if (/RQHM/i.test(paText)) return 'RQHM';
+      if (/DOG/i.test(paText)) return 'DOG';
+      if (/(?:GATE|LOCK)/i.test(paText)) return 'GATE';
+      if (/\bCALL\b/i.test(paText)) return 'CALL';
+      return 'N';
+    })(),
     neighbor_notice: (() => {
       const m = postJobText.match(/\b(?:NBR|NB)[:\s]*([A-Za-z0-9]+)\b/i);
       if (m) return m[1].toUpperCase();

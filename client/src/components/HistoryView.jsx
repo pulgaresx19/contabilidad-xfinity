@@ -17,6 +17,7 @@ import PdfDocumentViewer from './PdfDocumentViewer';
 import { getOrderRemark } from '../utils/remarkUtils';
 import { stampReceiptPhoto } from '../utils/receiptStamper';
 import { formatAdjustmentReason } from '../utils/adjustmentUtils';
+import { calcOrderRate, normalizeRateCard, DEFAULT_RATE_CARD } from '../utils/rateUtils';
 
 const CUTOFF_LABELS = {
   '0': 'Domingo (Lunes a Domingo)',
@@ -302,9 +303,9 @@ export default function HistoryView({
       const cleanCable = (o.cable_type || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
       const matchesSearch = 
-        o.job_id.toLowerCase().includes(q) ||
-        o.address.toLowerCase().includes(q) ||
-        o.city.toLowerCase().includes(q) ||
+        (o.job_id || '').toLowerCase().includes(q) ||
+        (o.address || '').toLowerCase().includes(q) ||
+        (o.city || '').toLowerCase().includes(q) ||
         (o.phone && o.phone.includes(q)) ||
         (o.work_date && o.work_date.includes(q)) ||
         (o.cable_type && o.cable_type.toLowerCase().includes(q)) ||
@@ -499,23 +500,33 @@ export default function HistoryView({
   // Comprehensive audit statement for dispute/claim
   const copyAuditStatement = (w) => {
     const completedList = w.orders.filter(o => o.status === 'Completado');
+    let activeRateCard = DEFAULT_RATE_CARD;
+    let activeTech = 'Javier (P0G1)';
+    try {
+      const cached = JSON.parse(localStorage.getItem('xfinity_cached_settings') || '{}');
+      if (cached.rate_card) activeRateCard = normalizeRateCard(cached.rate_card);
+      if (cached.tech_default) activeTech = cached.tech_default;
+    } catch (_) {}
     const jobLines = completedList.map((o, idx) => {
-      const boreTxt = o.bore_type && o.bore_type.includes('DW') ? ' [DW BORE +$30]' : '';
-      const footageBonus = o.drop_footage > 300 ? Math.floor((o.drop_footage - 300) / 100) * 25 : 0;
-      const footTxt = footageBonus > 0 ? ` [METRAJE >300ft: +$${footageBonus}]` : '';
+      const rateRes = calcOrderRate(o, activeRateCard);
+      const dwCode = rateRes.matchedCodes.find(c => c.code === 'D20');
+      const boreTxt = dwCode ? ` [DW BORE +$${dwCode.price.toFixed(0)}]` : '';
+      const rdCode = rateRes.matchedCodes.find(c => c.code === 'B002');
+      const rdTxt = rdCode ? ` [ROAD BORE ${o.road_bore_ft}ft: +$${rdCode.price.toFixed(2)}]` : '';
+      const footTxt = rateRes.footageExtra > 0 ? ` [METRAJE >300ft: +$${rateRes.footageExtra.toFixed(0)}]` : '';
       const adjTxt = o.manual_adjustment && o.manual_adjustment !== 0 
         ? ` [AJUSTE SUPERVISOR: ${o.manual_adjustment > 0 ? `+$${o.manual_adjustment}` : `-$${Math.abs(o.manual_adjustment)}`} (${formatAdjustmentReason(o.adjustment_reason) || 'Inconsistencia'})]`
         : '';
       const photosTxt = o.photos_count > 0 ? ` (${o.photos_count} fotos de respaldo)` : ' (Sin fotos)';
       return `${idx + 1}. Job #${o.job_id} | ${o.work_date}
    📍 ${o.address}, ${o.city}
-   📏 ${o.drop_footage} ft (${o.cable_type})${boreTxt}${footTxt}${adjTxt}${photosTxt}
+   📏 ${o.drop_footage} ft (${o.cable_type})${boreTxt}${rdTxt}${footTxt}${adjTxt}${photosTxt}
    💵 Valor Cobrable: $${o.rate_calculated}`;
     }).join('\n\n');
 
     const text = `📁 *CONSTANCIA DE AUDITORÍA & RECLAMACIÓN - XFINITY*
 📅 *Período:* Semana ${w.displayLabel || w.key} (${w.startDate} al ${w.endDate})
-👤 *Técnico:* Javier (P0G1)
+👤 *Técnico:* ${activeTech}
 🔢 *Órdenes Completadas:* ${completedList.length} trabajos
 📏 *Metraje Total:* ${Math.round(w.totalFootage)} ft
 💰 *MONTO TOTAL:* $${w.totalEarnings.toFixed(2)}

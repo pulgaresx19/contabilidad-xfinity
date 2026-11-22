@@ -2,8 +2,9 @@ import React from 'react';
 import { 
   MapPin, Sparkles, AlertTriangle, Camera, Copy, Pencil, Maximize2, Check, Share2, CheckCheck
 } from 'lucide-react';
-import { getOrderRemark, getOrderFieldBadges } from '../utils/remarkUtils';
+import { getOrderRemark, getOrderFieldBadges, getBoreInfo } from '../utils/remarkUtils';
 import { formatAdjustmentReason } from '../utils/adjustmentUtils';
+import { calcOrderRate, normalizeRateCard, DEFAULT_RATE_CARD } from '../utils/rateUtils';
 
 export default function HistoricalOrderCard({
   order,
@@ -80,7 +81,7 @@ export default function HistoricalOrderCard({
               ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-emerald-500/10'
               : 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-amber-500/10'
           }`}
-          title={`Tarifa del trabajo: $${order.rate_calculated || 100} USD (Toca para editar)`}
+          title={`Tarifa del trabajo: $${order.rate_calculated ?? 100} USD (Toca para editar)`}
         >
           <span className={`h-3.5 w-3.5 rounded-full flex items-center justify-center text-[9px] font-black ${
             isCancelled ? 'bg-slate-800 text-slate-500' : 'bg-emerald-500 text-slate-950'
@@ -88,7 +89,7 @@ export default function HistoricalOrderCard({
             $
           </span>
           <span className="text-xs sm:text-sm font-black font-mono tracking-tight leading-none">
-            {order.rate_calculated || 100}
+            {order.rate_calculated ?? 100}
           </span>
           <span className="text-[8.5px] font-extrabold uppercase tracking-wider opacity-60">
             USD
@@ -136,30 +137,41 @@ export default function HistoricalOrderCard({
         {/* 2. Tipo de Cable (Segundo) */}
         <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 font-mono flex items-center gap-1">
           <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Cable</span>
-          <span className="font-semibold text-slate-200">{order.cable_type || 'RG-6'}</span>
+          <span className={order.cable_type === 'EPON' ? 'font-bold text-amber-300' : 'font-semibold text-slate-200'}>
+            {order.cable_type || 'RG-6'}
+          </span>
         </span>
 
-        {/* 3. Perforación / Driveway Bore */}
-        {hasDrivewayBore ? (
-          <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-medium flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
-            <span>DW Bore</span>
-            <span className="text-slate-400 font-mono text-[9px]">(+$30)</span>
-          </span>
-        ) : order.bore_type && order.bore_type !== 'N' ? (
-          <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-mono flex items-center gap-1">
-            <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Bore</span>
-            <span className="font-semibold text-slate-200">{order.bore_type}</span>
-          </span>
-        ) : null}
-
-        {/* 4. Extra Footage Bonus (>300 ft) */}
-        {order.drop_footage > 300 && Math.floor((order.drop_footage - 300) / 100) > 0 && (
-          <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-mono font-medium flex items-center gap-1">
-            <span className="text-emerald-400 font-sans text-[9px] font-bold">+Drop</span>
-            <span className="font-bold text-slate-200">${Math.floor((order.drop_footage - 300) / 100) * 25}</span>
-          </span>
-        )}
+        {/* 3. Perforación / Bore & Metraje Largo (>300 ft) según Tarifario Oficial */}
+        {(() => {
+          let card = DEFAULT_RATE_CARD;
+          try {
+            const cached = JSON.parse(localStorage.getItem('xfinity_cached_settings') || '{}');
+            if (cached.rate_card) card = normalizeRateCard(cached.rate_card);
+          } catch (_) {}
+          const rateRes = calcOrderRate(order, card);
+          const dwCode = rateRes.matchedCodes.find(c => c.code === 'D20');
+          const rdCode = rateRes.matchedCodes.find(c => c.code === 'B002');
+          const b = getBoreInfo(order.bore_type);
+          return (
+            <>
+              {b && (
+                <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-mono flex items-center gap-1">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${b.dotColor}`} />
+                  <span className="font-semibold text-slate-200">{b.label}</span>
+                  {dwCode && <span className="text-slate-400 font-mono text-[9px]">(+${dwCode.price})</span>}
+                  {rdCode && <span className="text-emerald-400 font-mono text-[9px]">(+${rdCode.price.toFixed(2)})</span>}
+                </span>
+              )}
+              {rateRes.footageExtra > 0 && (
+                <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-mono font-medium flex items-center gap-1">
+                  <span className="text-emerald-400 font-sans text-[9px] font-bold">+Drop</span>
+                  <span className="font-bold text-slate-200">${rateRes.footageExtra}</span>
+                </span>
+              )}
+            </>
+          );
+        })()}
 
         {/* 5. Ajuste Manual de Tarifa */}
         {order.manual_adjustment !== undefined && Number(order.manual_adjustment) !== 0 && (

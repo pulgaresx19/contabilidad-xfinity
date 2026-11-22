@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, CalendarDays, BarChart3, User } from 'lucide-react';
+import { Home, CalendarDays, User } from 'lucide-react';
 
 export default function BottomNav({ activeTab, setActiveTab, pendingCount }) {
   const tabs = [
