@@ -15,6 +15,7 @@ import { geocodeAddressWithMapbox, detectOrderState, buildNavigationUrl, MAPBOX_
 import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
 import { getOrderRemark, getOrderFieldBadges, getBoreInfo } from '../utils/remarkUtils';
 import { useTheme } from '../context/ThemeContext';
+import EmptyStateCard from './EmptyStateCard';
 
 const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
 mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
@@ -3606,9 +3607,12 @@ export default function UberDriverView({
                 })}
 
               {tempOrdersList.length === 0 && (
-                <div className="py-12 text-center text-slate-400 text-xs">
-                  No hay trabajos registrados para esta jornada.
-                </div>
+                <EmptyStateCard
+                  icon={Calendar}
+                  iconColor="cyan"
+                  title="No hay trabajos registrados"
+                  description="No tienes órdenes registradas para esta jornada aún. Escanea una foto o añade un trabajo."
+                />
               )}
             </div>
 

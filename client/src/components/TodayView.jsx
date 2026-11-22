@@ -11,6 +11,7 @@ import EditJobModal from './EditJobModal';
 import ShareReportModal from './ShareReportModal';
 import UberDriverView from './UberDriverView';
 import LiveCameraModal from './LiveCameraModal';
+import EmptyStateCard from './EmptyStateCard';
 import { stampPhotoWithWatermark } from '../utils/watermark';
 import { getLocalDateStr, normalizeDateStr, formatDateFriendly } from '../utils/dateUtils';
 import { buildNavigationUrl } from '../utils/mapboxGeocode';
@@ -895,22 +896,32 @@ export default function TodayView({
       </div>
 
       {/* 3. LISTA DE TRABAJOS DEL DÍA CON NÚMEROS EN CÍRCULO */}
-      {visibleOrders.length === 0 ? (
-        <div className="bg-[#131b26] border border-white/10 rounded-3xl p-8 text-center space-y-3 shadow-md">
-          <div className="h-12 w-12 rounded-2xl bg-slate-800/80 text-slate-400 flex items-center justify-center mx-auto border border-white/5">
-            <CheckCircle2 className="h-6 w-6" />
-          </div>
-          <div className="space-y-1">
-            <h4 className="text-sm font-bold text-white">
-              Sin trabajos en esta fecha
-            </h4>
-            <p className="text-xs text-slate-400 max-w-xs mx-auto">
-              {isViewingToday 
-                ? 'No tienes trabajos registrados para hoy aún. Escanea tu hoja de despacho o añade el primer trabajo.'
-                : `No hay órdenes registradas para el día ${formatDateFriendly(activeDate)}.`
-              }
-            </p>
-          </div>
+      {dayOrders.length === 0 ? (
+        <EmptyStateCard
+          icon={Calendar}
+          iconColor="cyan"
+          title="Sin trabajos en esta fecha"
+          description={
+            isViewingToday 
+              ? 'No tienes trabajos registrados para hoy aún. Escanea tu hoja de despacho o añade el primer trabajo.'
+              : `No hay órdenes registradas para el día ${formatDateFriendly(activeDate)}.`
+          }
+        />
+      ) : visibleOrders.length === 0 ? (
+        <div className="bg-[#131b26] border border-white/10 rounded-2xl p-6 text-center space-y-2 select-none shadow-md my-4">
+          <p className="text-xs font-bold text-slate-300">
+            No se encontraron trabajos con el filtro "{statusFilter}"
+          </p>
+          <p className="text-[11px] text-slate-500">
+            Prueba seleccionando otro estado para ver las órdenes del día.
+          </p>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('ALL')}
+            className="mt-1 px-3 py-1 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25 border border-cyan-500/30 rounded-xl text-[11px] font-bold transition cursor-pointer"
+          >
+            Ver todos los trabajos ({dayOrders.length})
+          </button>
         </div>
       ) : (
         <div className="space-y-2.5">

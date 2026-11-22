@@ -19,6 +19,7 @@ import ShareReportModal from './ShareReportModal';
 import HistoricalOrderCard from './HistoricalOrderCard';
 import ZoomableImageViewer from './ZoomableImageViewer';
 import PdfDocumentViewer from './PdfDocumentViewer';
+import EmptyStateCard from './EmptyStateCard';
 import { stampReceiptPhoto } from '../utils/receiptStamper';
 
 const CATEGORY_ICONS = {
@@ -670,9 +671,12 @@ ${weeksLines || '  (No hay semanas registradas)'}
           </div>
 
           {weeks.length === 0 ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-xs">
-              No hay semanas cerradas en este mes aún.
-            </div>
+            <EmptyStateCard
+              icon={Calendar}
+              iconColor="cyan"
+              title="No hay semanas cerradas en este mes aún"
+              description="Las semanas correspondientes a este mes se agruparán automáticamente cuando tengas órdenes registradas."
+            />
           ) : (
             weeks.map((w) => {
               const completedCount = w.completedCount !== undefined 
@@ -858,10 +862,12 @@ ${weeksLines || '  (No hay semanas registradas)'}
             </div>
 
             {expenses.length === 0 ? (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-xs">
-                No has registrado gastos para este mes.
-                <p className="text-[11px] text-slate-500 mt-1">Registra combustible, herramientas, renta y repuestos para llevar tu contabilidad real.</p>
-              </div>
+              <EmptyStateCard
+                icon={DollarSign}
+                iconColor="cyan"
+                title="No has registrado gastos para este mes"
+                description="Registra combustible, herramientas, renta y repuestos para llevar tu contabilidad real."
+              />
             ) : (
               displayedExpenses.map((exp) => {
                 const catCfg = CATEGORY_ICONS[exp.category] || CATEGORY_ICONS.Otros;

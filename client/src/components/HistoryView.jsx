@@ -14,6 +14,7 @@ import EditJobModal from './EditJobModal';
 import HistoricalOrderCard from './HistoricalOrderCard';
 import ZoomableImageViewer from './ZoomableImageViewer';
 import PdfDocumentViewer from './PdfDocumentViewer';
+import EmptyStateCard from './EmptyStateCard';
 import { getOrderRemark } from '../utils/remarkUtils';
 import { stampReceiptPhoto } from '../utils/receiptStamper';
 import { formatAdjustmentReason } from '../utils/adjustmentUtils';
@@ -793,17 +794,12 @@ ${jobLines}
 
           {/* 4. Lista de Semanas / Historial */}
           {weeks.length === 0 ? (
-            <div className="bg-[#0f1722]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 text-center shadow-lg flex flex-col items-center justify-center space-y-3 my-4 select-none">
-              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-                <Calendar className="h-6 w-6 stroke-[2]" />
-              </div>
-              <div className="space-y-1 max-w-xs">
-                <h4 className="text-sm font-black text-white">No hay semanas registradas aún</h4>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Los cierres semanales se crean automáticamente conforme agregues y completes órdenes de trabajo.
-                </p>
-              </div>
-            </div>
+            <EmptyStateCard
+              icon={Calendar}
+              iconColor="cyan"
+              title="No hay semanas registradas aún"
+              description="Los cierres semanales se crean automáticamente conforme agregues y completes órdenes de trabajo."
+            />
           ) : filteredWeeks.length === 0 ? (
             <div className="bg-[#131b26] border border-white/10 rounded-2xl p-6 text-center space-y-2 select-none shadow-md">
               <p className="text-xs font-bold text-slate-300">
@@ -1108,9 +1104,33 @@ ${jobLines}
           </div>
 
           {/* Listado de Órdenes Filtradas */}
-          {filteredAllOrders.length === 0 ? (
-            <div className="bg-[#131b26] border border-white/10 rounded-2xl p-8 text-center text-slate-400 text-xs shadow-md">
-              No se encontraron trabajos con los filtros actuales.
+          {yearOrders.length === 0 ? (
+            <EmptyStateCard
+              icon={FileText}
+              iconColor="cyan"
+              title="No hay trabajos registrados aún"
+              description="El historial de trabajos se actualizará automáticamente conforme vayas agregando o escaneando órdenes de trabajo."
+            />
+          ) : filteredAllOrders.length === 0 ? (
+            <div className="bg-[#131b26] border border-white/10 rounded-2xl p-6 text-center space-y-2 select-none shadow-md my-4">
+              <p className="text-xs font-bold text-slate-300">
+                No se encontraron trabajos que coincidan con la búsqueda o filtro
+              </p>
+              <p className="text-[11px] text-slate-500">
+                Prueba buscando por otra dirección, ID de trabajo o limpia los filtros.
+              </p>
+              {(orderSearch || orderStatusFilter !== 'ALL') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrderSearch('');
+                    setOrderStatusFilter('ALL');
+                  }}
+                  className="mt-1 px-3 py-1 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25 border border-cyan-500/30 rounded-xl text-[11px] font-bold transition cursor-pointer"
+                >
+                  Limpiar filtros
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-2.5">
