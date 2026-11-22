@@ -2409,12 +2409,12 @@ export default function UberDriverView({
               tabIndex={-1}
             />
 
-            <span className="text-[10.5px] sm:text-xs font-black text-white whitespace-nowrap tracking-tighter sm:tracking-tight font-mono">
+            <span className="text-[11px] sm:text-xs font-black text-white whitespace-nowrap tracking-tight font-mono">
               {formattedHudDateFull}
             </span>
 
             {isViewingToday ? (
-              <span className="inline-flex items-center gap-1 text-[8.5px] sm:text-[9px] font-black text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1 sm:px-1.5 py-0.5 rounded-full shrink-0 select-none whitespace-nowrap">
+              <span className="inline-flex items-center gap-1 text-[8.5px] sm:text-[9px] font-black text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded-full shrink-0 select-none whitespace-nowrap">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span>Hoy</span>
               </span>
@@ -2422,7 +2422,7 @@ export default function UberDriverView({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onGoToToday(); }}
-                className="inline-flex items-center text-[8.5px] sm:text-[9px] font-black text-amber-300 hover:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-1 sm:px-1.5 py-0.5 rounded-full transition active:scale-90 shrink-0 cursor-pointer shadow-xs select-none whitespace-nowrap"
+                className="inline-flex items-center text-[8.5px] sm:text-[9px] font-black text-amber-300 hover:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-1.5 py-0.5 rounded-full transition active:scale-90 shrink-0 cursor-pointer shadow-xs select-none whitespace-nowrap"
                 title="Volver a la fecha de hoy"
               >
                 <span>Ir hoy</span>
@@ -2441,35 +2441,26 @@ export default function UberDriverView({
           </button>
         </div>
 
-        {/* Actions: [Saldo Diario (Adelante)] & [+ Añadir Trabajo (Esquina Derecha)] */}
-        <div className="pointer-events-auto flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* Action Right Corner: [Saldo Diario con ancho fijo predispuesto para 4-5 dígitos] */}
+        <div className="pointer-events-auto flex items-center shrink-0">
           {/* Saldo Diario / Ganancia del Día */}
           <div
             onClick={handleOpenDayJobsModal}
-            className="h-9 px-1.5 sm:px-2.5 rounded-2xl bg-[#0f1722]/95 backdrop-blur-2xl border border-emerald-500/30 hover:border-emerald-500/60 shadow-xl active:scale-95 transition flex items-center gap-1 sm:gap-1.5 cursor-pointer select-none group shrink-0"
+            className="h-9 px-2.5 sm:px-3 min-w-[88px] sm:min-w-[96px] rounded-2xl bg-[#0f1722]/95 backdrop-blur-2xl border border-emerald-500/30 hover:border-emerald-500/60 shadow-xl active:scale-95 transition flex items-center gap-2 cursor-pointer select-none group shrink-0"
             title={`Saldo del día (${dayCompleted.length} completados): $${dayEarnings.toFixed(2)}. Toca para ver travesía y lista.`}
           >
-            <div className="w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-[10px] sm:text-[10.5px] font-black shrink-0 font-mono">
+            <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-[10.5px] font-black shrink-0 font-mono">
               $
             </div>
-            <div className="flex flex-col justify-center leading-none">
-              <span className="text-[7px] sm:text-[8px] uppercase tracking-wider text-slate-400 font-bold group-hover:text-emerald-400/80 transition">
+            <div className="flex flex-col justify-center leading-none min-w-[5.5ch]">
+              <span className="text-[7.5px] sm:text-[8px] uppercase tracking-wider text-slate-400 font-bold group-hover:text-emerald-400/80 transition">
                 {isViewingToday ? 'Hoy' : 'Total'}
               </span>
-              <span className="text-[11px] sm:text-[13px] font-black font-mono text-emerald-400 tracking-tight whitespace-nowrap">
+              <span className="text-xs sm:text-[13px] font-black font-mono text-emerald-400 tracking-tight whitespace-nowrap">
                 ${dayEarnings % 1 === 0 ? dayEarnings.toFixed(0) : dayEarnings.toFixed(2)}
               </span>
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={onOpenAddJob}
-            className="w-8.5 h-9 sm:w-9 sm:h-9 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-md shadow-cyan-500/30 active:scale-95 transition-all flex items-center justify-center border border-white/20 outline-none focus:outline-none select-none cursor-pointer shrink-0"
-            title="Añadir nuevo trabajo (+)"
-          >
-            <Plus className="h-4 w-4 sm:h-4.5 sm:w-4.5 stroke-[3]" />
-          </button>
         </div>
       </div>
 
