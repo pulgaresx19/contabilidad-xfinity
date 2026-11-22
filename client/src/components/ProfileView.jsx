@@ -245,10 +245,7 @@ export default function ProfileView({ techName, summaryData, onRefresh, onOpenSe
             <div className="min-w-0">
               <span className="text-xs font-bold text-slate-100 block">Tarifario de Códigos</span>
               <span className="text-[10.5px] text-slate-400 font-mono font-medium truncate block mt-0.5">
-                {(() => {
-                  const rc = normalizeRateCard(settings.rate_card);
-                  return `B003 ($${rc.B003?.price ?? 100}) • D20 ($${rc.D20?.price ?? 30}) • B002 ($${(rc.B002?.price ?? 2.5).toFixed(2)}/ft) • B003.1–B003.9`;
-                })()}
+                Tabla oficial de precios y pagos por trabajo
               </span>
             </div>
           </div>

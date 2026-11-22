@@ -2370,22 +2370,22 @@ export default function UberDriverView({
       />
 
       {/* 2. TOP HUD: PREMIUM COCKPIT DATE & BALANCE PILL + ACTION BUTTONS */}
-      <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between pointer-events-none gap-2">
+      <div className="absolute top-2.5 left-1.5 right-1.5 sm:left-2.5 sm:right-2.5 z-20 flex items-center justify-between pointer-events-none gap-1 sm:gap-2">
         {/* Fixed-Height Linear Date Selector Pill */}
-        <div className="pointer-events-auto bg-[#0f1722]/95 backdrop-blur-2xl border border-white/10 rounded-2xl px-1 sm:px-1.5 h-9 shadow-xl flex items-center gap-1 select-none shrink-0">
+        <div className="pointer-events-auto bg-[#0f1722]/95 backdrop-blur-2xl border border-white/10 rounded-2xl px-0.5 sm:px-1.5 h-9 shadow-xl flex items-center gap-0.5 sm:gap-1 select-none shrink-0">
           {/* Previous Day Chevron */}
           <button
             type="button"
             onClick={() => onShiftDay(-1)}
-            className="w-6 h-7 flex items-center justify-center hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition active:scale-90 text-sm font-black shrink-0 cursor-pointer"
+            className="w-5 sm:w-6 h-7 flex items-center justify-center hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition active:scale-90 text-sm font-black shrink-0 cursor-pointer"
             title="Día anterior"
           >
             ‹
           </button>
           
-          {/* Center Date & Today Indicator (Single Line, Never Shifts) */}
+          {/* Center Date & Today Indicator (Single Line, Full Weekday + Date + Year on all devices) */}
           <div 
-            className="flex items-center gap-1.5 px-1 cursor-pointer"
+            className="flex items-center gap-1 sm:gap-1.5 px-0.5 sm:px-1 cursor-pointer"
             onClick={() => {
               if (dateInputRef.current) {
                 if (typeof dateInputRef.current.showPicker === 'function') {
@@ -2409,13 +2409,12 @@ export default function UberDriverView({
               tabIndex={-1}
             />
 
-            <span className="text-xs font-black text-white truncate tracking-tight font-mono">
-              <span className="hidden sm:inline">{formattedHudDateFull}</span>
-              <span className="inline sm:hidden">{formattedHudDateShort}</span>
+            <span className="text-[10.5px] sm:text-xs font-black text-white whitespace-nowrap tracking-tighter sm:tracking-tight font-mono">
+              {formattedHudDateFull}
             </span>
 
             {isViewingToday ? (
-              <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded-full shrink-0 select-none">
+              <span className="inline-flex items-center gap-1 text-[8.5px] sm:text-[9px] font-black text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1 sm:px-1.5 py-0.5 rounded-full shrink-0 select-none whitespace-nowrap">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span>Hoy</span>
               </span>
@@ -2423,7 +2422,7 @@ export default function UberDriverView({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onGoToToday(); }}
-                className="inline-flex items-center text-[9px] font-black text-amber-300 hover:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-1.5 py-0.5 rounded-full transition active:scale-90 shrink-0 cursor-pointer shadow-xs select-none"
+                className="inline-flex items-center text-[8.5px] sm:text-[9px] font-black text-amber-300 hover:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-1 sm:px-1.5 py-0.5 rounded-full transition active:scale-90 shrink-0 cursor-pointer shadow-xs select-none whitespace-nowrap"
                 title="Volver a la fecha de hoy"
               >
                 <span>Ir hoy</span>
@@ -2435,57 +2434,58 @@ export default function UberDriverView({
           <button
             type="button"
             onClick={() => onShiftDay(1)}
-            className="w-6 h-7 flex items-center justify-center hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition active:scale-90 text-sm font-black shrink-0 cursor-pointer"
+            className="w-5 sm:w-6 h-7 flex items-center justify-center hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition active:scale-90 text-sm font-black shrink-0 cursor-pointer"
             title="Día siguiente"
           >
             ›
           </button>
         </div>
 
-        {/* Actions: [+] & [Travesía / Lista de Trabajos] & [Saldo Diario] */}
+        {/* Actions: [Saldo Diario (Adelante)] & [+ Añadir Trabajo (Esquina Derecha)] */}
         <div className="pointer-events-auto flex items-center gap-1 sm:gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={onOpenAddJob}
-            className="w-9 h-9 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-md shadow-cyan-500/30 active:scale-95 transition-all flex items-center justify-center border border-white/20 outline-none focus:outline-none select-none cursor-pointer"
-            title="Añadir nuevo trabajo (+)"
-          >
-            <Plus className="h-4.5 w-4.5 stroke-[3]" />
-          </button>
-
-          <button
-            type="button"
-            onClick={handleOpenDayJobsModal}
-            className="w-9 h-9 rounded-2xl bg-[#0f1722]/95 backdrop-blur-2xl hover:bg-cyan-500/10 text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 shadow-xl active:scale-95 transition flex items-center justify-center cursor-pointer"
-            title="Organizar travesía y lista de trabajos del día"
-          >
-            <Route className="h-4 w-4 stroke-[2.3]" />
-          </button>
-
           {/* Saldo Diario / Ganancia del Día */}
           <div
             onClick={handleOpenDayJobsModal}
-            className="h-9 px-2 sm:px-2.5 rounded-2xl bg-[#0f1722]/95 backdrop-blur-2xl border border-emerald-500/30 hover:border-emerald-500/60 shadow-xl active:scale-95 transition flex items-center gap-1.5 cursor-pointer select-none group shrink-0"
+            className="h-9 px-1.5 sm:px-2.5 rounded-2xl bg-[#0f1722]/95 backdrop-blur-2xl border border-emerald-500/30 hover:border-emerald-500/60 shadow-xl active:scale-95 transition flex items-center gap-1 sm:gap-1.5 cursor-pointer select-none group shrink-0"
             title={`Saldo del día (${dayCompleted.length} completados): $${dayEarnings.toFixed(2)}. Toca para ver travesía y lista.`}
           >
-            <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-[10.5px] font-black shrink-0 font-mono">
+            <div className="w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-[10px] sm:text-[10.5px] font-black shrink-0 font-mono">
               $
             </div>
             <div className="flex flex-col justify-center leading-none">
-              <span className="text-[7.5px] sm:text-[8px] uppercase tracking-wider text-slate-400 font-bold group-hover:text-emerald-400/80 transition">
+              <span className="text-[7px] sm:text-[8px] uppercase tracking-wider text-slate-400 font-bold group-hover:text-emerald-400/80 transition">
                 {isViewingToday ? 'Hoy' : 'Total'}
               </span>
-              <span className="text-xs sm:text-[13px] font-black font-mono text-emerald-400 tracking-tight whitespace-nowrap">
+              <span className="text-[11px] sm:text-[13px] font-black font-mono text-emerald-400 tracking-tight whitespace-nowrap">
                 ${dayEarnings % 1 === 0 ? dayEarnings.toFixed(0) : dayEarnings.toFixed(2)}
               </span>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={onOpenAddJob}
+            className="w-8.5 h-9 sm:w-9 sm:h-9 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-md shadow-cyan-500/30 active:scale-95 transition-all flex items-center justify-center border border-white/20 outline-none focus:outline-none select-none cursor-pointer shrink-0"
+            title="Añadir nuevo trabajo (+)"
+          >
+            <Plus className="h-4 w-4 sm:h-4.5 sm:w-4.5 stroke-[3]" />
+          </button>
         </div>
       </div>
 
-      {/* 4. RIGHT FLOATING CONTROLS: THEME (TOP) + 3D/2D (BELOW) + CENTRAR EN RUTA + CENTRAR EN GPS */}
-      <div className="absolute right-3 top-20 z-20 flex flex-col gap-2 pointer-events-auto">
-        {/* 1. Toggle Theme Popover (Top) */}
+      {/* 4. RIGHT FLOATING CONTROLS: TRAVESÍA (TOP) + THEME + 3D/2D + CENTRAR EN RUTA + CENTRAR EN GPS */}
+      <div className="absolute right-3 top-15 z-20 flex flex-col gap-2 pointer-events-auto">
+        {/* 1. Organizar Travesía y Lista de Trabajos del Día (Top) */}
+        <button
+          type="button"
+          onClick={handleOpenDayJobsModal}
+          className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] text-cyan-400 hover:text-cyan-300 backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer"
+          title="Organizar travesía y lista de trabajos del día"
+        >
+          <Route className="h-4 w-4 stroke-[2.3]" />
+        </button>
+
+        {/* 2. Toggle Theme Popover (Below Travesía) */}
         <div className="relative">
           <button
             type="button"
