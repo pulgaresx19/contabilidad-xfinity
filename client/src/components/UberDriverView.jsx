@@ -3608,7 +3608,7 @@ export default function UberDriverView({
 
               {tempOrdersList.length === 0 && (
                 <EmptyStateCard
-                  icon={Calendar}
+                  icon={Clock}
                   iconColor="cyan"
                   title="No hay trabajos registrados"
                   description="No tienes órdenes registradas para esta jornada aún. Escanea una foto o añade un trabajo."

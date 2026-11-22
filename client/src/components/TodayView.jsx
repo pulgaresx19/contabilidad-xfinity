@@ -898,7 +898,7 @@ export default function TodayView({
       {/* 3. LISTA DE TRABAJOS DEL DÍA CON NÚMEROS EN CÍRCULO */}
       {dayOrders.length === 0 ? (
         <EmptyStateCard
-          icon={Calendar}
+          icon={Clock}
           iconColor="cyan"
           title="Sin trabajos en esta fecha"
           description={
