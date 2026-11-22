@@ -91,14 +91,18 @@ html.light [class*="bg-slate-900"] {
 }
 
 html.light .bg-\[\#0f1722\],
+html.light .bg-\[\#0f1722\]\/80,
 html.light .bg-\[\#0f1722\]\/90,
 html.light .bg-\[\#0f1722\]\/95,
 html.light .bg-\[\#0f1722\]\/96,
 html.light .bg-\[\#0f1722\]\/98,
 html.light .bg-\[\#101722\],
+html.light .bg-\[\#101722\]\/95,
 html.light .bg-\[\#121922\],
 html.light .bg-\[\#121a24\],
+html.light .bg-\[\#121b28\],
 html.light .bg-\[\#131b26\],
+html.light .bg-\[\#131d2a\],
 html.light .bg-\[\#131d2b\],
 html.light .bg-\[\#141d28\] {
   background-color: #ffffff !important;
@@ -106,47 +110,44 @@ html.light .bg-\[\#141d28\] {
   color: #0f172a !important;
 }
 
+/* Priority order card surface in Light Mode */
+html.light .bg-\[\#160c14\]\/95 {
+  background-color: #fff1f2 !important;
+  border-color: #fb7185 !important;
+  color: #881337 !important;
+}
+
 /* ==========================================================================
-   COCKPIT NAVIGATION IMMUNITY
-   UberDriverView must always maintain high-contrast dark cockpit styling
+   COCKPIT NAVIGATION LIGHT MODE (JORNADA / MAPA)
+   Clean, high-contrast Apple Maps iOS Light aesthetic for top bar, lateral
+   controls, and bottom sliding stop card in Light Mode
    ========================================================================== */
-[data-cockpit="true"],
-[data-cockpit="true"] * {
-  color-scheme: dark !important;
-}
 html.light [data-cockpit="true"] {
-  background-color: #121a24 !important;
-  border-color: #232f3e !important;
-  color: #f8fafc !important;
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
 }
-html.light [data-cockpit="true"] .bg-\[\#121a24\] {
-  background-color: #121a24 !important;
-}
-html.light [data-cockpit="true"] .bg-\[\#0f1722\],
 html.light [data-cockpit="true"] .bg-\[\#0f1722\]\/95,
-html.light [data-cockpit="true"] .bg-\[\#0f1722\]\/96 {
-  background-color: rgba(15, 23, 34, 0.96) !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-  color: #ffffff !important;
-}
-html.light [data-cockpit="true"] .bg-\[\#16202c\],
 html.light [data-cockpit="true"] .bg-\[\#16202c\]\/90,
+html.light [data-cockpit="true"] .bg-\[\#16202c\]\/98 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10) !important;
+}
+html.light [data-cockpit="true"] .bg-\[\#0f1722\]\/96 {
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 -8px 28px rgba(15, 23, 42, 0.12) !important;
+}
+html.light [data-cockpit="true"] .bg-\[\#131b26\],
+html.light [data-cockpit="true"] .bg-\[\#16202c\],
 html.light [data-cockpit="true"] .bg-\[\#182332\],
-html.light [data-cockpit="true"] .bg-\[\#1b2533\],
-html.light [data-cockpit="true"] .bg-\[\#121922\],
-html.light [data-cockpit="true"] .bg-\[\#101722\] {
-  background-color: #16202c !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-  color: #ffffff !important;
-}
-html.light [data-cockpit="true"] .text-white {
-  color: #ffffff !important;
-}
-html.light [data-cockpit="true"] .text-slate-300 {
-  color: #cbd5e1 !important;
-}
-html.light [data-cockpit="true"] .text-slate-400 {
-  color: #94a3b8 !important;
+html.light [data-cockpit="true"] .bg-\[\#1b2533\] {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
 }
 
 /* 2.1 Secondary Cockpit Containers -> Soft Slate-100 Panels */
@@ -161,20 +162,36 @@ html.light .bg-slate-950\/90 {
 }
 
 html.light .bg-\[\#16202c\],
+html.light .bg-\[\#16202c\]\/40,
 html.light .bg-\[\#16202c\]\/90,
+html.light .bg-\[\#16202c\]\/95,
 html.light .bg-\[\#16202c\]\/98,
 html.light .bg-\[\#182332\],
+html.light .bg-\[\#182333\],
 html.light .bg-\[\#192433\],
 html.light .bg-\[\#1a2634\],
 html.light .bg-\[\#1b2533\],
+html.light .bg-\[\#1b2736\],
 html.light .bg-\[\#1e2a3a\],
 html.light .bg-\[\#1e2b3b\],
 html.light .bg-\[\#1e2c3c\],
 html.light .bg-\[\#1e2d40\],
+html.light .bg-\[\#1f2d3d\],
+html.light .bg-\[\#223042\],
+html.light .bg-\[\#141d29\],
+html.light .bg-\[\#141d29\]\/80,
+html.light .bg-\[\#141d2a\],
 html.light .bg-\[\#0d141e\],
+html.light .bg-\[\#0d141e\]\/40,
+html.light .bg-\[\#0d141e\]\/50,
+html.light .bg-\[\#0d141e\]\/90,
+html.light .bg-\[\#0d141f\],
+html.light .bg-\[\#0c131d\],
 html.light .bg-\[\#0e1622\],
 html.light .bg-\[\#0e1622\]\/60,
 html.light .bg-\[\#0b1017\],
+html.light .bg-\[\#0b1118\],
+html.light .bg-\[\#0a1019\],
 html.light .bg-\[\#0a0f16\],
 html.light .bg-\[\#0a0f18\],
 html.light .bg-\[\#080d14\] {
@@ -184,7 +201,8 @@ html.light .bg-\[\#080d14\] {
 }
 
 /* Selected orders / Active rows */
-html.light .bg-\[\#007AFF\]\/20 {
+html.light .bg-\[\#007AFF\]\/20,
+html.light .bg-\[\#007AFF\]\/25 {
   background-color: #eff6ff !important;
   border-color: #3b82f6 !important;
 }
@@ -193,12 +211,17 @@ html.light .border-\[\#007AFF\]\/70 {
   border-color: #007aff !important;
 }
 
+/* Technical & Remark pills (Drop, Cable, Bore, +Drop, Reman) in Light Mode */
 html.light .bg-slate-800,
 html.light .bg-slate-800\/80,
+html.light .bg-slate-800\/70,
 html.light .bg-slate-800\/60,
-html.light .bg-slate-800\/50 {
-  background-color: #e2e8f0 !important; /* Slate-200 */
-  border-color: #cbd5e1 !important;
+html.light .bg-slate-800\/50,
+html.light .bg-slate-800\/40,
+html.light [class*="bg-slate-800"] {
+  background-color: #f1f5f9 !important; /* Crisp pearl slate-100 */
+  border-color: #cbd5e1 !important; /* Slate-300 border */
+  color: #1e293b !important;
 }
 
 html.light .bg-slate-700 {
@@ -294,26 +317,50 @@ html.light .placeholder-slate-500::placeholder {
 
 /* 5. Transform Pale Pastels into Rich Deep Colors in Light Mode */
 /* Amber/Gold: Transform pale yellow into deep readable bronze */
+html.light .text-amber-200,
 html.light .text-amber-300,
 html.light .text-amber-300\/80,
-html.light .text-amber-400 {
+html.light .text-amber-300\/90,
+html.light .text-amber-400,
+html.light .text-amber-400\/90 {
   color: #b45309 !important; /* Amber-700: high contrast */
 }
 
-/* Cyan/Blue: Transform pale blue into deep rich ocean cyan */
+/* Cyan/Blue/Sky: Transform pale blue into deep rich ocean cyan */
+html.light .text-cyan-200,
 html.light .text-cyan-300,
-html.light .text-cyan-400 {
+html.light .text-cyan-400,
+html.light .text-cyan-400\/70,
+html.light .text-cyan-400\/80,
+html.light .text-cyan-400\/90,
+html.light .text-sky-300,
+html.light .text-sky-400 {
   color: #0369a1 !important; /* Sky-700 */
 }
 
+html.light .text-blue-300,
+html.light .text-blue-400 {
+  color: #1d4ed8 !important; /* Blue-700 */
+}
+
 /* Emerald: Rich forest green */
+html.light .text-emerald-200,
 html.light .text-emerald-300,
-html.light .text-emerald-400 {
+html.light .text-emerald-400,
+html.light .text-emerald-400\/80 {
   color: #047857 !important; /* Emerald-700 */
 }
 
-/* Rose: Deep dark crimson */
+/* Rose: Deep dark crimson (especially Motivo No Realizado text-rose-100 / text-rose-200) */
+html.light .text-rose-100 {
+  color: #881337 !important; /* Rose-900: Ultra-crisp readable reason text */
+}
+html.light .text-rose-200,
+html.light .text-rose-200\/80,
+html.light .text-rose-200\/90,
 html.light .text-rose-300,
+html.light .text-rose-300\/70,
+html.light .text-rose-300\/90,
 html.light .text-rose-400 {
   color: #be123c !important; /* Rose-700 */
 }

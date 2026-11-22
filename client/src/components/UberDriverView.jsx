@@ -250,29 +250,29 @@ export default function UberDriverView({
 
   const { actualTheme } = useTheme();
 
-  // Map Theme state: Defaults to streets in Light Mode, dark in Dark Mode
+  // Map Theme state: Defaults to streets (Mapa Claro) in Light Mode, dark (Mapa Oscuro) in Dark Mode
   const [mapTheme, setMapTheme] = useState(() => {
-    const saved = localStorage.getItem('xfinity_map_theme');
-    if (saved === 'satellite') return 'satellite';
-    if (saved === 'streets' || saved === 'dark') return saved;
+    const isLockedSat = localStorage.getItem('xfinity_map_theme_locked') === 'satellite';
+    if (isLockedSat) return 'satellite';
     return actualTheme === 'light' ? 'streets' : 'dark';
   });
   const mapThemeRef = useRef(mapTheme);
   mapThemeRef.current = mapTheme;
   const [showThemePicker, setShowThemePicker] = useState(false);
 
-  // Sync Mapbox theme when global app theme switches (unless user locked satellite)
+  // Sync Mapbox theme automatically when global app theme switches (unless user locked satellite)
   useEffect(() => {
     const isLockedSatellite = localStorage.getItem('xfinity_map_theme_locked') === 'satellite';
-    if (isLockedSatellite && mapTheme === 'satellite') return;
+    if (isLockedSatellite && mapThemeRef.current === 'satellite') return;
 
     const targetStyle = actualTheme === 'light' ? 'streets' : 'dark';
-    if (mapTheme !== targetStyle) {
-      setMapTheme(targetStyle);
-      mapThemeRef.current = targetStyle;
-      if (mapInstanceRef.current && MAP_THEMES[targetStyle]) {
-        mapInstanceRef.current.setStyle(MAP_THEMES[targetStyle].style);
-      }
+    setMapTheme(targetStyle);
+    mapThemeRef.current = targetStyle;
+    try {
+      localStorage.setItem('xfinity_map_theme', targetStyle);
+    } catch (_) {}
+    if (mapInstanceRef.current && MAP_THEMES[targetStyle]) {
+      mapInstanceRef.current.setStyle(MAP_THEMES[targetStyle].style);
     }
   }, [actualTheme]);
 
@@ -1582,7 +1582,8 @@ export default function UberDriverView({
       ? [targetOrder.longitude, targetOrder.latitude] 
       : DEFAULT_LNG_LAT;
 
-    const activeKey = (mapTheme === 'apple_dark' || mapTheme === 'night') ? 'dark' : mapTheme;
+    const currentKey = mapThemeRef.current || (actualTheme === 'light' ? 'streets' : 'dark');
+    const activeKey = (currentKey === 'apple_dark' || currentKey === 'night') ? 'dark' : currentKey;
     const initialStyleUrl = MAP_THEMES[activeKey]?.style || (actualTheme === 'light' ? MAP_THEMES.streets.style : MAP_THEMES.dark.style);
 
     const map = new mapboxgl.Map({
