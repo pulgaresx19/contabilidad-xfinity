@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, X, Check, AlertCircle, Phone, MapPin, Ruler, DollarSign, 
-  Calendar, Sparkles, Navigation, Search, Loader2, CheckCircle2, ChevronDown, ChevronRight
+  Calendar, Sparkles, Navigation, Search, Loader2, CheckCircle2, ChevronDown
 } from 'lucide-react';
 import { getLocalDateStr } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox, searchAddressSuggestions } from '../utils/mapboxGeocode';
@@ -393,40 +393,36 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
 
           {/* Tarifa Estimada Banner Limpio con Contador y Desglose Plegable */}
           <div className="bg-[#131d2b] border border-emerald-500/30 rounded-2xl p-2.5 space-y-2 shadow-xs shrink-0">
-            <div className="flex items-center justify-between gap-2">
+            <div 
+              onClick={() => setShowBreakdown(!showBreakdown)}
+              className="flex items-center justify-between gap-2 cursor-pointer select-none group"
+            >
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-200">
                   Tarifa Estimada:
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setShowBreakdown(!showBreakdown)}
-                  className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition cursor-pointer active:scale-95 ${
-                    showBreakdown
-                      ? 'bg-cyan-500/25 text-cyan-300 border-cyan-500/50 shadow-xs'
-                      : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
-                  }`}
-                  title="Ver desglose detallado de la tarifa"
-                >
-                  <span className="font-mono text-[9px] uppercase tracking-wider">Desglose</span>
-                  {showBreakdown ? (
-                    <ChevronDown className="h-3 w-3 text-cyan-400" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3 text-slate-400" />
-                  )}
-                </button>
               </div>
 
-              {/* Medallón Contador de Dinero (Toca para alternar desglose) */}
-              <button
-                type="button"
-                onClick={() => setShowBreakdown(!showBreakdown)}
-                className="flex items-center gap-0.5 px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-mono font-black shadow-xs shrink-0 text-sm cursor-pointer transition active:scale-95"
-                title="Toca para ver u ocultar el desglose detallado"
-              >
-                <span className="text-xs font-bold">$</span>
-                <span>{currentTotal.toFixed(2)}</span>
-              </button>
+              {/* Medallón Contador de Dinero + Flechita al lado en la misma esquina */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div
+                  className="flex items-center gap-0.5 px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-mono font-black shadow-xs text-sm transition"
+                  title="Tarifa calculada"
+                >
+                  <span className="text-xs font-bold">$</span>
+                  <span>{currentTotal.toFixed(2)}</span>
+                </div>
+                <div 
+                  className={`p-1 rounded-lg border transition ${
+                    showBreakdown 
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' 
+                      : 'bg-white/5 text-slate-400 border-white/10 group-hover:text-white'
+                  }`}
+                  title={showBreakdown ? "Ocultar desglose" : "Ver desglose de tarifa"}
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showBreakdown ? 'rotate-180' : ''}`} />
+                </div>
+              </div>
             </div>
 
             {/* Panel Desplegable: Desglose Lineal Detallado por Códigos */}
