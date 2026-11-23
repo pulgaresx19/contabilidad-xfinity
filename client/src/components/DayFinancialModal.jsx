@@ -6,6 +6,11 @@ import {
 import { formatDateFriendly } from '../utils/dateUtils';
 import { formatCableType, getBoreInfo } from '../utils/remarkUtils';
 
+const formatMoney = (val) => {
+  const num = Number(val) || 0;
+  return num % 1 === 0 ? num.toFixed(0) : num.toFixed(2);
+};
+
 export default function DayFinancialModal({
   isOpen,
   onClose,
@@ -94,7 +99,7 @@ export default function DayFinancialModal({
                 Realizados
               </span>
               <span className="text-sm sm:text-base font-black font-mono text-emerald-400 mt-0.5">
-                ${completedEarnings.toFixed(2)}
+                ${formatMoney(completedEarnings)}
               </span>
               <span className="text-[9.5px] text-emerald-300/80 font-medium mt-auto truncate">
                 ✓ {completedOrders.length} {completedOrders.length === 1 ? 'realizado' : 'realizados'}
@@ -107,7 +112,7 @@ export default function DayFinancialModal({
                 Pendientes
               </span>
               <span className="text-sm sm:text-base font-black font-mono text-amber-400 mt-0.5">
-                ${pendingEarnings.toFixed(2)}
+                ${formatMoney(pendingEarnings)}
               </span>
               <span className="text-[9.5px] text-amber-300/80 font-medium mt-auto truncate">
                 ⏳ {pendingOrders.length} {pendingOrders.length === 1 ? 'pendiente' : 'pendientes'}
@@ -120,7 +125,7 @@ export default function DayFinancialModal({
                 Proyección
               </span>
               <span className="text-sm sm:text-base font-black font-mono text-cyan-400 mt-0.5">
-                ${totalPotential.toFixed(2)}
+                ${formatMoney(totalPotential)}
               </span>
               <span className="text-[9.5px] text-cyan-300/80 font-medium mt-auto truncate">
                 {orders.length} asignados
@@ -283,7 +288,7 @@ export default function DayFinancialModal({
                             : 'text-amber-400'
                         }`}
                       >
-                        {isCancelled ? '$0' : `+$${rate.toFixed(2)}`}
+                        ${formatMoney(rate)}
                       </div>
                       <div className="text-[9px] text-slate-400 font-medium mt-0.5">
                         {isCompleted ? 'Realizado' : isCancelled ? 'No Cobrado' : 'Estimado'}
@@ -359,7 +364,7 @@ export default function DayFinancialModal({
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-slate-400 font-medium">Total Realizado:</span>
             <span className="text-sm font-black font-mono text-emerald-400">
-              ${completedEarnings.toFixed(2)}
+              ${formatMoney(completedEarnings)}
             </span>
           </div>
 
