@@ -507,7 +507,13 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
           if (/PRIVLITE|PRIV/i.test(obsRaw)) obsList.push('PRIVLITE');
           obstacles = obsList.length > 0 ? obsList.join(',') : (obsRaw || 'N');
         } else if (up.startsWith('PREMISE ACS:') || up.startsWith('PREMISE:')) {
-          premise_access = t.replace(/^(?:PREMISE\s*ACS|PREMISE)[:\s]*/i, '').trim() || 'N';
+          const rawPa = t.replace(/^(?:PREMISE\s*ACS|PREMISE)[:\s]*/i, '').trim();
+          if (rawPa) {
+            const list = rawPa.split(/[,/]/).map(s => s.trim().toUpperCase()).filter(Boolean);
+            premise_access = list.length > 0 ? list.join(',') : rawPa;
+          } else {
+            premise_access = 'N';
+          }
         } else if (up.startsWith('NBR:') || up.startsWith('NB:')) {
           neighbor_notice = t.replace(/^(?:NBR|NB)[:\s]*/i, '').trim().toUpperCase();
         } else if (up === 'NB') {
@@ -763,11 +769,13 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
     obstacles,
     premise_access: (() => {
       const paText = postJobText.replace(/CALL\s*FIRST/ig, '');
-      if (/RQHM/i.test(paText)) return 'RQHM';
-      if (/DOG/i.test(paText)) return 'DOG';
-      if (/(?:GATE|LOCK)/i.test(paText)) return 'GATE';
-      if (/\bCALL\b/i.test(paText)) return 'CALL';
-      return 'N';
+      const list = [];
+      if (/RQHM/i.test(paText)) list.push('RQHM');
+      if (/\bDOGS?\b/i.test(paText)) list.push('DOG');
+      if (/(?:GATE|LOCK|CANDADO|PORT[OÓ]N)/i.test(paText)) list.push('GATE');
+      if (/\bCALL\b/i.test(paText)) list.push('CALL');
+      if (/\bFREE\b/i.test(paText) || /\bLIBRE\b/i.test(paText)) list.push('FREE');
+      return list.length > 0 ? list.join(',') : 'N';
     })(),
     neighbor_notice: (() => {
       const m = postJobText.match(/\b(?:NBR|NB)[:\s]*([A-Za-z0-9]+)\b/i);

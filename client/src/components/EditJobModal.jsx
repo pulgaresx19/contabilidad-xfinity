@@ -29,7 +29,55 @@ const BORE_TYPE_OPTIONS = [
   { value: 'RD:2', label: 'Road Bore 2 / Doble vía (RD:2)', sublabel: '$2.50/ft (si se hace)', shortLabel: 'Road Bore 2 (RD:2)' }
 ];
 
+const hasAccessCode = (pa, code) => {
+  if (!pa || pa === 'N') return false;
+  return pa.split(',').map(s => s.trim().toUpperCase()).includes(code);
+};
+
+const toggleAccessCode = (pa, code) => {
+  const current = (pa || '').split(',').map(s => s.trim().toUpperCase()).filter(x => x && x !== 'N');
+  let next;
+  if (current.includes(code)) {
+    next = current.filter(x => x !== code);
+  } else {
+    next = [...current, code];
+  }
+  return next.length > 0 ? next.join(',') : 'N';
+};
+
 const REMARK_CHIPS = [
+  {
+    id: 'access_free',
+    label: 'Acceso Libre',
+    icon: '🟢',
+    isActive: (fd) => hasAccessCode(fd.premise_access, 'FREE'),
+    toggle: (fd) => ({ ...fd, premise_access: toggleAccessCode(fd.premise_access, 'FREE') }),
+    activeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-xs'
+  },
+  {
+    id: 'access_rqhm',
+    label: 'Req. Cliente (RQHM)',
+    icon: '🏠',
+    isActive: (fd) => hasAccessCode(fd.premise_access, 'RQHM'),
+    toggle: (fd) => ({ ...fd, premise_access: toggleAccessCode(fd.premise_access, 'RQHM') }),
+    activeClass: 'bg-blue-500/20 text-blue-300 border-blue-500/50 shadow-xs'
+  },
+  {
+    id: 'access_dog',
+    label: 'Perro',
+    icon: '🐕',
+    isActive: (fd) => hasAccessCode(fd.premise_access, 'DOG'),
+    toggle: (fd) => ({ ...fd, premise_access: toggleAccessCode(fd.premise_access, 'DOG') }),
+    activeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-xs'
+  },
+  {
+    id: 'access_gate',
+    label: 'Portón / Candado',
+    icon: '🔒',
+    isActive: (fd) => hasAccessCode(fd.premise_access, 'GATE'),
+    toggle: (fd) => ({ ...fd, premise_access: toggleAccessCode(fd.premise_access, 'GATE') }),
+    activeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-xs'
+  },
   {
     id: 'priority',
     label: 'Prioritario',
@@ -45,38 +93,6 @@ const REMARK_CHIPS = [
     isActive: (fd) => Boolean(fd.call_first),
     toggle: (fd) => ({ ...fd, call_first: !fd.call_first }),
     activeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-xs'
-  },
-  {
-    id: 'access_free',
-    label: 'Acceso Libre',
-    icon: '🟢',
-    isActive: (fd) => fd.premise_access === 'FREE',
-    toggle: (fd) => ({ ...fd, premise_access: fd.premise_access === 'FREE' ? 'N' : 'FREE' }),
-    activeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-xs'
-  },
-  {
-    id: 'access_rqhm',
-    label: 'Req. Cliente (RQHM)',
-    icon: '🏠',
-    isActive: (fd) => fd.premise_access === 'RQHM',
-    toggle: (fd) => ({ ...fd, premise_access: fd.premise_access === 'RQHM' ? 'N' : 'RQHM' }),
-    activeClass: 'bg-blue-500/20 text-blue-300 border-blue-500/50 shadow-xs'
-  },
-  {
-    id: 'access_gate',
-    label: 'Portón / Candado',
-    icon: '🔒',
-    isActive: (fd) => fd.premise_access === 'GATE',
-    toggle: (fd) => ({ ...fd, premise_access: fd.premise_access === 'GATE' ? 'N' : 'GATE' }),
-    activeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-xs'
-  },
-  {
-    id: 'access_dog',
-    label: 'Perro',
-    icon: '🐕',
-    isActive: (fd) => fd.premise_access === 'DOG',
-    toggle: (fd) => ({ ...fd, premise_access: fd.premise_access === 'DOG' ? 'N' : 'DOG' }),
-    activeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-xs'
   },
   {
     id: 'temp_cable',

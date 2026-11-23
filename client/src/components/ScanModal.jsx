@@ -251,13 +251,18 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
           })();
 
           const detectedPremise = (() => {
-            if (o.premise_access && o.premise_access !== 'N') return String(o.premise_access).toUpperCase();
-            const paNotes = rawNotesStr.replace(/CALL\s*FIRST/ig, '');
-            if (/RQHM/i.test(paNotes)) return 'RQHM';
-            if (/DOG/i.test(paNotes)) return 'DOG';
-            if (/(?:GATE|LOCK)/i.test(paNotes)) return 'GATE';
-            if (/\bCALL\b/i.test(paNotes)) return 'CALL';
-            return o.premise_access || 'N';
+            const list = [];
+            const initialList = String(o.premise_access || '').split(/[,/]/).map(s => s.trim().toUpperCase()).filter(s => s && s !== 'N');
+            initialList.forEach(item => { if (!list.includes(item)) list.push(item); });
+
+            const paNotes = (rawNotesStr + ' ' + (o.raw_notes || '')).replace(/CALL\s*FIRST/ig, '');
+            if (/RQHM/i.test(paNotes) && !list.includes('RQHM')) list.push('RQHM');
+            if (/\bDOGS?\b/i.test(paNotes) && !list.includes('DOG')) list.push('DOG');
+            if (/(?:GATE|LOCK|CANDADO|PORT[OÓ]N)/i.test(paNotes) && !list.includes('GATE')) list.push('GATE');
+            if (/\bCALL\b/i.test(paNotes) && !list.includes('CALL')) list.push('CALL');
+            if ((/\bFREE\b/i.test(paNotes) || /\bLIBRE\b/i.test(paNotes)) && !list.includes('FREE')) list.push('FREE');
+
+            return list.length > 0 ? list.join(',') : (o.premise_access || 'N');
           })();
 
           const isPriorityRow = Boolean(o.is_priority || priorityRowIndices.includes(idx));

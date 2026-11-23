@@ -107,9 +107,13 @@ export function getOrderFieldBadges(order) {
     });
   }
 
-  // 1. CONDICIÓN DE ACCESO A LA PROPIEDAD
+  // 1. CONDICIÓN DE ACCESO A LA PROPIEDAD (Soporta múltiples simultáneas)
   const pa = String(order.premise_access || 'N').trim().toUpperCase();
-  if (pa === 'RQHM' || rawNotesStr.includes('RQHM')) {
+  const paList = pa.split(',').map(s => s.trim());
+  let hasSpecificAccess = false;
+
+  if (paList.includes('RQHM') || pa.includes('RQHM') || rawNotesStr.includes('RQHM')) {
+    hasSpecificAccess = true;
     badges.push({
       key: 'access-rqhm',
       type: 'access',
@@ -118,7 +122,10 @@ export function getOrderFieldBadges(order) {
       tooltip: 'Cliente en casa requerido para realizar el trabajo (RQHM)',
       className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
     });
-  } else if (pa === 'DOG' || /\bDOGS?\b/i.test(rawNotesStr)) {
+  }
+
+  if (paList.includes('DOG') || pa.includes('DOG') || /\bDOGS?\b/i.test(rawNotesStr)) {
+    hasSpecificAccess = true;
     badges.push({
       key: 'access-dog',
       type: 'access',
@@ -127,7 +134,10 @@ export function getOrderFieldBadges(order) {
       tooltip: 'Perro en la propiedad: Precaución al ingresar',
       className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
     });
-  } else if (pa.includes('GATE') || pa.includes('LOCK') || /(?:PORT[OÓ]N|CANDADO|LOCKED\s*GATE)/i.test(rawNotesStr)) {
+  }
+
+  if (paList.includes('GATE') || pa.includes('GATE') || pa.includes('LOCK') || /(?:PORT[OÓ]N|CANDADO|LOCKED\s*GATE)/i.test(rawNotesStr)) {
+    hasSpecificAccess = true;
     badges.push({
       key: 'access-gate',
       type: 'access',
@@ -136,7 +146,10 @@ export function getOrderFieldBadges(order) {
       tooltip: 'Portón cerrado o con candado / reja trasera',
       className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
     });
-  } else if (pa === 'CALL' || /\bCALLFIRST\b/i.test(rawNotesStr) || order.call_first === 1 || order.call_first === true) {
+  }
+
+  if (paList.includes('CALL') || pa.includes('CALL') || /\bCALLFIRST\b/i.test(rawNotesStr) || order.call_first === 1 || order.call_first === true) {
+    hasSpecificAccess = true;
     badges.push({
       key: 'access-call',
       type: 'access',
@@ -145,8 +158,9 @@ export function getOrderFieldBadges(order) {
       tooltip: 'Llamar al cliente antes de entrar a la propiedad',
       className: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
     });
-  } else {
-    // Acceso completamente libre (predeterminado)
+  }
+
+  if (paList.includes('FREE') || (!hasSpecificAccess && (pa === 'N' || pa === 'FREE' || pa === ''))) {
     badges.push({
       key: 'access-free',
       type: 'access',
@@ -300,19 +314,27 @@ export function getOrderRemark(order) {
     parts.push(`🚗 ${boreInfo.label}`);
   }
 
-  // 2. CONDICIÓN DE ACCESO A LA PROPIEDAD (Req. Cliente, Perro, Portón, Llamar, o Acceso Libre)
-  if (pa === 'RQHM' || rawNotesStr.includes('RQHM')) {
+  // 2. CONDICIONES DE ACCESO A LA PROPIEDAD (Soporta múltiples combinadas)
+  let addedAccessPart = false;
+  const paList = pa.split(',').map(s => s.trim());
+
+  if (paList.includes('RQHM') || pa.includes('RQHM') || rawNotesStr.includes('RQHM')) {
     parts.push('🏠 Req. Cliente');
-  } else if (pa === 'DOG' || /\bDOGS?\b/i.test(rawNotesStr)) {
+    addedAccessPart = true;
+  }
+  if (paList.includes('DOG') || pa.includes('DOG') || /\bDOGS?\b/i.test(rawNotesStr)) {
     parts.push('🐕 Perro');
-  } else if (pa.includes('GATE') || pa.includes('LOCK') || /(?:PORT[OÓ]N|CANDADO|LOCKED\s*GATE)/i.test(rawNotesStr)) {
+    addedAccessPart = true;
+  }
+  if (paList.includes('GATE') || pa.includes('GATE') || pa.includes('LOCK') || /(?:PORT[OÓ]N|CANDADO|LOCKED\s*GATE)/i.test(rawNotesStr)) {
     parts.push('🔒 Portón');
-  } else if (pa === 'CALL' || /\bCALLFIRST\b/i.test(rawNotesStr) || order.call_first === 1 || order.call_first === true) {
+    addedAccessPart = true;
+  }
+  if (paList.includes('CALL') || pa.includes('CALL') || /\bCALLFIRST\b/i.test(rawNotesStr) || order.call_first === 1 || order.call_first === true) {
     parts.push('📞 Llamar 1ro');
-  } else if (pa !== 'N' && pa !== 'NONE' && pa !== '') {
-    parts.push(pa);
-  } else {
-    // Si no tiene restricciones de acceso, ES ACCESO LIBRE Y VA DE PRIMERO
+    addedAccessPart = true;
+  }
+  if (paList.includes('FREE') || (!addedAccessPart && (pa === 'N' || pa === 'FREE' || pa === ''))) {
     parts.push('🟢 Acceso libre');
   }
 
