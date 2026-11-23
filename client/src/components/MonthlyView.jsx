@@ -504,17 +504,24 @@ ${weeksLines || '  (No hay semanas registradas)'}
           <ChevronLeft className="w-5 h-5" />
         </button>
 
-        <div className="text-center">
-          <div className="text-base font-extrabold text-white capitalize flex items-center justify-center gap-1.5">
+        <div className="text-center flex flex-col items-center justify-center">
+          <div className="text-base font-extrabold text-white capitalize flex items-center justify-center gap-1.5 leading-tight">
             <Calendar className="w-4 h-4 text-cyan-400" />
             <span>{formatMonthFriendly(selectedMonth)}</span>
           </div>
-          <button
-            onClick={handleTodayMonth}
-            className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold tracking-wide uppercase transition mt-0.5"
-          >
-            Ir a Mes Actual
-          </button>
+          {selectedMonth === getCurrentMonthStr() ? (
+            <span className="text-[10px] leading-none h-3.5 flex items-center justify-center text-emerald-400 font-bold tracking-wide uppercase mt-1 select-none">
+              Mes Actual
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={handleTodayMonth}
+              className="text-[10px] leading-none h-3.5 flex items-center justify-center p-0 text-cyan-400 hover:text-cyan-300 font-bold tracking-wide uppercase transition mt-1 cursor-pointer select-none"
+            >
+              Ir al Mes Actual
+            </button>
+          )}
         </div>
 
         <button

@@ -2512,34 +2512,31 @@ export default function UberDriverView({
           </button>
           
           {/* Center Date & Today Indicator (Single Line, Full Weekday + Date + Year on all devices) */}
-          <div 
-            className="flex items-center gap-1 sm:gap-1.5 px-0.5 sm:px-1 cursor-pointer"
-            onClick={() => {
-              if (dateInputRef.current) {
-                if (typeof dateInputRef.current.showPicker === 'function') {
-                  dateInputRef.current.showPicker();
-                } else {
-                  dateInputRef.current.focus();
+          <div className="flex items-center gap-1 sm:gap-1.5 px-0.5 sm:px-1">
+            <label
+              className="relative inline-flex items-center cursor-pointer select-none py-0.5"
+              title="Toca para seleccionar otra fecha en el calendario"
+              onClick={() => {
+                if (dateInputRef.current && typeof dateInputRef.current.showPicker === 'function') {
+                  try {
+                    dateInputRef.current.showPicker();
+                  } catch (_) {}
                 }
-              }
-            }}
-            title="Toca para seleccionar otra fecha en el calendario"
-          >
-            {/* Hidden native date input for direct calendar selection */}
-            <input
-              ref={dateInputRef}
-              type="date"
-              value={activeDate || ''}
-              onChange={(e) => {
-                if (e.target.value && onSelectDate) onSelectDate(e.target.value);
               }}
-              className="sr-only pointer-events-none"
-              tabIndex={-1}
-            />
-
-            <span className="text-[11px] sm:text-xs font-black text-white whitespace-nowrap tracking-tight font-mono">
-              {formattedHudDateFull}
-            </span>
+            >
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={activeDate || ''}
+                onChange={(e) => {
+                  if (e.target.value && onSelectDate) onSelectDate(e.target.value);
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              />
+              <span className="text-[11px] sm:text-xs font-black text-white hover:text-cyan-300 transition whitespace-nowrap tracking-tight font-mono">
+                {formattedHudDateFull}
+              </span>
+            </label>
 
             {isViewingToday ? (
               <span className="inline-flex items-center gap-1 text-[8.5px] sm:text-[9px] font-black text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded-full shrink-0 select-none whitespace-nowrap">
@@ -3256,22 +3253,29 @@ export default function UberDriverView({
                           <div
                             key={ord.id || idx}
                             onClick={() => handleSelectJob(ord)}
-                            className={`p-3 rounded-2xl border cursor-pointer transition select-none flex items-center justify-between gap-2.5 ${
-                              isTarget 
-                                ? 'bg-[#007AFF]/20 border-[#007AFF]/80 shadow-md ring-1 ring-[#007AFF]/50'
+                            className={`p-3 rounded-2xl border cursor-pointer transition select-none flex items-center justify-between gap-2.5 bg-[#1b2533] ${
+                              isCompleted
+                                ? 'border-emerald-500/35 hover:border-emerald-500/50 shadow-emerald-500/5'
                                 : isCancelled
-                                ? 'bg-rose-950/25 border-rose-500/35 hover:border-rose-500/50 shadow-xs'
-                                : 'bg-[#1b2533] border-white/5 hover:border-white/15'
-                            }`}
+                                ? 'border-rose-500/35 hover:border-rose-500/50 shadow-rose-500/5'
+                                : 'border-amber-500/35 hover:border-amber-500/50 shadow-amber-500/5'
+                            } ${isTarget ? 'ring-1 ring-[#007AFF]/60 bg-[#007AFF]/10' : ''}`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                              <span className={`w-6 h-6 rounded-full text-white font-black text-xs flex items-center justify-center font-mono shrink-0 ${
-                                isCompleted ? 'bg-[#34C759]' : isCancelled ? 'bg-[#FF3B30]' : 'bg-[#007AFF]'
+                              <span className={`w-6 h-6 rounded-full font-black text-xs flex items-center justify-center font-mono shrink-0 shadow-xs ${
+                                isCompleted
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/45'
+                                  : isCancelled
+                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/45'
+                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/45'
                               }`}>
-                                {isCompleted ? '✓' : isCancelled ? '✕' : (realStopNumber > 0 ? realStopNumber : idx + 1)}
+                                {realStopNumber > 0 ? realStopNumber : idx + 1}
                               </span>
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5 flex-wrap">
+                                <div className="text-[10px] font-mono leading-tight">
+                                  <span className="text-cyan-300 font-semibold">#{ord.job_id}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                                   <span className="text-xs font-bold truncate leading-tight text-white">
                                     {ord.address}
                                   </span>
@@ -3280,8 +3284,6 @@ export default function UberDriverView({
                                   </span>
                                 </div>
                                 <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5 font-mono truncate">
-                                  <span className="text-cyan-300 font-semibold">#{ord.job_id}</span>
-                                  <span>•</span>
                                   <span>{ord.drop_footage || 0} ft</span>
                                   <span>•</span>
                                   <span className={ord.cable_type === 'EPON' ? 'text-amber-400 font-bold' : 'text-slate-300'}>{formatCableType(ord.cable_type)}</span>
@@ -3300,18 +3302,14 @@ export default function UberDriverView({
                                   })()}
                                 </div>
 
-                                <div className="text-[10px] text-slate-300 font-sans truncate mt-0.5">
-                                  {getOrderRemark(ord)}
-                                </div>
-
                                 {legInfo && (
-                                  <div className={`mt-1 inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-md ${
+                                  <div className={`mt-1 inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-md max-w-full truncate ${
                                     legInfo.isFirst
                                       ? 'text-cyan-300 bg-cyan-500/15 border border-cyan-400/30'
                                       : 'text-sky-300 bg-sky-500/15 border border-sky-400/30'
                                   }`}>
                                     <Car className={`h-2.5 w-2.5 shrink-0 ${legInfo.isFirst ? 'text-cyan-400' : 'text-sky-400'}`} />
-                                    <span>{legInfo.shortText}</span>
+                                    <span className="truncate">{legInfo.text}</span>
                                   </div>
                                 )}
                               </div>
@@ -3319,7 +3317,9 @@ export default function UberDriverView({
 
                             <div className="flex items-center gap-2 shrink-0">
                               <div className="text-right shrink-0">
-                                <div className="text-xs font-mono font-black text-[#34C759]">
+                                <div className={`text-xs font-mono font-black ${
+                                  isCancelled ? 'text-rose-400 line-through' : isCompleted ? 'text-emerald-400' : 'text-amber-400'
+                                }`}>
                                   ${ord.rate_calculated || 100}
                                 </div>
                                 <span className={`text-[9px] font-bold uppercase ${
@@ -3587,17 +3587,9 @@ export default function UberDriverView({
               </div>
             </div>
 
-            {/* Drag & Reorder Instruction Tip */}
-            <div className="px-4 py-1.5 bg-[#0a0f16] border-b border-white/5 text-[10px] text-slate-400 flex items-center justify-between">
-              <span className="truncate">Arrastra (⋮⋮) para ordenar la travesía</span>
-              <span className="text-cyan-400 font-semibold shrink-0">Toca para centrar</span>
-            </div>
-
-            {/* Jobs List (Scrollable with Drag & Drop & Direct Tactile Position Control) */}
+            {/* Jobs List (Scrollable with Direct Tactile Arrow Position Control) */}
             <div 
               className="p-2.5 sm:p-3 space-y-2.5 overflow-y-auto flex-1 min-h-0 select-none scrollbar-none"
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
             >
               {tempOrdersList
                 .filter(o => {
@@ -3615,57 +3607,31 @@ export default function UberDriverView({
                   const stopNumber = (fullIdx >= 0 ? fullIdx : idx) + 1;
                   const isFirst = fullIdx === 0;
                   const isLast = fullIdx === tempOrdersList.length - 1;
-
-                  const isBeingDragged = dragIndex === fullIdx || touchDragIndex === fullIdx;
-                  const isDropTarget = (dragOverIndex === fullIdx && dragIndex !== fullIdx) || (touchOverIndex === fullIdx && touchDragIndex !== fullIdx);
                   const legInfo = getLegInfoForOrder(ord, fullIdx >= 0 ? fullIdx : idx);
 
                   return (
                     <div
                       key={ord.id || idx}
                       data-stop-idx={fullIdx}
-                      onDragOver={(e) => handleDragOver(e, fullIdx)}
-                      onDrop={(e) => handleDrop(e, fullIdx)}
-                      onDragEnd={handleDragEnd}
-                      className={`p-3 rounded-2xl border transition-all duration-150 select-none flex flex-col gap-2 ${
-                        isBeingDragged
-                          ? 'opacity-40 bg-cyan-950/40 border-cyan-500 scale-[0.98]'
-                          : isDropTarget
-                          ? 'bg-[#1e2d40] border-cyan-400 ring-2 ring-cyan-400/50 scale-[1.01]'
-                          : isTarget
-                          ? 'bg-[#007AFF]/20 border-[#007AFF]/70 shadow-lg ring-1 ring-[#007AFF]/40'
+                      className={`p-3 rounded-2xl border transition-all duration-150 select-none flex flex-col gap-2 bg-[#16202c]/90 ${
+                        isCompleted
+                          ? 'border-emerald-500/35 hover:border-emerald-500/50 shadow-emerald-500/5'
                           : isCancelled
-                          ? 'bg-rose-950/25 border-rose-500/35 hover:border-rose-500/50 hover:bg-rose-950/35 shadow-xs'
-                          : 'bg-[#16202c]/90 border-white/5 hover:border-white/20 hover:bg-[#1a2634]'
-                      }`}
+                          ? 'border-rose-500/35 hover:border-rose-500/50 shadow-rose-500/5'
+                          : 'border-amber-500/35 hover:border-amber-500/50 shadow-amber-500/5'
+                      } ${isTarget ? 'ring-1 ring-[#007AFF]/60 bg-[#007AFF]/10' : ''}`}
                     >
-                      {/* Top Row: Reorder Handle + Position Dropdown + Address Info + Rate & Move Buttons */}
+                      {/* Top Row: Position Badge + Address Info + Rate, Status & Up/Down Arrow Buttons */}
                       <div className="flex items-center justify-between gap-2.5">
                         <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
-                          {/* Tactile Drag Handle (Punticos para mover) */}
-                          <div
-                            draggable={overlayStatusFilter === 'ALL'}
-                            onDragStart={(e) => handleDragStart(e, fullIdx)}
-                            onTouchStart={(e) => {
-                              e.stopPropagation();
-                              handleTouchStart(e, fullIdx);
-                            }}
-                            className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-slate-500 hover:text-cyan-400 touch-none flex items-center justify-center rounded-lg hover:bg-white/5 transition shrink-0"
-                            title="Mantén presionado para mover parada"
-                          >
-                            <GripVertical className="h-4 w-4 stroke-[2.5]" />
-                          </div>
-
                           {/* Direct Position Indicator Badge */}
                           <div
-                            className={`w-7 h-7 rounded-full font-black text-xs font-mono flex items-center justify-center text-center shrink-0 shadow-sm ${
+                            className={`w-7 h-7 rounded-full font-black text-xs font-mono flex items-center justify-center text-center shrink-0 shadow-xs ${
                               isCompleted
-                                ? 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/40 ring-1 ring-emerald-500/20'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/45'
                                 : isCancelled
-                                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
-                                : isTarget
-                                ? 'bg-[#007AFF] text-white border border-blue-400 shadow-md ring-2 ring-blue-400/30'
-                                : 'bg-[#007AFF]/25 text-[#007AFF] border border-[#007AFF]/40 ring-1 ring-[#007AFF]/20'
+                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/45'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/45'
                             }`}
                             title={`Parada #${stopNumber}`}
                           >
@@ -3674,7 +3640,10 @@ export default function UberDriverView({
 
                           {/* Job Details */}
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="text-[10px] sm:text-[10.5px] font-mono leading-tight">
+                              <span className="text-cyan-300 font-semibold">#{ord.job_id}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                               <span className="text-xs font-bold truncate leading-tight text-white">
                                 {ord.address}
                               </span>
@@ -3683,8 +3652,6 @@ export default function UberDriverView({
                               </span>
                             </div>
                             <div className="text-[10px] sm:text-[10.5px] text-slate-400 flex items-center gap-1.5 mt-0.5 truncate font-mono">
-                              <span className="text-cyan-300 font-semibold">#{ord.job_id}</span>
-                              <span>•</span>
                               <span>{ord.drop_footage || 0} ft</span>
                               <span>•</span>
                               <span className={ord.cable_type === 'EPON' ? 'text-amber-400 font-bold' : 'text-slate-300'}>{formatCableType(ord.cable_type)}</span>
@@ -3702,29 +3669,66 @@ export default function UberDriverView({
                                 );
                               })()}
                             </div>
-                            <div className="text-[10px] text-slate-300 font-sans truncate mt-0.5">
-                              {getOrderRemark(ord)}
-                            </div>
                           </div>
                         </div>
 
-                        {/* Right: Rate & Status Chip */}
+                        {/* Right: Rate, Status & Tactile Up/Down Buttons */}
                         <div className="flex items-center gap-2 shrink-0">
                           <div className="text-right flex flex-col items-end">
-                            <div className="text-xs font-mono font-black text-emerald-400">
+                            <div className={`text-xs font-mono font-black ${
+                              isCancelled ? 'text-rose-400 line-through' : isCompleted ? 'text-emerald-400' : 'text-amber-400'
+                            }`}>
                               ${ord.rate_calculated || 100}
                             </div>
-                            <span className={`text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-0.5 ${
+                            <span className={`text-[9px] font-bold uppercase ${
                               isReported
-                                ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                                ? 'text-blue-400'
                                 : isCompleted
-                                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                ? 'text-emerald-400'
                                 : isCancelled
-                                ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                                : 'bg-slate-800 text-slate-300 border border-slate-700'
+                                ? 'text-rose-400'
+                                : 'text-amber-400'
                             }`}>
                               {isReported ? 'Reportado' : (ord.status || 'Pendiente')}
                             </span>
+                          </div>
+
+                          <div 
+                            className="flex flex-col gap-0.5 shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              disabled={isFirst}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveStopUp(ord.id);
+                              }}
+                              className={`w-6 h-5 rounded-md flex items-center justify-center border text-[10px] font-bold transition ${
+                                isFirst
+                                  ? 'opacity-20 border-slate-800 text-slate-600'
+                                  : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90 cursor-pointer'
+                              }`}
+                              title="Subir parada en la ruta"
+                            >
+                              <MoveUp className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isLast}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveStopDown(ord.id);
+                              }}
+                              className={`w-6 h-5 rounded-md flex items-center justify-center border text-[10px] font-bold transition ${
+                                isLast
+                                  ? 'opacity-20 border-slate-800 text-slate-600'
+                                  : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 active:scale-90 cursor-pointer'
+                              }`}
+                              title="Bajar parada en la ruta"
+                            >
+                              <MoveDown className="h-3 w-3" />
+                            </button>
                           </div>
                         </div>
                       </div>

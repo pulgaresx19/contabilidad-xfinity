@@ -798,10 +798,31 @@ export default function TodayView({
               </button>
 
               <div className="flex items-center gap-2">
-                <Calendar className="h-3.5 w-3.5 text-cyan-400" />
-                <span className="text-xs font-black text-white font-mono">
-                  {isViewingToday ? `Hoy (${formatDateFriendly(activeDate)})` : formatDateFriendly(activeDate)}
-                </span>
+                <label
+                  className="relative inline-flex items-center gap-2 cursor-pointer select-none py-0.5"
+                  title="Toca para seleccionar una fecha en el calendario"
+                  onClick={(e) => {
+                    const inp = e.currentTarget.querySelector('input[type="date"]');
+                    if (inp && typeof inp.showPicker === 'function') {
+                      try {
+                        inp.showPicker();
+                      } catch (_) {}
+                    }
+                  }}
+                >
+                  <input
+                    type="date"
+                    value={activeDate || ''}
+                    onChange={(e) => {
+                      if (e.target.value) setActiveDate(e.target.value);
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  />
+                  <Calendar className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                  <span className="text-xs font-black text-white hover:text-cyan-300 transition font-mono">
+                    {isViewingToday ? `Hoy (${formatDateFriendly(activeDate)})` : formatDateFriendly(activeDate)}
+                  </span>
+                </label>
                 {!isViewingToday && (
                   <button
                     type="button"
