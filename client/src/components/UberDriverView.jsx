@@ -16,6 +16,7 @@ import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
 import { getOrderRemark, getOrderFieldBadges, getBoreInfo, formatCableType } from '../utils/remarkUtils';
 import { useTheme } from '../context/ThemeContext';
 import EmptyStateCard from './EmptyStateCard';
+import DayFinancialModal from './DayFinancialModal';
 
 const MAPBOX_ACCESS_TOKEN = MAPBOX_TOKEN;
 mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
@@ -260,18 +261,25 @@ export default function UberDriverView({
     window.addEventListener('mouseup', handleDragEnd);
   };
 
-  // Free Exploration Mode: User can pan/zoom anywhere freely without being snapped back
+  // Free Exploration Mode & Map Focus: User can pan/zoom anywhere freely
   const [isUserPanned, setIsUserPanned] = useState(false);
+  const [activeMapMode, setActiveMapMode] = useState('route'); // 'route' | 'gps' | 'free'
   const userHasPannedMapRef = useRef(false);
   const framedOrderIdRef = useRef(null);
+  const [showFinancialModal, setShowFinancialModal] = useState(false);
 
   // Reset free exploration, filters, and framed order when activeDate changes
   useEffect(() => {
     userHasPannedMapRef.current = false;
     setIsUserPanned(false);
+    setActiveMapMode('route');
     framedOrderIdRef.current = null;
     setStatusFilter('ALL');
     setOverlayStatusFilter('ALL');
+    try {
+      const saved = localStorage.getItem(`travesia_mode_${activeDate}`) || 'none';
+      setOptimizationMode(saved);
+    } catch (_) {}
   }, [activeDate]);
 
   // Date picker ref for direct calendar jump
@@ -348,7 +356,13 @@ export default function UberDriverView({
   const [showDayJobsOverlay, setShowDayJobsOverlay] = useState(false);
   const [overlayStatusFilter, setOverlayStatusFilter] = useState('ALL');
   const [hasOrderChanged, setHasOrderChanged] = useState(false);
-  const [optimizationMode, setOptimizationMode] = useState('none'); // 'none' | 'nearest' | 'furthest'
+  const [optimizationMode, setOptimizationMode] = useState(() => {
+    try {
+      return localStorage.getItem(`travesia_mode_${activeDate}`) || 'none';
+    } catch (_) {
+      return 'none';
+    }
+  }); // 'none' | 'nearest' | 'furthest'
   const originalManualListRef = useRef([]);
 
   // Live responsive orders state that updates in 0 ms during reordering
@@ -1719,6 +1733,7 @@ export default function UberDriverView({
       if (!e || e.originalEvent) {
         userHasPannedMapRef.current = true;
         setIsUserPanned(true);
+        setActiveMapMode('free');
       }
     };
 
@@ -2034,6 +2049,7 @@ export default function UberDriverView({
   const handleCenterOnMe = () => {
     userHasPannedMapRef.current = false;
     setIsUserPanned(false);
+    setActiveMapMode('gps');
     const map = mapInstanceRef.current;
     if (!map) return;
     const target = userLocation ? [userLocation.lng, userLocation.lat] : DEFAULT_LNG_LAT;
@@ -2050,6 +2066,7 @@ export default function UberDriverView({
   const handleCenterOnRoute = () => {
     userHasPannedMapRef.current = false;
     setIsUserPanned(false);
+    setActiveMapMode('route');
     const map = mapInstanceRef.current;
     if (!map) return;
     const bounds = new mapboxgl.LngLatBounds();
@@ -2085,7 +2102,11 @@ export default function UberDriverView({
   const handleOpenDayJobsModal = () => {
     setTempOrdersList([...activeOrders]);
     originalManualListRef.current = [...activeOrders];
-    setOptimizationMode('none');
+    let savedMode = 'none';
+    try {
+      savedMode = localStorage.getItem(`travesia_mode_${activeDate}`) || 'none';
+    } catch (_) {}
+    setOptimizationMode(savedMode);
     setHasOrderChanged(false);
     setOptimizedNotice(null);
     setDragIndex(null);
@@ -2322,6 +2343,9 @@ export default function UberDriverView({
     // If the clicked optimization mode is already active, DESELECT IT and revert to manual
     if (optimizationMode === targetMode) {
       setOptimizationMode('none');
+      try {
+        localStorage.setItem(`travesia_mode_${activeDate}`, 'none');
+      } catch (_) {}
       setOptimizedNotice(null);
       if (originalManualListRef.current && originalManualListRef.current.length > 0) {
         setTempOrdersList([...originalManualListRef.current]);
@@ -2346,6 +2370,9 @@ export default function UberDriverView({
     const saved = Math.max(0, beforeMiles - afterMiles);
 
     setOptimizationMode(targetMode);
+    try {
+      localStorage.setItem(`travesia_mode_${activeDate}`, targetMode);
+    } catch (_) {}
     setTempOrdersList(newSequence);
     setLiveOrders(newSequence);
     setHasOrderChanged(true);
@@ -2375,6 +2402,9 @@ export default function UberDriverView({
       await applyOrdersSequenceLive(finalSequence);
       if (onOrderUpdated) await onOrderUpdated();
       setHasOrderChanged(false);
+      try {
+        localStorage.setItem(`travesia_mode_${activeDate}`, optimizationMode);
+      } catch (_) {}
       setShowDayJobsOverlay(false);
 
       // Keep or refresh selected order with its new sequence position
@@ -2570,9 +2600,9 @@ export default function UberDriverView({
         <div className="pointer-events-auto flex items-center shrink-0">
           {/* Saldo Diario / Ganancia del Día */}
           <div
-            onClick={handleOpenDayJobsModal}
+            onClick={() => setShowFinancialModal(true)}
             className="h-9 pl-2 pr-2.5 sm:pl-2.5 sm:pr-3 min-w-[88px] sm:min-w-[96px] rounded-2xl bg-[#0f1722]/95 backdrop-blur-2xl border border-emerald-500/30 hover:border-emerald-500/60 shadow-xl active:scale-95 transition flex items-center justify-between gap-1.5 sm:gap-2 cursor-pointer select-none group shrink-0"
-            title={`Ganancia del día (${dayCompleted.length} completados): $${dayEarnings.toFixed(2)}. Toca para ver travesía y lista.`}
+            title={`Estado Financiero (${dayCompleted.length} completados): $${dayEarnings.toFixed(2)}. Toca para ver arqueo y desglose de cobros.`}
           >
             <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-[10.5px] font-black shrink-0 font-mono">
               $
@@ -2595,10 +2625,24 @@ export default function UberDriverView({
         <button
           type="button"
           onClick={handleOpenDayJobsModal}
-          className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] text-cyan-400 hover:text-cyan-300 backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer"
-          title="Organizar travesía y lista de trabajos del día"
+          className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] border border-white/15 backdrop-blur-xl flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer select-none"
+          title={
+            optimizationMode === 'nearest'
+              ? 'Travesía organizada: Más cercano primero'
+              : optimizationMode === 'furthest'
+              ? 'Travesía organizada: Más lejano primero'
+              : 'Organizar travesía y lista de trabajos del día'
+          }
         >
-          <Route className="h-4 w-4 stroke-[2.3]" />
+          <Route className={`h-4 w-4 stroke-[2.3] transition-colors ${
+            showDayJobsOverlay
+              ? 'text-cyan-400 drop-shadow-[0_0_6px_rgba(34,211,238,0.7)]'
+              : optimizationMode === 'nearest'
+              ? 'text-blue-500 drop-shadow-[0_0_6px_rgba(59,130,246,0.7)]'
+              : optimizationMode === 'furthest'
+              ? 'text-sky-400 drop-shadow-[0_0_6px_rgba(56,189,248,0.7)]'
+              : 'text-slate-300'
+          }`} />
         </button>
 
         {/* 2. Toggle Theme Popover (Below Travesía) */}
@@ -2606,10 +2650,14 @@ export default function UberDriverView({
           <button
             type="button"
             onClick={() => setShowThemePicker(prev => !prev)}
-            className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] text-slate-300 hover:text-white backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer"
+            className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] border border-white/15 backdrop-blur-xl flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer select-none"
             title="Cambiar estilo de mapa"
           >
-            <Layers className="h-4 w-4" />
+            <Layers className={`h-4 w-4 transition-colors ${
+              showThemePicker
+                ? 'text-cyan-400 drop-shadow-[0_0_6px_rgba(34,211,238,0.7)]'
+                : 'text-slate-300'
+            }`} />
           </button>
 
           {showThemePicker && (
@@ -2643,44 +2691,48 @@ export default function UberDriverView({
           )}
         </div>
 
-        {/* 2. Toggle 3D / 2D Perspective (Below Theme) */}
+        {/* 3. Toggle 3D / 2D Perspective (Below Theme) */}
         <button
           type="button"
           onClick={toggle3DView}
-          className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer select-none"
+          className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] border border-white/15 backdrop-blur-xl flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer select-none font-bold"
           title={is3DMode ? 'Modo 3D Activo (Toca para vista 2D)' : 'Modo 2D Activo (Toca para perspectiva 3D)'}
         >
           <span className={`text-[11px] transition-colors ${
             is3DMode 
-              ? 'text-cyan-400 font-black drop-shadow-[0_0_8px_rgba(34,211,238,0.7)]' 
+              ? 'text-cyan-400 font-black drop-shadow-[0_0_6px_rgba(34,211,238,0.7)]' 
               : 'text-slate-300 font-bold'
           }`}>
             {is3DMode ? '3D' : '2D'}
           </span>
         </button>
 
-        {/* Recenter on Route Overview */}
+        {/* 4. Recenter on Route Overview */}
         <button
           type="button"
           onClick={handleCenterOnRoute}
-          className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] backdrop-blur-xl border border-white/15 flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer select-none"
-          title={!isUserPanned ? "Modo Travesía activo (Centrado)" : "Enfocar ruta de travesía"}
+          className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] border border-white/15 backdrop-blur-xl flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer select-none"
+          title={activeMapMode === 'route' ? 'Modo Travesía activo (Ruta completa en pantalla)' : 'Enfocar ruta de travesía'}
         >
-          <Car className={`h-4.5 w-4.5 transition-all ${
-            !isUserPanned 
-              ? 'text-sky-400 dark:text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.7)]' 
+          <Car className={`h-4.5 w-4.5 transition-colors ${
+            activeMapMode === 'route'
+              ? 'text-sky-400 drop-shadow-[0_0_6px_rgba(56,189,248,0.7)]'
               : 'text-slate-300'
           }`} />
         </button>
 
-        {/* Recenter on Live Tech GPS */}
+        {/* 5. Recenter on Live Tech GPS */}
         <button
           type="button"
           onClick={handleCenterOnMe}
-          className="w-10 h-10 rounded-full bg-[#16202c]/90 backdrop-blur-xl border border-white/15 text-[#007AFF] hover:text-blue-400 flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer"
-          title="Centrar en mi ubicación GPS"
+          className="w-10 h-10 rounded-full bg-[#16202c]/90 hover:bg-[#1e2b3b] border border-white/15 backdrop-blur-xl flex items-center justify-center shadow-lg active:scale-95 transition cursor-pointer select-none"
+          title={activeMapMode === 'gps' ? 'Siguiendo mi ubicación GPS (Activo)' : 'Centrar en mi ubicación GPS'}
         >
-          <Navigation className="h-4 w-4 fill-[#007AFF]/25" />
+          <Navigation className={`h-4 w-4 transition-colors ${
+            activeMapMode === 'gps'
+              ? 'text-[#007AFF] fill-[#007AFF] drop-shadow-[0_0_6px_rgba(0,122,255,0.7)]'
+              : 'text-slate-300'
+          }`} />
         </button>
       </div>
 
@@ -3490,13 +3542,13 @@ export default function UberDriverView({
             {/* Auto Optimize Shortest / Furthest Route Action Bar */}
             <div className="px-4 py-2 bg-[#0e1622] border-b border-white/5 shrink-0 space-y-1.5">
               <div className="grid grid-cols-2 gap-2">
-                {/* Botón 1: Más cercano primero */}
+                {/* Botón 1: Más cercano primero (Azul fuerte) */}
                 <button
                   type="button"
                   onClick={() => handleToggleOptimization('nearest')}
                   className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shadow-sm select-none ${
                     optimizationMode === 'nearest'
-                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/20'
+                      ? 'bg-blue-600 text-white font-black shadow-md shadow-blue-600/30'
                       : 'bg-[#16202c] hover:bg-[#1e2a3a] text-slate-300 hover:text-white border border-white/10'
                   }`}
                   title="Organizar por la ruta más corta"
@@ -3505,13 +3557,13 @@ export default function UberDriverView({
                   <span>Más cercano</span>
                 </button>
 
-                {/* Botón 2: Más lejano primero */}
+                {/* Botón 2: Más lejano primero (Azul claro, eliminando morado) */}
                 <button
                   type="button"
                   onClick={() => handleToggleOptimization('furthest')}
                   className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shadow-sm select-none ${
                     optimizationMode === 'furthest'
-                      ? 'bg-indigo-500 text-white font-black shadow-md shadow-indigo-500/20'
+                      ? 'bg-sky-400 text-slate-950 font-black shadow-md shadow-sky-400/30'
                       : 'bg-[#16202c] hover:bg-[#1e2a3a] text-slate-300 hover:text-white border border-white/10'
                   }`}
                   title="Organizar del más lejano al más cercano"
@@ -3522,32 +3574,40 @@ export default function UberDriverView({
               </div>
 
               {optimizedNotice && (
-                <div className="px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-500/30 text-[11px] text-emerald-300 font-bold flex items-center justify-between gap-2">
+                <div className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center justify-between gap-2 ${
+                  optimizedNotice.mode === 'nearest'
+                    ? 'bg-blue-950/60 border-blue-500/30 text-blue-300'
+                    : 'bg-sky-950/60 border-sky-500/30 text-sky-300'
+                }`}>
                   <span className="truncate">
-                    {optimizedNotice.mode === 'nearest' ? 'Ruta más corta organizada' : 'Ruta inversa organizada'}
+                    {optimizedNotice.mode === 'nearest' ? 'Ruta más cercana organizada' : 'Ruta más lejana organizada'}
                   </span>
-                  <span className="font-mono text-emerald-200 shrink-0 text-xs">
+                  <span className="font-mono text-white shrink-0 text-xs">
                     {optimizedNotice.totalMiles} mi
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Status Filter Tabs - Segmented Grid 4 Columnas sin scroll horizontal */}
+            {/* Status Filter Tabs - Segmented Grid 4 Columnas: Realizados, Pendientes, Cancelados, Todos */}
             <div className="px-3 sm:px-4 py-2 border-b border-white/5 bg-[#101722] shrink-0">
               <div className="grid grid-cols-4 gap-1 bg-[#121922] p-1 rounded-xl border border-white/5 text-[10px] font-bold text-center">
+                {/* 1. Realizados */}
                 <button
                   type="button"
-                  onClick={() => setOverlayStatusFilter('ALL')}
+                  onClick={() => setOverlayStatusFilter('Completado')}
                   className={`py-1.5 px-0.5 rounded-lg transition font-bold truncate cursor-pointer ${
-                    overlayStatusFilter === 'ALL'
-                      ? 'bg-cyan-500 text-slate-950 font-black shadow-sm'
+                    overlayStatusFilter === 'Completado'
+                      ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
                       : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }`}
-                  title="Ver todos los trabajos"
+                  title="Ver trabajos realizados"
                 >
-                  Todos ({tempOrdersList.length})
+                  <span className="sm:hidden">Realiz. ({tempOrdersList.filter(o => o.status === 'Completado').length})</span>
+                  <span className="hidden sm:inline">Realizados ({tempOrdersList.filter(o => o.status === 'Completado').length})</span>
                 </button>
+
+                {/* 2. Pendientes */}
                 <button
                   type="button"
                   onClick={() => setOverlayStatusFilter('Pendiente')}
@@ -3561,18 +3621,8 @@ export default function UberDriverView({
                   <span className="sm:hidden">Pend. ({tempOrdersList.filter(o => o.status !== 'Completado' && o.status !== 'No Realizado').length})</span>
                   <span className="hidden sm:inline">Pendientes ({tempOrdersList.filter(o => o.status !== 'Completado' && o.status !== 'No Realizado').length})</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setOverlayStatusFilter('Completado')}
-                  className={`py-1.5 px-0.5 rounded-lg transition font-bold truncate cursor-pointer ${
-                    overlayStatusFilter === 'Completado'
-                      ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
-                  }`}
-                  title="Ver trabajos hechos"
-                >
-                  Hechos ({tempOrdersList.filter(o => o.status === 'Completado').length})
-                </button>
+
+                {/* 3. Cancelados */}
                 <button
                   type="button"
                   onClick={() => setOverlayStatusFilter('No Realizado')}
@@ -3585,6 +3635,20 @@ export default function UberDriverView({
                 >
                   <span className="sm:hidden">Canc. ({tempOrdersList.filter(o => o.status === 'No Realizado').length})</span>
                   <span className="hidden sm:inline">Cancelados ({tempOrdersList.filter(o => o.status === 'No Realizado').length})</span>
+                </button>
+
+                {/* 4. Todos */}
+                <button
+                  type="button"
+                  onClick={() => setOverlayStatusFilter('ALL')}
+                  className={`py-1.5 px-0.5 rounded-lg transition font-bold truncate cursor-pointer ${
+                    overlayStatusFilter === 'ALL'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Ver todos los trabajos"
+                >
+                  Todos ({tempOrdersList.length})
                 </button>
               </div>
             </div>
@@ -3826,6 +3890,18 @@ export default function UberDriverView({
           </div>
         </div>
       )}
+
+      {/* 7. MODAL FINANCIERO Y ARQUEO DE GANANCIAS DEL DÍA */}
+      <DayFinancialModal
+        isOpen={showFinancialModal}
+        onClose={() => setShowFinancialModal(false)}
+        activeDate={activeDate}
+        orders={activeOrders}
+        onSelectJob={handleSelectJob}
+        onOpenPhotos={onOpenPhotos}
+        onOpenShareModal={onOpenShareModal}
+        localSharedMap={localSharedMap}
+      />
 
     </div>
   );
