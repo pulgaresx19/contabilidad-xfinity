@@ -1491,12 +1491,12 @@ export default function TodayView({
                   {/* Desglose Oficial de la Tarifa Base Plegable */}
                   {showAdjustBreakdown && rateResult && rateResult.matchedCodes && rateResult.matchedCodes.length > 0 && (
                     <div className="bg-[#0b1017] border border-cyan-500/30 rounded-xl p-2.5 space-y-1.5 text-xs shadow-inner animate-fade-in pt-2 mt-1 border-t border-white/5">
-                      <div className="flex items-center justify-between pb-1.5 border-b border-white/10">
-                        <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
-                          <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-                          <span>Desglose de Tarifa Inicial</span>
+                      <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-white/10">
+                        <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                          <Sparkles className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                          <span>Desglose de Tarifa</span>
                         </span>
-                        <span className="text-[9.5px] font-mono text-slate-400">
+                        <span className="text-[9.5px] font-mono text-slate-400 whitespace-nowrap shrink-0">
                           {formatCableType(adjustModalOrder.cable_type)} • {adjustModalOrder.drop_footage || 0} ft
                         </span>
                       </div>

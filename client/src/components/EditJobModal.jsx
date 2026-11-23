@@ -568,12 +568,12 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, onJ
             {/* Panel Desplegable: Desglose Lineal Detallado por Códigos */}
             {showBreakdown && (
               <div className="bg-[#0b1017] border border-cyan-500/30 rounded-xl p-2.5 space-y-1.5 animate-fade-in text-xs shadow-inner">
-                <div className="flex items-center justify-between pb-1 border-b border-white/10">
-                  <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1">
-                    <Sparkles className="h-3 w-3" />
-                    <span>Desglose Oficial de Tarifa</span>
+                <div className="flex items-center justify-between gap-2 pb-1 border-b border-white/10">
+                  <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1 whitespace-nowrap shrink-0">
+                    <Sparkles className="h-3 w-3 shrink-0" />
+                    <span>Desglose de Tarifa</span>
                   </span>
-                  <span className="text-[9.5px] font-mono text-slate-400">
+                  <span className="text-[9.5px] font-mono text-slate-400 whitespace-nowrap shrink-0">
                     {formData.cable_type === 'EPON' ? 'Fibra' : (formData.cable_type || 'RG-6')} • {numFootage} ft
                   </span>
                 </div>

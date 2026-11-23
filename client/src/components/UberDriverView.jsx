@@ -196,31 +196,67 @@ export default function UberDriverView({
   const [is3DMode, setIs3DMode] = useState(true);
   const [showFullRemark, setShowFullRemark] = useState(false);
 
-  // Touch / Drag Gestures for Bottom Sliding Drawer (Swipe Up to Expand, Swipe Down to Collapse)
+  // Touch / Drag Gestures for Bottom Sliding Drawer (Swipe Up to Expand, Swipe Down to Collapse from ANY part of the card)
   const drawerTouchStartY = useRef(null);
+  const drawerScrollRef = useRef(null);
+  const drawerWasDraggedRef = useRef(false);
 
   const handleDrawerDragStart = (e) => {
+    if (e.type === 'mousedown' && e.button !== 0) return;
+
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     drawerTouchStartY.current = clientY;
+    drawerWasDraggedRef.current = false;
 
-    const handleDragEnd = (endEvt) => {
-      const endY = endEvt.changedTouches ? endEvt.changedTouches[0].clientY : endEvt.clientY;
-      if (drawerTouchStartY.current !== null && endY !== undefined) {
-        const diffY = endY - drawerTouchStartY.current;
-        if (diffY < -30) {
-          // Deslizó hacia arriba -> Expandir tarjeta
-          setDrawerState('expanded');
-        } else if (diffY > 30) {
-          // Deslizó hacia abajo -> Contraer tarjeta
-          setDrawerState('peek');
-        }
-      }
+    const startedInScrollArea =
+      drawerScrollRef.current && drawerScrollRef.current.contains(e.target);
+
+    const cleanup = () => {
       drawerTouchStartY.current = null;
+      window.removeEventListener('touchmove', handleDragMove);
       window.removeEventListener('touchend', handleDragEnd);
+      window.removeEventListener('mousemove', handleDragMove);
       window.removeEventListener('mouseup', handleDragEnd);
     };
 
+    const evaluateSwipe = (currentY) => {
+      if (drawerTouchStartY.current === null || currentY === undefined) return false;
+      const diffY = currentY - drawerTouchStartY.current;
+
+      // Si el usuario está desplazándose dentro del área con scroll interno y no está en el tope superior, respetar el scroll de la lista
+      if (startedInScrollArea && drawerScrollRef.current) {
+        if (diffY < 0) return false;
+        if (drawerScrollRef.current.scrollTop > 4) return false;
+      }
+
+      if (diffY < -28) {
+        drawerWasDraggedRef.current = true;
+        setDrawerState('expanded');
+        cleanup();
+        return true;
+      } else if (diffY > 28) {
+        drawerWasDraggedRef.current = true;
+        setDrawerState('peek');
+        cleanup();
+        return true;
+      }
+      return false;
+    };
+
+    const handleDragMove = (moveEvt) => {
+      const currentY = moveEvt.touches ? moveEvt.touches[0].clientY : moveEvt.clientY;
+      evaluateSwipe(currentY);
+    };
+
+    const handleDragEnd = (endEvt) => {
+      const endY = endEvt.changedTouches ? endEvt.changedTouches[0].clientY : endEvt.clientY;
+      evaluateSwipe(endY);
+      cleanup();
+    };
+
+    window.addEventListener('touchmove', handleDragMove, { passive: true });
     window.addEventListener('touchend', handleDragEnd, { passive: true });
+    window.addEventListener('mousemove', handleDragMove);
     window.addEventListener('mouseup', handleDragEnd);
   };
 
@@ -2653,14 +2689,21 @@ export default function UberDriverView({
 
       {/* 5. BOTTOM SLIDING DRAWER: REFINED ACTIVE JOB CARD */}
       <div 
-        className={`absolute bottom-0 left-0 right-0 z-30 bg-[#0f1722]/96 backdrop-blur-2xl rounded-t-[28px] border-t border-white/10 shadow-[0_-8px_32px_rgba(0,0,0,0.6)] transition-all duration-300 flex flex-col ${
+        onTouchStart={handleDrawerDragStart}
+        onMouseDown={handleDrawerDragStart}
+        onClickCapture={(e) => {
+          if (drawerWasDraggedRef.current) {
+            e.stopPropagation();
+            e.preventDefault();
+            drawerWasDraggedRef.current = false;
+          }
+        }}
+        className={`absolute bottom-0 left-0 right-0 z-30 bg-[#0f1722]/96 backdrop-blur-2xl rounded-t-[28px] border-t border-white/10 shadow-[0_-8px_32px_rgba(0,0,0,0.6)] transition-all duration-300 flex flex-col select-none ${
           drawerState === 'expanded' ? 'h-[75%]' : 'min-h-[195px] sm:min-h-[205px] pb-2'
         }`}
       >
         {/* Grabber Handle with Touch & Drag Support */}
         <div 
-          onTouchStart={handleDrawerDragStart}
-          onMouseDown={handleDrawerDragStart}
           onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
           className="w-full pt-2.5 pb-1.5 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none touch-none group"
           title="Desliza hacia arriba para ver más o hacia abajo para contraer"
@@ -3061,7 +3104,7 @@ export default function UberDriverView({
 
             {/* EXPANDED SECTION */}
             {drawerState === 'expanded' && (
-              <div className="flex-1 overflow-y-auto mt-2 pt-2 border-t border-slate-700/60 space-y-3 scrollbar-none pr-1">
+              <div ref={drawerScrollRef} className="flex-1 overflow-y-auto mt-2 pt-2 border-t border-slate-700/60 space-y-3 scrollbar-none pr-1">
                 {showMoreActions && (
                   <div className="bg-[#121922] border border-white/10 rounded-2xl p-2 grid grid-cols-3 gap-2">
                     <button
