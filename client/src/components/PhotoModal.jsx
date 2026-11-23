@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, Upload, Trash2, Camera, Image as ImageIcon, 
   CheckCircle2, AlertCircle, Check, CheckCheck,
-  ExternalLink, Share2, Copy, Clock, RotateCcw
+  ExternalLink, Share2, Copy, Clock, RotateCcw, Sparkles
 } from 'lucide-react';
 import ShareReportModal from './ShareReportModal';
 import LiveCameraModal from './LiveCameraModal';
@@ -480,9 +480,9 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
               </button>
             </div>
 
-            {/* 4. Selector de Pasos */}
-            <div className="flex items-center justify-between gap-1.5 px-4 py-2 border-b border-white/5 bg-[#101722] shrink-0">
-              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none flex-1 py-0.5">
+            {/* 4. Selector Lineal de Pasos */}
+            <div className="px-4 py-2 border-b border-white/5 bg-[#101722] shrink-0 overflow-x-auto scrollbar-none">
+              <div className="flex items-center gap-1.5 py-0.5">
                 {PHOTO_STEPS.map((step) => {
                   const isSelected = category === step.id;
                   const hasPhotos = isStepCompleted(step.id, workPhotos);
@@ -509,16 +509,6 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
                   );
                 })}
               </div>
-
-              <label className="flex items-center gap-1 cursor-pointer text-slate-400 hover:text-cyan-300 text-[10px] shrink-0 select-none font-medium ml-1">
-                <input
-                  type="checkbox"
-                  checked={autoAdvance}
-                  onChange={(e) => setAutoAdvance(e.target.checked)}
-                  className="h-3 w-3 rounded border-white/20 bg-slate-900 text-cyan-500 focus:ring-0"
-                />
-                <span className="hidden sm:inline">Auto</span>
-              </label>
             </div>
           </>
         )}
@@ -787,6 +777,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
                 </span>
 
                 <div className="flex items-center gap-1.5">
+                  {/* Botón Copiar Reporte */}
                   <button
                     type="button"
                     onClick={handleCopyReportDirect}
@@ -795,6 +786,22 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
                   >
                     {copiedReportText ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3 text-cyan-400" />}
                     <span>{copiedReportText ? '¡Copiado!' : 'Copiar'}</span>
+                  </button>
+
+                  {/* Botón Modo Auto */}
+                  <button
+                    type="button"
+                    onClick={() => setAutoAdvance(prev => !prev)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 transition shadow-xs cursor-pointer active:scale-95 ${
+                      autoAdvance
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-cyan-500/10'
+                        : 'bg-[#16202c] hover:bg-[#1e2b3b] text-slate-300 border border-white/10'
+                    }`}
+                    title={autoAdvance ? "Modo Auto activo: Selecciona el siguiente paso pendiente automáticamente" : "Modo Auto desactivado: Toca para activar avance automático"}
+                  >
+                    <Sparkles className={`h-3 w-3 ${autoAdvance ? 'text-cyan-400' : 'text-slate-400'}`} />
+                    <span>Auto</span>
+                    <span className={`w-1.5 h-1.5 rounded-full transition ${autoAdvance ? 'bg-cyan-400 shadow-[0_0_6px_#22d3ee]' : 'bg-slate-600'}`} />
                   </button>
                 </div>
               </div>

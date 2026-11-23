@@ -3589,10 +3589,24 @@ export default function UberDriverView({
               )}
             </div>
 
-            {/* Status Filter Tabs - Segmented Grid 4 Columnas: Realizados, Pendientes, Cancelados, Todos */}
+            {/* Status Filter Tabs - Segmented Grid 4 Columnas: Todos, Realizados, Pendientes, Cancelados */}
             <div className="px-3 sm:px-4 py-2 border-b border-white/5 bg-[#101722] shrink-0">
               <div className="grid grid-cols-4 gap-1 bg-[#121922] p-1 rounded-xl border border-white/5 text-[10px] font-bold text-center">
-                {/* 1. Realizados */}
+                {/* 1. Todos */}
+                <button
+                  type="button"
+                  onClick={() => setOverlayStatusFilter('ALL')}
+                  className={`py-1.5 px-0.5 rounded-lg transition font-bold truncate cursor-pointer ${
+                    overlayStatusFilter === 'ALL'
+                      ? 'bg-cyan-500 text-slate-950 font-black shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Ver todos los trabajos"
+                >
+                  Todos ({tempOrdersList.length})
+                </button>
+
+                {/* 2. Realizados */}
                 <button
                   type="button"
                   onClick={() => setOverlayStatusFilter('Completado')}
@@ -3607,7 +3621,7 @@ export default function UberDriverView({
                   <span className="hidden sm:inline">Realizados ({tempOrdersList.filter(o => o.status === 'Completado').length})</span>
                 </button>
 
-                {/* 2. Pendientes */}
+                {/* 3. Pendientes */}
                 <button
                   type="button"
                   onClick={() => setOverlayStatusFilter('Pendiente')}
@@ -3622,7 +3636,7 @@ export default function UberDriverView({
                   <span className="hidden sm:inline">Pendientes ({tempOrdersList.filter(o => o.status !== 'Completado' && o.status !== 'No Realizado').length})</span>
                 </button>
 
-                {/* 3. Cancelados */}
+                {/* 4. Cancelados */}
                 <button
                   type="button"
                   onClick={() => setOverlayStatusFilter('No Realizado')}
@@ -3635,20 +3649,6 @@ export default function UberDriverView({
                 >
                   <span className="sm:hidden">Canc. ({tempOrdersList.filter(o => o.status === 'No Realizado').length})</span>
                   <span className="hidden sm:inline">Cancelados ({tempOrdersList.filter(o => o.status === 'No Realizado').length})</span>
-                </button>
-
-                {/* 4. Todos */}
-                <button
-                  type="button"
-                  onClick={() => setOverlayStatusFilter('ALL')}
-                  className={`py-1.5 px-0.5 rounded-lg transition font-bold truncate cursor-pointer ${
-                    overlayStatusFilter === 'ALL'
-                      ? 'bg-cyan-500 text-slate-950 font-black shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
-                  }`}
-                  title="Ver todos los trabajos"
-                >
-                  Todos ({tempOrdersList.length})
                 </button>
               </div>
             </div>
