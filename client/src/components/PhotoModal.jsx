@@ -8,17 +8,11 @@ import ShareReportModal from './ShareReportModal';
 import LiveCameraModal from './LiveCameraModal';
 import { stampPhotoWithWatermark } from '../utils/watermark';
 import { formatCableType } from '../utils/remarkUtils';
-
-const PHOTO_STEPS = [
-  { id: 'Casa', label: 'Casa / Entrada', short: 'Casa', icon: '🏠' },
-  { id: 'Terreno', label: 'Terreno / Ruta', short: 'Terreno', icon: '🌱' },
-  { id: 'Profundidad 1', label: 'Comprobante Profundidad 1', short: 'Profundidad 1', icon: '📏' },
-  { id: 'Profundidad 2', label: 'Comprobante Profundidad 2', short: 'Profundidad 2', icon: '📏' },
-  { id: 'Conector Central', label: 'Conector Central / Tap', short: 'Conector Central', icon: '⚡' },
-  { id: 'Pedestal Casa', label: 'Pedestal de la Casa', short: 'Pedestal Casa', icon: '🔌' },
-  { id: 'Finalizado', label: 'Terreno Cerrado / Finalizado', short: 'Finalizado', icon: '✨' },
-  { id: 'Extra', label: 'Foto Extra', short: 'Extra', icon: '📷' }
-];
+import {
+  PHOTO_STEPS,
+  isStepCompleted,
+  getNextPendingStep
+} from '../utils/photoSteps';
 
 const QUICK_CANCEL_REASONS = [
   'Cliente cancela o no desea el servicio',
@@ -51,12 +45,15 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
   const galleryInputRef = useRef(null);
   const cancelGalleryInputRef = useRef(null);
   const cancelPromptRef = useRef(null);
+  const photoStepRefs = useRef({});
 
   useEffect(() => {
     if (isOpen) {
       setLocalStatusOverride(null);
       setLocalPhotosOverride(null);
-      setCategory('Casa');
+      const currentWorkPhotos = (order?.photos || []).filter(p => p.category !== 'Constancia No Realizado');
+      const initialPending = getNextPendingStep(currentWorkPhotos);
+      setCategory(initialPending);
       setShowCancelPrompt(Boolean(initialShowCancel));
       setCancelReason('');
       setError(null);
@@ -69,7 +66,6 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
     setShowCancelPrompt(false);
     setCancelReason('');
     setError(null);
-    setCategory('Casa');
     setConfirmingReactivate(false);
     setLocalStatusOverride(null);
     setLocalPhotosOverride(null);
@@ -83,6 +79,22 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
       }, 60);
     }
   }, [showCancelPrompt]);
+
+  // Auto-scroll del selector de pasos en el modal para centrar la categoría activa
+  useEffect(() => {
+    if (!isOpen || !order) return;
+    const targetEl = photoStepRefs.current[category];
+    if (targetEl) {
+      const timer = setTimeout(() => {
+        try {
+          targetEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        } catch (e) {
+          targetEl.scrollIntoView(false);
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [category, isOpen, order]);
 
   if (!isOpen || !order) return null;
 
@@ -126,6 +138,12 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
       });
       const data = await res.json();
       if (res.ok) {
+        if (data.photos && data.photos.length > 0) {
+          setLocalPhotosOverride(prev => {
+            const base = prev !== null ? prev : (order.photos || []);
+            return [...base, ...data.photos];
+          });
+        }
         if (onPhotoUpdated) onPhotoUpdated();
 
         // Auto-avanzar al siguiente paso si está habilitado
@@ -204,6 +222,12 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
     });
     const data = await res.json();
     if (res.ok) {
+      if (data.photos && data.photos.length > 0) {
+        setLocalPhotosOverride(prev => {
+          const base = prev !== null ? prev : (order.photos || []);
+          return [...base, ...data.photos];
+        });
+      }
       if (onPhotoUpdated) onPhotoUpdated();
     } else {
       throw new Error(data.error || 'Error al guardar foto');
@@ -440,7 +464,13 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
 
               <button
                 type="button"
-                onClick={() => setIsLiveCameraOpen(true)}
+                onClick={() => {
+                  if (autoAdvance && isStepCompleted(category, workPhotos)) {
+                    const nextPending = getNextPendingStep(workPhotos, category);
+                    setCategory(nextPending);
+                  }
+                  setIsLiveCameraOpen(true);
+                }}
                 disabled={uploading}
                 className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black text-xs shadow-md shadow-cyan-600/20 flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer disabled:opacity-50"
                 title="Tomar foto de evidencia con visor en tiempo real"
@@ -455,19 +485,11 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
               <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none flex-1 py-0.5">
                 {PHOTO_STEPS.map((step) => {
                   const isSelected = category === step.id;
-                  const hasPhotos = workPhotos.some(p => 
-                    p.category === step.id || 
-                    (step.id === 'Casa' && (p.category === 'Casa/Ground Block' || p.category === 'Casa')) || 
-                    (step.id === 'Terreno' && (p.category === 'Terreno/Ruta' || p.category === 'Terreno')) || 
-                    (step.id === 'Profundidad 1' && (p.category === 'Profundidad' || p.category === 'Profundidad de Zanja')) || 
-                    (step.id === 'Conector Central' && (p.category === 'Pedestal' || p.category === 'Pedestal/Tap')) || 
-                    (step.id === 'Pedestal Casa' && (p.category === 'Pedestal Casa' || p.category === 'Pedestal de la Casa')) || 
-                    (step.id === 'Finalizado' && (p.category === 'Trabajo Terminado' || p.category === 'Finalizado')) || 
-                    (step.id === 'Extra' && (p.category === 'General' || p.category === 'General / Extra'))
-                  );
+                  const hasPhotos = isStepCompleted(step.id, workPhotos);
                   return (
                     <button
                       key={step.id}
+                      ref={(el) => { photoStepRefs.current[step.id] = el; }}
                       type="button"
                       onClick={() => setCategory(step.id)}
                       className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition whitespace-nowrap cursor-pointer flex items-center gap-1 shrink-0 ${
@@ -480,6 +502,9 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
                     >
                       <span>{step.icon}</span>
                       <span>{step.short}</span>
+                      {hasPhotos && !isSelected && (
+                        <span className="text-[9px] text-emerald-400 font-black">✓</span>
+                      )}
                     </button>
                   );
                 })}
@@ -1028,6 +1053,8 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
           autoAdvance={autoAdvance}
           onAutoAdvanceToggle={setAutoAdvance}
           workPhotosCount={workPhotosCount}
+          existingPhotos={workPhotos}
+          onCategoryChange={setCategory}
         />
       )}
     </div>

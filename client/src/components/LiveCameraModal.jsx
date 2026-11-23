@@ -8,17 +8,11 @@ import {
   drawWatermarkOnCanvas,
   getPhysicalAddressFromLocation
 } from '../utils/watermark';
-
-const PHOTO_STEPS = [
-  { id: 'Casa', label: 'Casa / Entrada', short: 'Casa', icon: '🏠' },
-  { id: 'Terreno', label: 'Terreno / Ruta', short: 'Terreno', icon: '🌱' },
-  { id: 'Profundidad 1', label: 'Comprobante Profundidad 1', short: 'Profundidad 1', icon: '📏' },
-  { id: 'Profundidad 2', label: 'Comprobante Profundidad 2', short: 'Profundidad 2', icon: '📏' },
-  { id: 'Conector Central', label: 'Conector Central / Tap', short: 'Conector Central', icon: '⚡' },
-  { id: 'Pedestal Casa', label: 'Pedestal de la Casa', short: 'Pedestal Casa', icon: '🔌' },
-  { id: 'Finalizado', label: 'Terreno Cerrado / Finalizado', short: 'Finalizado', icon: '✨' },
-  { id: 'Extra', label: 'Foto Extra', short: 'Extra', icon: '📷' }
-];
+import {
+  PHOTO_STEPS,
+  isStepCompleted,
+  getNextPendingStep
+} from '../utils/photoSteps';
 
 export default function LiveCameraModal({
   isOpen,
@@ -28,9 +22,12 @@ export default function LiveCameraModal({
   onPhotoSaved,
   autoAdvance = true,
   onAutoAdvanceToggle,
-  workPhotosCount = 0
+  workPhotosCount = 0,
+  existingPhotos = [],
+  onCategoryChange
 }) {
   const [category, setCategory] = useState(initialCategory);
+  const [localTakenCategories, setLocalTakenCategories] = useState(() => new Set());
   const [stream, setStream] = useState(null);
   const [facingMode, setFacingMode] = useState('environment'); // 'environment' (trasera) o 'user' (frontal)
   const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
@@ -59,15 +56,68 @@ export default function LiveCameraModal({
   const watchIdRef = useRef(null);
   const isGeocodingRef = useRef(false);
   const fallbackInputRef = useRef(null);
+  const stepRefs = useRef({});
+  const stepsContainerRef = useRef(null);
 
-  // Sincronizar categoría inicial al abrir
+  // Sincronizar y deducir categoría inicial inteligente al abrir
   useEffect(() => {
     if (isOpen) {
-      setCategory(initialCategory || 'Casa');
+      setLocalTakenCategories(new Set());
       setCameraError(null);
       setToastMessage(null);
+
+      if (initialCategory === 'Constancia No Realizado') {
+        setCategory('Constancia No Realizado');
+        if (onCategoryChange) onCategoryChange('Constancia No Realizado');
+      } else {
+        const currentPhotos = existingPhotos && existingPhotos.length > 0 
+          ? existingPhotos 
+          : (order?.photos || []);
+        
+        let chosen = initialCategory || 'Casa';
+        // Si autoAdvance está activo y la categoría inicial ya está tomada, deducir la siguiente pendiente
+        if (autoAdvance && isStepCompleted(chosen, currentPhotos)) {
+          chosen = getNextPendingStep(currentPhotos, chosen);
+        }
+        setCategory(chosen);
+        if (onCategoryChange) onCategoryChange(chosen);
+      }
     }
-  }, [isOpen, initialCategory]);
+  }, [isOpen]);
+
+  // Desplazamiento automático suave (auto-scroll) para centrar el paso activo en la barra superior
+  useEffect(() => {
+    if (!isOpen || category === 'Constancia No Realizado') return;
+    const targetEl = stepRefs.current[category];
+    if (targetEl) {
+      const timer = setTimeout(() => {
+        try {
+          targetEl.scrollIntoView({
+            behavior: 'smooth',
+            inline: 'center',
+            block: 'nearest'
+          });
+        } catch (e) {
+          targetEl.scrollIntoView(false);
+        }
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [category, isOpen]);
+
+  // Helper para verificar si un paso ya tiene evidencia fotográfica
+  const isStepTaken = useCallback((stepId) => {
+    if (localTakenCategories.has(stepId)) return true;
+    const currentPhotos = existingPhotos && existingPhotos.length > 0 
+      ? existingPhotos 
+      : (order?.photos || []);
+    return isStepCompleted(stepId, currentPhotos);
+  }, [localTakenCategories, existingPhotos, order?.photos]);
+
+  const handleSelectCategory = (stepId) => {
+    setCategory(stepId);
+    if (onCategoryChange) onCategoryChange(stepId);
+  };
 
   // 1. Reloj en tiempo real continuo
   useEffect(() => {
@@ -388,10 +438,13 @@ export default function LiveCameraModal({
       setTimeout(() => setToastMessage(null), 2500);
 
       // 6. Auto-avanzar al siguiente paso si está habilitado (no auto-avanzar si es Constancia No Realizado)
+      setLocalTakenCategories((prev) => new Set([...prev, category]));
       if (autoAdvance && category !== 'Constancia No Realizado') {
         const currentIdx = PHOTO_STEPS.findIndex((s) => s.id === category);
         if (currentIdx !== -1 && currentIdx < PHOTO_STEPS.length - 1) {
-          setCategory(PHOTO_STEPS[currentIdx + 1].id);
+          const nextStepId = PHOTO_STEPS[currentIdx + 1].id;
+          setCategory(nextStepId);
+          if (onCategoryChange) onCategoryChange(nextStepId);
         }
       }
     } catch (err) {
@@ -461,10 +514,13 @@ export default function LiveCameraModal({
       setToastMessage(`✓ Foto de "${category}" guardada`);
       setTimeout(() => setToastMessage(null), 2500);
 
+      setLocalTakenCategories((prev) => new Set([...prev, category]));
       if (autoAdvance && category !== 'Constancia No Realizado') {
         const currentIdx = PHOTO_STEPS.findIndex((s) => s.id === category);
         if (currentIdx !== -1 && currentIdx < PHOTO_STEPS.length - 1) {
-          setCategory(PHOTO_STEPS[currentIdx + 1].id);
+          const nextStepId = PHOTO_STEPS[currentIdx + 1].id;
+          setCategory(nextStepId);
+          if (onCategoryChange) onCategoryChange(nextStepId);
         }
       }
     } catch (err) {
@@ -576,8 +632,11 @@ export default function LiveCameraModal({
         </div>
       </div>
 
-      {/* 2. Selector Rápido de Categoría / Paso (Superior) */}
-      <div className="relative z-20 px-3 py-2 bg-slate-900 border-b border-white/10 flex items-center justify-between gap-2 overflow-x-auto scrollbar-none shrink-0 shadow-md">
+      {/* 2. Selector Rápido de Categoría (Superior) */}
+      <div
+        ref={stepsContainerRef}
+        className="relative z-20 px-3 py-2 bg-slate-900 border-b border-white/10 flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0 shadow-md"
+      >
         {category === 'Constancia No Realizado' ? (
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-black uppercase tracking-wider text-rose-400 shrink-0">
@@ -589,29 +648,32 @@ export default function LiveCameraModal({
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
-            <span className="text-[11px] font-black uppercase tracking-wider text-cyan-400 shrink-0 mr-0.5">
-              Paso:
-            </span>
-            {PHOTO_STEPS.map((step) => {
-              const isSelected = category === step.id;
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  onClick={() => setCategory(step.id)}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-xl transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95 ${
-                    isSelected
-                      ? 'bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-400/30 font-black ring-2 ring-cyan-300'
-                      : 'bg-white/10 text-slate-200 hover:text-white hover:bg-white/15 border border-white/10'
-                  }`}
-                >
-                  <span className="text-sm">{step.icon}</span>
-                  <span>{step.short}</span>
-                </button>
-              );
-            })}
-          </div>
+          PHOTO_STEPS.map((step) => {
+            const isSelected = category === step.id;
+            const hasPhoto = isStepTaken(step.id);
+            return (
+              <button
+                key={step.id}
+                ref={(el) => { stepRefs.current[step.id] = el; }}
+                type="button"
+                onClick={() => handleSelectCategory(step.id)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95 ${
+                  isSelected
+                    ? 'bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-400/30 font-black ring-2 ring-cyan-300'
+                    : hasPhoto
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                    : 'bg-white/10 text-slate-200 hover:text-white hover:bg-white/15 border border-white/10'
+                }`}
+                title={hasPhoto ? `${step.label} (Foto ya tomada)` : step.label}
+              >
+                <span className="text-sm">{step.icon}</span>
+                <span>{step.short}</span>
+                {hasPhoto && !isSelected && (
+                  <span className="text-[10px] text-emerald-400 font-black ml-0.5">✓</span>
+                )}
+              </button>
+            );
+          })
         )}
       </div>
 

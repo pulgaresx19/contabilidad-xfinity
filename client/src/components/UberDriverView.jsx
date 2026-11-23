@@ -3253,13 +3253,15 @@ export default function UberDriverView({
                           <div
                             key={ord.id || idx}
                             onClick={() => handleSelectJob(ord)}
-                            className={`p-3 rounded-2xl border cursor-pointer transition select-none flex items-center justify-between gap-2.5 bg-[#1b2533] ${
+                            className={`p-3 rounded-2xl border cursor-pointer transition select-none flex items-center justify-between gap-2.5 ${
+                              isTarget ? 'bg-[#152e4d]' : 'bg-[#1b2533]'
+                            } ${
                               isCompleted
                                 ? 'border-emerald-500/35 hover:border-emerald-500/50 shadow-emerald-500/5'
                                 : isCancelled
                                 ? 'border-rose-500/35 hover:border-rose-500/50 shadow-rose-500/5'
                                 : 'border-amber-500/35 hover:border-amber-500/50 shadow-amber-500/5'
-                            } ${isTarget ? 'ring-1 ring-[#007AFF]/60 bg-[#007AFF]/10' : ''}`}
+                            }`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0 flex-1">
                               <span className={`w-6 h-6 rounded-full font-black text-xs flex items-center justify-center font-mono shrink-0 shadow-xs ${
@@ -3598,7 +3600,6 @@ export default function UberDriverView({
                   return o.status === overlayStatusFilter;
                 })
                 .map((ord, idx) => {
-                  const isTarget = selectedOrder?.id === ord.id;
                   const isCompleted = ord.status === 'Completado';
                   const isCancelled = ord.status === 'No Realizado';
                   const isReported = ord.is_reported || ord.status === 'Reportado';
@@ -3619,7 +3620,7 @@ export default function UberDriverView({
                           : isCancelled
                           ? 'border-rose-500/35 hover:border-rose-500/50 shadow-rose-500/5'
                           : 'border-amber-500/35 hover:border-amber-500/50 shadow-amber-500/5'
-                      } ${isTarget ? 'ring-1 ring-[#007AFF]/60 bg-[#007AFF]/10' : ''}`}
+                      }`}
                     >
                       {/* Top Row: Position Badge + Address Info + Rate, Status & Up/Down Arrow Buttons */}
                       <div className="flex items-center justify-between gap-2.5">
