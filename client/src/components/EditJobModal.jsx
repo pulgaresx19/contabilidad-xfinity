@@ -12,16 +12,21 @@ import CompactSelect from './CompactSelect';
 const CABLE_TYPE_OPTIONS = [
   { value: 'RG-6', label: 'RG-6 (Coaxial Estándar)', shortLabel: 'RG-6 (Coaxial)' },
   { value: 'RG-11', label: 'RG-11 (Larga Distancia)', shortLabel: 'RG-11 (Largo)' },
-  { value: 'EPON', label: 'EPON (Fibra Óptica)', shortLabel: 'EPON (Fibra)' }
+  { value: 'EPON', label: 'Fibra', shortLabel: 'Fibra' }
 ];
 
 const BORE_TYPE_OPTIONS = [
   { value: 'N', label: 'Sin cruce', sublabel: '$0', shortLabel: 'Sin cruce ($0)' },
-  { value: 'DW:1', label: 'Driveway', sublabel: '+$30 (D20)', shortLabel: 'Driveway (+$30)' },
-  { value: 'SW:1', label: 'Acera / Sidewalk', sublabel: '$0', shortLabel: 'Acera ($0)' },
-  { value: 'SW:1,DW:1', label: 'Driveway + Acera', sublabel: '+$30 (D20)', shortLabel: 'DW + Acera (+$30)' },
-  { value: 'RD:1', label: 'Road Bore / Calle', sublabel: '$2.50/ft (B002)', shortLabel: 'Road Bore (RD:1)' },
-  { value: 'RD:2', label: 'Road Bore 2 (Doble cruce)', sublabel: '$2.50/ft (B002)', shortLabel: 'Road Bore 2 (RD:2)' }
+  { value: 'DW:1', label: 'Driveway (DW)', sublabel: '+$30', shortLabel: 'Driveway (DW)' },
+  { value: 'DW:2', label: '2 Driveways (DW:2)', sublabel: '+$60', shortLabel: '2 Driveways (DW:2)' },
+  { value: 'SW:1', label: 'Acera / Sidewalk (SW)', sublabel: '$0', shortLabel: 'Acera (SW)' },
+  { value: 'SW:2', label: '2 Aceras (SW:2)', sublabel: '$0', shortLabel: '2 Aceras (SW:2)' },
+  { value: 'SW:1,DW:1', label: 'Acera + Driveway (SW + DW)', sublabel: '+$30', shortLabel: 'SW + DW' },
+  { value: 'DW:1,RD:1', label: 'Driveway + Calle (DW + RD)', sublabel: '+$30', shortLabel: 'DW + RD' },
+  { value: 'SW:1,RD:1', label: 'Acera + Calle (SW + RD)', sublabel: '$0', shortLabel: 'SW + RD' },
+  { value: 'SW:1,DW:1,RD:1', label: 'Acera + Driveway + Calle (SW + DW + RD)', sublabel: '+$30', shortLabel: 'SW + DW + RD' },
+  { value: 'RD:1', label: 'Road Bore / Calle (RD)', sublabel: '$2.50/ft (si se hace)', shortLabel: 'Road Bore (RD)' },
+  { value: 'RD:2', label: 'Road Bore 2 / Doble vía (RD:2)', sublabel: '$2.50/ft (si se hace)', shortLabel: 'Road Bore 2 (RD:2)' }
 ];
 
 const REMARK_CHIPS = [
@@ -528,40 +533,36 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, onJ
 
           {/* Tarifa Estimada Banner Limpio con Contador y Desglose Plegable */}
           <div className="bg-[#131d2b] border border-emerald-500/30 rounded-2xl p-2.5 space-y-2 shadow-xs shrink-0">
-            <div className="flex items-center justify-between gap-2">
+            <div 
+              onClick={() => setShowBreakdown(!showBreakdown)}
+              className="flex items-center justify-between gap-2 cursor-pointer select-none group"
+            >
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-200">
                   Tarifa Estimada:
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setShowBreakdown(!showBreakdown)}
-                  className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition cursor-pointer active:scale-95 ${
-                    showBreakdown
-                      ? 'bg-cyan-500/25 text-cyan-300 border-cyan-500/50 shadow-xs'
-                      : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
-                  }`}
-                  title="Ver desglose detallado de la tarifa"
-                >
-                  <span className="font-mono text-[9px] uppercase tracking-wider">Desglose</span>
-                  {showBreakdown ? (
-                    <ChevronDown className="h-3 w-3 text-cyan-400" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3 text-slate-400" />
-                  )}
-                </button>
               </div>
 
-              {/* Medallón Contador de Dinero (Toca para alternar desglose) */}
-              <button
-                type="button"
-                onClick={() => setShowBreakdown(!showBreakdown)}
-                className="flex items-center gap-0.5 px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-mono font-black shadow-xs shrink-0 text-sm cursor-pointer transition active:scale-95"
-                title="Toca para ver u ocultar el desglose detallado"
-              >
-                <span className="text-xs font-bold">$</span>
-                <span>{currentTotal.toFixed(2)}</span>
-              </button>
+              {/* Medallón Contador de Dinero + Flechita al lado en la misma esquina */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div
+                  className="flex items-center gap-0.5 px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-mono font-black shadow-xs text-sm transition"
+                  title="Tarifa calculada"
+                >
+                  <span className="text-xs font-bold">$</span>
+                  <span>{currentTotal.toFixed(2)}</span>
+                </div>
+                <div 
+                  className={`p-1 rounded-lg border transition ${
+                    showBreakdown 
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' 
+                      : 'bg-white/5 text-slate-400 border-white/10 group-hover:text-white'
+                  }`}
+                  title={showBreakdown ? "Ocultar desglose" : "Ver desglose de tarifa"}
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showBreakdown ? 'rotate-180' : ''}`} />
+                </div>
+              </div>
             </div>
 
             {/* Panel Desplegable: Desglose Lineal Detallado por Códigos */}
@@ -573,7 +574,7 @@ export default function EditJobModal({ order, isOpen, onClose, onJobUpdated, onJ
                     <span>Desglose Oficial de Tarifa</span>
                   </span>
                   <span className="text-[9.5px] font-mono text-slate-400">
-                    {formData.cable_type === 'EPON' ? 'EPON (Fibra)' : formData.cable_type} • {numFootage} ft
+                    {formData.cable_type === 'EPON' ? 'Fibra' : (formData.cable_type || 'RG-6')} • {numFootage} ft
                   </span>
                 </div>
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   MapPin, Sparkles, AlertTriangle, Camera, Copy, Pencil, Maximize2, Check, Share2, CheckCheck
 } from 'lucide-react';
-import { getOrderRemark, getOrderFieldBadges, getBoreInfo } from '../utils/remarkUtils';
+import { getOrderRemark, getOrderFieldBadges, getBoreInfo, formatCableType } from '../utils/remarkUtils';
 import { formatAdjustmentReason } from '../utils/adjustmentUtils';
 import { calcOrderRate, normalizeRateCard, DEFAULT_RATE_CARD } from '../utils/rateUtils';
 
@@ -138,7 +138,7 @@ export default function HistoricalOrderCard({
         <span className="shrink-0 bg-slate-800/70 px-2 py-0.5 rounded-md border border-slate-700/60 text-slate-300 font-mono flex items-center gap-1">
           <span className="text-slate-400 font-sans text-[9px] uppercase tracking-wider font-semibold">Cable</span>
           <span className={order.cable_type === 'EPON' ? 'font-bold text-amber-300' : 'font-semibold text-slate-200'}>
-            {order.cable_type || 'RG-6'}
+            {formatCableType(order.cable_type)}
           </span>
         </span>
 
@@ -159,14 +159,7 @@ export default function HistoricalOrderCard({
                 <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-mono flex items-center gap-1">
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${b.dotColor}`} />
                   <span className="font-semibold text-slate-200">{b.label}</span>
-                  {dwCode && <span className="text-slate-400 font-mono text-[9px]">(+${dwCode.price})</span>}
                   {rdCode && <span className="text-emerald-400 font-mono text-[9px]">(+${rdCode.price.toFixed(2)})</span>}
-                </span>
-              )}
-              {rateRes.footageExtra > 0 && (
-                <span className="shrink-0 bg-slate-800/70 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px] font-mono font-medium flex items-center gap-1">
-                  <span className="text-emerald-400 font-sans text-[9px] font-bold">+Drop</span>
-                  <span className="font-bold text-slate-200">${rateRes.footageExtra}</span>
                 </span>
               )}
             </>

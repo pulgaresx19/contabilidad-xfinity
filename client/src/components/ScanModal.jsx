@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { getLocalDateStr, normalizeDateStr } from '../utils/dateUtils';
 import { interactWithAuraCore } from '../services/auraService';
-import { cleanRawNotes, getOrderFieldBadges } from '../utils/remarkUtils';
+import { cleanRawNotes, getOrderFieldBadges, formatCableType } from '../utils/remarkUtils';
 import { compressImage, detectPriorityRowIndices } from '../services/imageUtils';
 import ZoomableImageViewer from './ZoomableImageViewer';
 import BadgeDetailModal from './BadgeDetailModal';
@@ -263,6 +263,35 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
           const isPriorityRow = Boolean(o.is_priority || priorityRowIndices.includes(idx));
           const parsedRoadFt = parseFloat(o.road_bore_ft) || 0;
 
+          const normalizedBore = (() => {
+            const rawBoreSrc = (o.bore_type && o.bore_type !== 'N') ? String(o.bore_type) : (rawNotesStr.match(/B[O0]RE[:\s.\-_]*([^/\n\r]+?)(?=\/|\bTEMP|\bObst|\bPrem|\bNBR|$)/i)?.[1] || String(o.bore_type || 'N'));
+            const s = rawBoreSrc.toUpperCase();
+            const parts = [];
+            const swM = s.match(/(?:SW|SV|SIDEWALK)[:\s.\-_]*(\d+)?/);
+            if (swM) {
+              const qty = swM[1] ? parseInt(swM[1], 10) : 1;
+              if (qty > 0) parts.push(`SW:${qty}`);
+            }
+            const dwM = s.match(/(?:DW|DV|DRIVEWAY)[:\s.\-_]*(\d+)?/);
+            if (dwM) {
+              const qty = dwM[1] ? parseInt(dwM[1], 10) : 1;
+              if (qty > 0) parts.push(`DW:${qty}`);
+            }
+            const rdM = s.match(/(?:RD|ROAD)[:\s.\-_]*(\d+)?/);
+            if (rdM) {
+              const qty = rdM[1] ? parseInt(rdM[1], 10) : 1;
+              if (qty > 0) parts.push(`RD:${qty}`);
+            }
+            return parts.length > 0 ? parts.join(',') : 'N';
+          })();
+
+          const cableSource = `${o.cable_type || ''} ${rawNotesStr}`;
+          const normalizedCable = /EP[O0]N|FIBER|FIBRA|FTTH|OPTIC/i.test(cableSource)
+            ? 'EPON'
+            : /11|RG[- ]?M|RG[- ]?II/i.test(String(o.cable_type || ''))
+            ? 'RG-11'
+            : 'RG-6';
+
           return {
             ...o,
             work_date: normalizeDateStr(o.work_date || detectedDate) || detectedDate,
@@ -274,8 +303,8 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
             zip_code: String(o.zip_code || '').trim(),
             phone: String(o.phone || '').trim(),
             drop_footage: parseFloat(o.drop_footage) || 0,
-            cable_type: /EPON|FIBER|FIBRA|FTTH|OPTIC/i.test(String(o.cable_type || '')) ? 'EPON' : /11/i.test(String(o.cable_type || '')) ? 'RG-11' : 'RG-6',
-            bore_type: o.bore_type || 'N',
+            cable_type: normalizedCable,
+            bore_type: normalizedBore,
             road_bore_ft: parsedRoadFt,
             obstacles: (() => {
               const rawObs = String(o.obstacles || '').toUpperCase();
@@ -289,7 +318,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
             is_temp: o.is_temp ? 1 : (/TEMP[:\s.\-_]*Y/i.test(rawNotesStr) ? 1 : 0),
             premise_access: detectedPremise,
             neighbor_notice: detectedNeighbor,
-            rate_calculated: calcOrderRate(o.drop_footage, o.bore_type, false, parsedRoadFt),
+            rate_calculated: calcOrderRate(o.drop_footage, normalizedBore, false, parsedRoadFt),
             status: 'Pendiente',
             payment_status: 'Pendiente',
             raw_notes: cleanRawNotes(rawNotesStr) || (rawNotesStr && !/^(?:N|NO|NONE|NULL)$/i.test(rawNotesStr.trim()) ? rawNotesStr.trim() : '')
@@ -898,7 +927,7 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                       <span>Desglose Oficial de Tarifa (IA)</span>
                     </span>
                     <span className="text-[9.5px] font-mono text-slate-400">
-                      {o.cable_type === 'EPON' ? 'EPON (Fibra)' : (o.cable_type || 'RG-6')} • {o.drop_footage || 0} ft
+                      {formatCableType(o.cable_type)} • {o.drop_footage || 0} ft
                     </span>
                   </div>
 
@@ -979,43 +1008,31 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                 </div>
               </div>
 
-              {/* Fila 3: Perforación (Bore), Teléfono del Cliente y Tipo de Cable */}
-              <div className="flex items-center gap-1.5 pt-0.5">
-                {/* Bore Selector */}
-                <select
-                  value={o.bore_type || 'N'}
-                  onChange={(e) => updateOrderField(idx, 'bore_type', e.target.value)}
-                  className="bg-[#0b1017] border border-white/10 hover:border-cyan-500/40 rounded-lg px-2 py-0.5 text-[10px] text-slate-200 focus:outline-none cursor-pointer flex-1 min-w-0 font-medium"
-                  title="Tipo de Perforación (Bore)"
-                >
-                  <option value="N">Sin Bore ($0)</option>
-                  <option value="DW:1">Driveway (+${rateCard?.D20?.price ?? rateConfig.bore_dw_bonus})</option>
-                  <option value="SW:1,DW:1">SW + DW (+${rateCard?.D20?.price ?? rateConfig.bore_dw_bonus})</option>
-                  <option value="SW:1">Sidewalk ($0)</option>
-                  <option value="RD:1">Road Bore 1 (${(rateCard?.B002?.price ?? 2.5).toFixed(2)}/ft B002)</option>
-                  <option value="RD:2">Road Bore 2 (${(rateCard?.B002?.price ?? 2.5).toFixed(2)}/ft B002)</option>
-                </select>
-
-                {/* Teléfono del Cliente */}
-                <div className="flex items-center gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-2 py-0.5 flex-1 min-w-[115px] max-w-[145px]" title="Teléfono del cliente">
-                  <Phone className="w-3 h-3 text-cyan-400 shrink-0" />
-                  <input
-                    type="text"
-                    placeholder="Teléfono"
-                    value={o.phone || ''}
-                    onChange={(e) => updateOrderField(idx, 'phone', e.target.value)}
-                    className="w-full bg-transparent text-cyan-300 font-mono text-[10.5px] focus:outline-none placeholder-slate-600"
-                  />
+              {/* Fila 3: Metraje (Pies), Tipo de Cable y Perforación (Bore) — Repartido en 3 partes iguales */}
+              <div className="grid grid-cols-3 gap-1.5 pt-0.5 items-center">
+                {/* 1. Metraje Drop (Pies) */}
+                <div className="flex items-center justify-between gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-2 py-0.5 min-w-0 h-full" title="Metraje (pies)">
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <Ruler className="w-3 h-3 text-amber-400 shrink-0" />
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={o.drop_footage}
+                      onChange={(e) => updateOrderField(idx, 'drop_footage', e.target.value)}
+                      className="w-full min-w-0 bg-transparent text-amber-300 font-mono font-bold focus:outline-none text-[10.5px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                  </div>
+                  <span className="text-slate-500 font-mono text-[10px] shrink-0">ft</span>
                 </div>
 
-                {/* Cable Selector */}
-                <div className="flex bg-[#0b1017] p-0.5 rounded-lg border border-white/10 shrink-0">
+                {/* 2. Selector de Tipo de Cable */}
+                <div className="grid grid-cols-3 bg-[#0b1017] p-0.5 rounded-lg border border-white/10 min-w-0">
                   {['RG-6', 'RG-11', 'EPON'].map((cab) => (
                     <button
                       key={cab}
                       type="button"
                       onClick={() => updateOrderField(idx, 'cable_type', cab)}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                      className={`px-1 py-0.5 rounded text-[9.5px] sm:text-[10px] font-bold transition cursor-pointer text-center truncate ${
                         o.cable_type === cab
                           ? cab === 'EPON'
                             ? 'bg-amber-400 text-slate-950 font-black shadow-xs'
@@ -1028,47 +1045,55 @@ export default function ScanModal({ isOpen, onClose, onOrdersSaved, defaultTech 
                     </button>
                   ))}
                 </div>
+
+                {/* 3. Selector de Perforación (Bore) */}
+                <select
+                  value={o.bore_type || 'N'}
+                  onChange={(e) => updateOrderField(idx, 'bore_type', e.target.value)}
+                  className="bg-[#0b1017] border border-white/10 hover:border-cyan-500/40 rounded-lg px-1.5 py-0.5 text-[10px] text-slate-200 focus:outline-none cursor-pointer w-full min-w-0 h-full font-medium truncate"
+                  title="Tipo de Perforación (Bore)"
+                >
+                  <option value="N">Sin Bore</option>
+                  <option value="DW:1">Driveway (DW)</option>
+                  <option value="DW:2">2 Driveways (DW:2)</option>
+                  <option value="SW:1">Acera (SW)</option>
+                  <option value="SW:2">2 Aceras (SW:2)</option>
+                  <option value="SW:1,DW:1">SW + DW</option>
+                  <option value="DW:1,RD:1">DW + RD (Calle)</option>
+                  <option value="SW:1,RD:1">SW + RD (Calle)</option>
+                  <option value="SW:1,DW:1,RD:1">SW + DW + RD</option>
+                  <option value="RD:1">Road Bore (RD)</option>
+                  <option value="RD:2">Road Bore 2 (RD:2)</option>
+                  {o.bore_type && !['N', 'DW:1', 'DW:2', 'SW:1', 'SW:2', 'SW:1,DW:1', 'DW:1,RD:1', 'SW:1,RD:1', 'SW:1,DW:1,RD:1', 'RD:1', 'RD:2'].includes(o.bore_type) && (
+                    <option value={o.bore_type}>{o.bore_type}</option>
+                  )}
+                </select>
               </div>
 
-              {/* Fila 4: Metraje Drop e Iconos de Notas / Alertas de Terreno */}
+              {/* Fila 4: Teléfono del Cliente (formato (XXX) XXX-XXXX y color neutro) e Iconos de Notas / Remarks */}
               <div className="flex items-center gap-1.5 text-[10px] pt-0.5">
-                {/* Metraje Drop */}
-                <div className="flex items-center gap-1 bg-[#0b1017] border border-white/10 rounded-lg px-1.5 py-0.5 shrink-0">
-                  <Ruler className="w-3 h-3 text-amber-400 shrink-0" />
+                {/* Teléfono del Cliente */}
+                <div className="flex items-center gap-1.5 bg-[#0b1017] border border-white/10 rounded-lg px-2 py-0.5 shrink-0 w-[130px]" title="Teléfono del cliente">
+                  <Phone className="w-3 h-3 text-slate-400 shrink-0" />
                   <input
-                    type="number"
-                    step="0.1"
-                    value={o.drop_footage}
-                    onChange={(e) => updateOrderField(idx, 'drop_footage', e.target.value)}
-                    className="w-12 bg-transparent text-amber-300 font-mono font-bold focus:outline-none text-[10.5px]"
+                    type="text"
+                    placeholder="(000) 000-0000"
+                    value={(() => {
+                      const raw = String(o.phone || '').replace(/\D/g, '');
+                      const d = (raw.length === 11 && raw.startsWith('1') ? raw.slice(1) : raw).slice(0, 10);
+                      if (!d) return '';
+                      if (d.length <= 3) return d;
+                      if (d.length <= 6) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
+                      return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6, 10)}`;
+                    })()}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '');
+                      const clean = (digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits).slice(0, 10);
+                      updateOrderField(idx, 'phone', clean);
+                    }}
+                    className="w-full bg-transparent text-slate-200 font-mono text-[10.5px] font-semibold focus:outline-none placeholder-slate-600"
                   />
-                  <span className="text-slate-500 font-mono">ft</span>
-                  {(() => {
-                    const tierExtra = computeOrderRate(o, rateCard).footageExtra || 0;
-                    return tierExtra > 0 ? (
-                      <span className="text-[9px] text-emerald-400 font-bold font-mono">
-                        (+${tierExtra})
-                      </span>
-                    ) : null;
-                  })()}
                 </div>
-
-                {/* Si tiene Road Bore (RD), mostrar input rápido de pies bajo calle */}
-                {String(o.bore_type || '').includes('RD') && (
-                  <div className="flex items-center gap-1 bg-cyan-950/50 border border-cyan-500/40 rounded-lg px-1.5 py-0.5 shrink-0" title="Pies bajo calle (B002)">
-                    <span className="text-[9px] font-bold text-cyan-300 font-mono">RD</span>
-                    <input
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      placeholder="ft"
-                      value={o.road_bore_ft || ''}
-                      onChange={(e) => updateOrderField(idx, 'road_bore_ft', e.target.value)}
-                      className="w-10 bg-transparent text-emerald-300 font-mono font-bold focus:outline-none text-[10px]"
-                    />
-                    <span className="text-slate-400 font-mono text-[9px]">ft</span>
-                  </div>
-                )}
 
                 {/* Badges de Campo: Solo Iconos de lo detectado con Modal Informativo al pulsar */}
                 <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">

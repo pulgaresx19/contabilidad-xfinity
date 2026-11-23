@@ -7,6 +7,44 @@ function normalizeAddrKey(addr) {
   return (addr || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
+// Extract and normalize all bore types and quantities (SW, DW, RD) from text
+export function extractBoreType(str) {
+  if (!str) return 'N';
+  const s = String(str).toUpperCase().trim();
+  if (s === 'N' || s === 'NONE' || s === 'NO' || s.startsWith('N,') || s.startsWith('N/')) return 'N';
+
+  const parts = [];
+
+  // 1. Sidewalk / Acera (SW o SV)
+  const swMatch = s.match(/\b(?:SW|SV)[:\s]*(\d+)/i);
+  if (swMatch) {
+    const qty = parseInt(swMatch[1], 10) || 1;
+    parts.push(qty > 1 ? `SW:${qty}` : 'SW:1');
+  } else if (/\b(?:SW|SV)\b/i.test(s)) {
+    parts.push('SW:1');
+  }
+
+  // 2. Driveway / Entrada vehicular (DW o DV)
+  const dwMatch = s.match(/\b(?:DW|DV|DOW)[:\s]*(\d+)/i);
+  if (dwMatch) {
+    const qty = parseInt(dwMatch[1], 10) || 1;
+    parts.push(qty > 1 ? `DW:${qty}` : 'DW:1');
+  } else if (/\b(?:DW|DV|DOW)\b/i.test(s) || /DRIVEWAY/i.test(s)) {
+    parts.push('DW:1');
+  }
+
+  // 3. Road Bore / Calle (RD)
+  const rdMatch = s.match(/\bRD[:\s]*(\d+)/i);
+  if (rdMatch) {
+    const qty = parseInt(rdMatch[1], 10) || 1;
+    parts.push(qty > 1 ? `RD:${qty}` : 'RD:1');
+  } else if (/\bRD\b/i.test(s) || /ROAD/i.test(s)) {
+    parts.push('RD:1');
+  }
+
+  return parts.length > 0 ? parts.join(',') : 'N';
+}
+
 // Smart parser for Xfinity dispatch format lines
 export function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
   if (!line || typeof line !== 'string') return null;
@@ -62,18 +100,11 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
           if (!isNaN(val) && val > 0) drop_footage = val;
         } else if (up.startsWith('TYPE:')) {
           const typeStr = t.substring(5).trim().toUpperCase();
-          if (/EPON|FIBER|FIBRA|FTTH|OPTIC/i.test(typeStr)) cable_type = 'EPON';
+          if (/EP[O0]N|FIBER|FIBRA|FTTH|OPTIC/i.test(typeStr)) cable_type = 'EPON';
           else if (typeStr.includes('11')) cable_type = 'RG-11';
           else cable_type = 'RG-6';
         } else if (up.startsWith('BORE:')) {
-          const bStr = t.substring(5).trim().toUpperCase();
-          if (bStr.includes('DW') && bStr.includes('SW')) bore_type = 'SW:1,DW:1';
-          else if (bStr.includes('DW')) bore_type = 'DW:1';
-          else if (bStr.includes('RD')) {
-            const rm = bStr.match(/RD[:\s]*(\d+)/);
-            bore_type = rm ? `RD:${rm[1]}` : 'RD:1';
-          } else if (bStr.includes('SW')) bore_type = 'SW:1';
-          else bore_type = 'N';
+          bore_type = extractBoreType(t.substring(5));
         } else if (up.startsWith('TEMP:')) {
           is_temp = t.substring(5).trim().toUpperCase() === 'Y';
         } else if (up.startsWith('OBSTACLES:')) {
@@ -268,25 +299,19 @@ export function parseDispatchLine(line, defaultDate = null, defaultTech = null) 
 
   // Cable Type (EPON / Fibra, RG-11 or RG-6)
   let cableType = 'RG-6';
-  if (/EPON|FIBER|FIBRA|FTTH|OPTIC/i.test(postJobText)) {
+  if (/EP[O0]N|FIBER|FIBRA|FTTH|OPTIC/i.test(postJobText)) {
     cableType = 'EPON';
   } else if (/RG[- ]?(?:11|M\b|II\b|1[1lI])/i.test(postJobText)) {
     cableType = 'RG-11';
   }
 
-  // Bore Type (Driveway DW:1, Sidewalk SW:1, Road RD:2, or None N)
+  // Bore Type: aislar el segmento de BORE antes de la siguiente diagonal o token
   let boreType = 'N';
-  const hasDW = /(?:BORE[:\s]*)?(?:DW|DV)[-:\s/.]*1/i.test(postJobText) || /\b(?:DW|DV)[-:\s/.]*1\b/i.test(postJobText) || /\b(?:DW|DV)[-:\s/.]*V\b/i.test(postJobText);
-  const hasSW = /(?:BORE[:\s]*)?(?:SW|SV)[-:\s/.]*1/i.test(postJobText) || /\b(?:SW|SV)[-:\s/.]*1\b/i.test(postJobText) || /BORE[:\s]*(?:SW|SV)\b/i.test(postJobText);
-  const rdMatch = postJobText.match(/\bRD[:\s.]*([12])\b/i);
-  if (hasDW && hasSW) {
-    boreType = 'SW:1,DW:1';
-  } else if (hasDW) {
-    boreType = 'DW:1';
-  } else if (rdMatch) {
-    boreType = `RD:${rdMatch[1]}`;
-  } else if (hasSW) {
-    boreType = 'SW:1';
+  const boreSegmentMatch = postJobText.match(/\bBORE[:\s]*([^/]+?)(?=\s*\/|\s*(?:TEMP|OBSTACLES|PREMISE|NBR|REMARKS?)\b|$)/i);
+  if (boreSegmentMatch) {
+    boreType = extractBoreType(boreSegmentMatch[1]);
+  } else {
+    boreType = extractBoreType(postJobText);
   }
 
   // Phone

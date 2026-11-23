@@ -143,15 +143,18 @@ function calcOrderRate(order = {}, rateCard = DEFAULT_RATE_CARD) {
 
   // Extra Driveway Bore (D20)
   if (/DW/i.test(bore)) {
-    const dwPrice = parseFloat(card.D20?.price) || 30.00;
+    const dwMatch = bore.match(/DW[:\s]*(\d+)/i);
+    const dwQty = dwMatch ? parseInt(dwMatch[1], 10) : 1;
+    const dwUnitPrice = parseFloat(card.D20?.price) || 30.00;
+    const dwPrice = dwUnitPrice * (dwQty > 0 ? dwQty : 1);
     matchedCodes.push({
       code: 'D20',
       price: dwPrice,
-      label: 'Extra Driveways (Cruce de entrada vehicular)'
+      label: dwQty > 1 ? `Extra Driveways x${dwQty} (Cruces de entrada vehicular)` : 'Extra Driveways (Cruce de entrada vehicular)'
     });
   }
 
-  // Road Bore (B002) - Si se especifica metraje de perforación bajo calle
+  // Road Bore (B002) - Solo si el usuario especificó manualmente metraje de perforación bajo calle (inicialmente 0)
   const rdFt = parseFloat(order.road_bore_ft) || 0;
   if (rdFt > 0) {
     const rdUnitPrice = parseFloat(card.B002?.price) || 2.50;
@@ -358,6 +361,44 @@ function initDb() {
   }
 }
 
+// Extract and normalize all bore types and quantities (SW, DW, RD) from text
+function extractBoreType(str) {
+  if (!str) return 'N';
+  const s = String(str).toUpperCase().trim();
+  if (s === 'N' || s === 'NONE' || s === 'NO' || s.startsWith('N,') || s.startsWith('N/')) return 'N';
+
+  const parts = [];
+
+  // 1. Sidewalk / Acera (SW o SV)
+  const swMatch = s.match(/\b(?:SW|SV)[:\s]*(\d+)/i);
+  if (swMatch) {
+    const qty = parseInt(swMatch[1], 10) || 1;
+    parts.push(qty > 1 ? `SW:${qty}` : 'SW:1');
+  } else if (/\b(?:SW|SV)\b/i.test(s)) {
+    parts.push('SW:1');
+  }
+
+  // 2. Driveway / Entrada vehicular (DW o DV)
+  const dwMatch = s.match(/\b(?:DW|DV|DOW)[:\s]*(\d+)/i);
+  if (dwMatch) {
+    const qty = parseInt(dwMatch[1], 10) || 1;
+    parts.push(qty > 1 ? `DW:${qty}` : 'DW:1');
+  } else if (/\b(?:DW|DV|DOW)\b/i.test(s) || /DRIVEWAY/i.test(s)) {
+    parts.push('DW:1');
+  }
+
+  // 3. Road Bore / Calle (RD)
+  const rdMatch = s.match(/\bRD[:\s]*(\d+)/i);
+  if (rdMatch) {
+    const qty = parseInt(rdMatch[1], 10) || 1;
+    parts.push(qty > 1 ? `RD:${qty}` : 'RD:1');
+  } else if (/\bRD\b/i.test(s) || /ROAD/i.test(s)) {
+    parts.push('RD:1');
+  }
+
+  return parts.length > 0 ? parts.join(',') : 'N';
+}
+
 // Clean raw notes utility to prevent duplicating telephone, footage, cable, bore in remarks
 function cleanRawNotes(rawText) {
   if (!rawText || typeof rawText !== 'string') return '';
@@ -378,7 +419,7 @@ function cleanRawNotes(rawText) {
     .replace(/(?:Type|Cable)[:\s]*(?:RG[- ]?(?:6|11|M|II)|EPON)\b/gi, ' ')
     .replace(/\b(?:RG[- ]?(?:6|11)|EPON)\b/gi, ' ')
     .replace(/BORE[:\s]*(?:[A-Z]{2}[:\s]*\d+(?:,\s*[A-Z]{2,3}[:\s]*[A-Z0-9]+)*|N(?:,\s*CND[:\s]*[A-Z0-9]+)?\b)/gi, ' ')
-    .replace(/\b(?:DW|SW|DV|SV|RD)[:\s]*[12](?:,\s*(?:DW|SW|DV|SV|RD)[:\s]*[12])*\b/gi, ' ')
+    .replace(/\b(?:DW|SW|DV|SV|RD)[:\s]*\d+(?:,\s*(?:DW|SW|DV|SV|RD)[:\s]*\d+)*\b/gi, ' ')
     .replace(/\bCND[:\s]*[A-Z0-9]+\b/gi, ' ')
     .replace(/\bTEMP[:\s]*[YN]\b/gi, ' ')
     .replace(/Obstacl(?:es|ias)?[:\s]*[A-Za-z0-9, ]*(?=\/|$|\b(?:Premise|NBR|NB|REMARKS?)\b)/gi, ' ')
@@ -450,18 +491,11 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
           if (!isNaN(val) && val > 0) drop_footage = val;
         } else if (up.startsWith('TYPE:')) {
           const typeStr = t.substring(5).trim().toUpperCase();
-          if (typeStr.includes('EPON')) cable_type = 'EPON';
+          if (/EP[O0]N|FIBER|FIBRA|FTTH|OPTIC/i.test(typeStr)) cable_type = 'EPON';
           else if (typeStr.includes('11')) cable_type = 'RG-11';
           else cable_type = 'RG-6';
         } else if (up.startsWith('BORE:')) {
-          const bStr = t.substring(5).trim().toUpperCase();
-          if (bStr.includes('DW') && bStr.includes('SW')) bore_type = 'SW:1,DW:1';
-          else if (bStr.includes('DW')) bore_type = 'DW:1';
-          else if (bStr.includes('RD')) {
-            const rm = bStr.match(/RD[:\s]*(\d+)/);
-            bore_type = rm ? `RD:${rm[1]}` : 'RD:1';
-          } else if (bStr.includes('SW')) bore_type = 'SW:1';
-          else bore_type = 'N';
+          bore_type = extractBoreType(t.substring(5));
         } else if (up.startsWith('TEMP:')) {
           is_temp = t.substring(5).trim().toUpperCase() === 'Y';
         } else if (up.startsWith('OBSTACLES:')) {
@@ -664,25 +698,19 @@ function parseDispatchLine(line, defaultDate = null, defaultTech = null) {
 
   // Cable Type
   let cableType = 'RG-6';
-  if (/EPON/i.test(postJobText)) {
+  if (/EP[O0]N|FIBER|FIBRA|FTTH|OPTIC/i.test(postJobText)) {
     cableType = 'EPON';
   } else if (/RG[- ]?(?:11|M\b|II\b|1[1lI])/i.test(postJobText)) {
     cableType = 'RG-11';
   }
 
-  // Bore Type
+  // Bore Type: aislar el segmento de BORE antes de la siguiente diagonal o token
   let boreType = 'N';
-  const hasDW = /(?:BORE[:\s]*)?(?:DW|DV)[-:\s/.]*1/i.test(postJobText) || /\b(?:DW|DV)[-:\s/.]*1\b/i.test(postJobText) || /\b(?:DW|DV)[-:\s/.]*V\b/i.test(postJobText);
-  const hasSW = /(?:BORE[:\s]*)?(?:SW|SV)[-:\s/.]*1/i.test(postJobText) || /\b(?:SW|SV)[-:\s/.]*1\b/i.test(postJobText) || /BORE[:\s]*(?:SW|SV)\b/i.test(postJobText);
-  const rdMatch = postJobText.match(/\bRD[:\s.]*([12])\b/i);
-  if (hasDW && hasSW) {
-    boreType = 'SW:1,DW:1';
-  } else if (hasDW) {
-    boreType = 'DW:1';
-  } else if (rdMatch) {
-    boreType = `RD:${rdMatch[1]}`;
-  } else if (hasSW) {
-    boreType = 'SW:1';
+  const boreSegmentMatch = postJobText.match(/\bBORE[:\s]*([^/]+?)(?=\s*\/|\s*(?:TEMP|OBSTACLES|PREMISE|NBR|REMARKS?)\b|$)/i);
+  if (boreSegmentMatch) {
+    boreType = extractBoreType(boreSegmentMatch[1]);
+  } else {
+    boreType = extractBoreType(postJobText);
   }
 
   // Phone
@@ -800,6 +828,7 @@ initDb();
 
 module.exports = {
   db,
+  extractBoreType,
   parseDispatchLine,
   cleanRawNotes,
   calcOrderRate,

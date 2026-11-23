@@ -7,6 +7,7 @@ import {
 import ShareReportModal from './ShareReportModal';
 import LiveCameraModal from './LiveCameraModal';
 import { stampPhotoWithWatermark } from '../utils/watermark';
+import { formatCableType } from '../utils/remarkUtils';
 
 const PHOTO_STEPS = [
   { id: 'Casa', label: 'Casa / Entrada', short: 'Casa', icon: '🏠' },
@@ -401,7 +402,7 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
                 Cable
               </span>
               <span className="text-xs sm:text-sm font-black text-cyan-400 font-mono truncate block">
-                {order.cable_type || 'RG-6'}
+                {formatCableType(order.cable_type)}
               </span>
             </div>
             <div className="bg-[#16202c] p-1.5 rounded-xl border border-white/5 min-w-0">
@@ -1007,6 +1008,11 @@ export default function PhotoModal({ order, isOpen, onClose, onPhotoUpdated, ini
         onClose={() => setIsShareModalOpen(false)}
         onOrderUpdated={() => {
           setLocalReported(true);
+          if (onPhotoUpdated) onPhotoUpdated();
+        }}
+        onShared={(orderId) => {
+          setIsShareModalOpen(false);
+          if (onClose) onClose();
           if (onPhotoUpdated) onPhotoUpdated();
         }}
       />

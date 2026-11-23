@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { getOrders, getWeeklySummary, getSettings, getExpenses } from './localDb';
 import { formatAdjustmentReason } from '../utils/adjustmentUtils';
 import { normalizeRateCard } from '../utils/rateUtils';
+import { formatCableType, getBoreInfo } from '../utils/remarkUtils';
 
 export async function exportOrdersToExcel(filename = null) {
   let orders = [];
@@ -51,8 +52,8 @@ export async function exportOrdersToExcel(filename = null) {
       'Teléfono': o.phone || '',
       'Call First': o.call_first ? 'SÍ' : 'NO',
       'Metraje (ft)': Number(o.drop_footage) || 0,
-      'Tipo de Cable': o.cable_type || 'RG-6',
-      'Perforación (Bore)': o.bore_type || 'N',
+      'Tipo de Cable': formatCableType(o.cable_type),
+      'Perforación (Bore)': getBoreInfo(o.bore_type)?.label || (o.bore_type && o.bore_type !== 'N' ? o.bore_type : 'Sin cruce'),
       'Road Bore (ft)': Number(o.road_bore_ft) || 0,
       'Línea Temporal (Temp)': o.is_temp ? 'SÍ' : 'NO',
       'Acceso Predio': o.premise_access || 'N',

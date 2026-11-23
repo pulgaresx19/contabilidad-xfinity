@@ -161,11 +161,14 @@ export function calcOrderRate(order = {}, rateCard = DEFAULT_RATE_CARD) {
 
   // Extra Driveway Bore (D20)
   if (/DW/i.test(bore)) {
-    const dwPrice = parseFloat(card.D20?.price) || 30.00;
+    const dwMatch = bore.match(/DW[:\s]*(\d+)/i);
+    const dwQty = dwMatch ? parseInt(dwMatch[1], 10) : 1;
+    const dwUnitPrice = parseFloat(card.D20?.price) || 30.00;
+    const dwPrice = dwUnitPrice * (dwQty > 0 ? dwQty : 1);
     matchedCodes.push({
       code: 'D20',
       price: dwPrice,
-      label: 'Extra Driveways (Cruce de entrada vehicular)'
+      label: dwQty > 1 ? `Extra Driveways x${dwQty} (Cruces de entrada vehicular)` : 'Extra Driveways (Cruce de entrada vehicular)'
     });
   }
 

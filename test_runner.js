@@ -124,7 +124,7 @@ assert.strictEqual(extracted[1].status, 'Pendiente');
 assert.strictEqual(extracted[2].job_id, '717040');
 assert.strictEqual(extracted[2].address.replace(/\s+/g, ' '), '28747 W WOLF AVE');
 assert.strictEqual(extracted[2].drop_footage, 450);
-assert.strictEqual(extracted[2].rate_calculated, 155);
+assert.strictEqual(extracted[2].rate_calculated, 180);
 assert.strictEqual(extracted[2].status, 'Pendiente');
 
 // Test real-world noisy dispatch sheet from user upload (verifying 7 of 7 orders & both Wolf Ave lines)

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, Share2, Copy, Check, CheckCheck, Camera, ExternalLink, AlertCircle, AlertTriangle
 } from 'lucide-react';
-import { getBoreInfo } from '../utils/remarkUtils';
+import { getBoreInfo, formatCableType } from '../utils/remarkUtils';
 
 export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdated, onShared }) {
   const [reportText, setReportText] = useState('');
@@ -53,7 +53,7 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
 📅 *Fecha:* ${order.work_date}
 🔢 *Orden #:* ${order.job_id}
 📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
-📏 *Pies / Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
+📏 *Pies / Drop:* ${order.drop_footage} ft (${formatCableType(order.cable_type)})
 🚗 *Cruce / Bore:* ${boreLabel}
 ✅ *Estado:* Completado y Verificado`;
     }
@@ -189,6 +189,7 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
           text: textToSend,
           files: filesToShare
         });
+        if (onShared) onShared(order.id);
         onClose();
         return;
       }
@@ -199,6 +200,7 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
           title: shareTitle,
           text: textToSend
         });
+        if (onShared) onShared(order.id);
         onClose();
         return;
       }
@@ -206,11 +208,13 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
       // 6. Fallback si no hay Web Share: abrir WhatsApp
       const waUrl = `https://wa.me/?text=${encodeURIComponent(textToSend)}`;
       window.open(waUrl, '_blank');
+      if (onShared) onShared(order.id);
       onClose();
     } catch (err) {
       if (err.name !== 'AbortError') {
         const waUrl = `https://wa.me/?text=${encodeURIComponent(textToSend)}`;
         window.open(waUrl, '_blank');
+        if (onShared) onShared(order.id);
         onClose();
       }
     } finally {
@@ -278,7 +282,7 @@ export default function ShareReportModal({ isOpen, order, onClose, onOrderUpdate
                 Cable
               </span>
               <span className="text-xs sm:text-sm font-black text-cyan-400 font-mono truncate block">
-                {order.cable_type || 'RG-6'}
+                {formatCableType(order.cable_type)}
               </span>
             </div>
             <div className="bg-[#16202c] p-1.5 rounded-xl border border-white/5 min-w-0">

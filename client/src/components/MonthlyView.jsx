@@ -12,7 +12,7 @@ import {
   getCurrentMonthStr, formatMonthFriendly, 
   getPreviousMonth, getNextMonth, formatDateFriendly 
 } from '../utils/dateUtils';
-import { getOrderRemark } from '../utils/remarkUtils';
+import { getOrderRemark, getBoreInfo, formatCableType } from '../utils/remarkUtils';
 import AddExpenseModal from './AddExpenseModal';
 import EditJobModal from './EditJobModal';
 import ShareReportModal from './ShareReportModal';
@@ -96,22 +96,16 @@ export default function MonthlyView({
   };
 
   const copySingleJobClaim = (order) => {
-    const hasDriveway = Boolean(
-      order.bore_type && (
-        order.bore_type.includes('DW') || 
-        order.bore_type.toLowerCase().includes('driveway') || 
-        order.bore_type === 'Y'
-      )
-    );
-
+    const bInfo = getBoreInfo(order.bore_type);
+    const boreLabel = bInfo ? bInfo.label : 'No';
     const remark = getOrderRemark(order);
 
     const text = `📋 *COMPROBANTE DE TRABAJO - XFINITY*
 🔢 *Work Order #:* ${order.job_id}
 📅 *Fecha Ejecución:* ${order.work_date}
 📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
-📏 *Pies / Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
-🚗 *Driveway:* ${hasDriveway ? 'Sí' : 'No'}
+📏 *Pies / Drop:* ${order.drop_footage} ft (${formatCableType(order.cable_type)})
+🚧 *Cruce (Bore):* ${boreLabel}
 📝 *Observaciones / Acceso:* ${remark || '🟢 Acceso libre'}
 📸 *Fotos de Evidencia:* ${order.photos_count || (order.photos ? order.photos.length : 0)} archivada(s)`;
 
@@ -131,7 +125,7 @@ export default function MonthlyView({
 
   const copyWeeklyAudit = (w) => {
     const jobList = (w.orders || []).map((o, idx) => 
-      `  ${idx + 1}. Job #${o.job_id}: ${o.address} (${o.drop_footage || 0} ft, ${o.cable_type || 'RG-6'}) - $${o.rate_calculated || 0}`
+      `  ${idx + 1}. Job #${o.job_id}: ${o.address} (${o.drop_footage || 0} ft, ${formatCableType(o.cable_type)}) - $${o.rate_calculated || 0}`
     ).join('\n');
 
     const text = `📊 *CIERRE SEMANAL - SEMANA ${w.displayLabel || w.key}*

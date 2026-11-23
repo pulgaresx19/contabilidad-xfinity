@@ -44,7 +44,7 @@ export function cleanRawNotes(rawText) {
     .replace(/\b(?:RG[- ]?(?:6|11)|EPON)\b/gi, ' ')
     // Eliminar tipo de perforación (BORE:DW:1, BORE:SW:1, BORE:RD:2, BORE:SW:1,DW:1, BORE:N,CND:NU)
     .replace(/BORE[:\s]*(?:[A-Z]{2}[:\s]*\d+(?:,\s*[A-Z]{2,3}[:\s]*[A-Z0-9]+)*|N(?:,\s*CND[:\s]*[A-Z0-9]+)?\b)/gi, ' ')
-    .replace(/\b(?:DW|SW|DV|SV|RD)[:\s]*[12](?:,\s*(?:DW|SW|DV|SV|RD)[:\s]*[12])*\b/gi, ' ')
+    .replace(/\b(?:DW|SW|DV|SV|RD)[:\s]*\d+(?:,\s*(?:DW|SW|DV|SV|RD)[:\s]*\d+)*\b/gi, ' ')
     .replace(/\bCND[:\s]*[A-Z0-9]+\b/gi, ' ')
     // Eliminar indicador de cable temporal (TEMP:Y, TEMP:N)
     .replace(/\bTEMP[:\s]*[YN]\b/gi, ' ')
@@ -294,7 +294,13 @@ export function getOrderRemark(order) {
     parts.push('🔴 Prioritario');
   }
 
-  // 1. CONDICIÓN DE ACCESO A LA PROPIEDAD (SIEMPRE DE PRIMERO)
+  // 1. TIPO DE PERFORACIÓN / CRUCE (Bore: DW, SW, RD)
+  const boreInfo = getBoreInfo(order.bore_type);
+  if (boreInfo && boreInfo.label) {
+    parts.push(`🚗 ${boreInfo.label}`);
+  }
+
+  // 2. CONDICIÓN DE ACCESO A LA PROPIEDAD (Req. Cliente, Perro, Portón, Llamar, o Acceso Libre)
   if (pa === 'RQHM' || rawNotesStr.includes('RQHM')) {
     parts.push('🏠 Req. Cliente');
   } else if (pa === 'DOG' || /\bDOGS?\b/i.test(rawNotesStr)) {
@@ -727,72 +733,103 @@ export function getBadgeDetailedInfo(badgeKeyOrType, order = null) {
  * Normaliza y clasifica cualquier tipo de perforación/cruce (DW, SW, RD, etc.)
  * Proporciona etiquetas limpias, bonificaciones y estilos consistentes para toda la app.
  */
+/**
+ * getBoreInfo
+ * Normaliza y clasifica cualquier tipo de perforación/cruce (DW, SW, RD, etc.)
+ * Proporciona etiquetas limpias combinadas (SW + DW + RD), bonificaciones y estilos
+ * consistentes para toda la app sin textos redundantes.
+ */
 export function getBoreInfo(boreType) {
   if (!boreType || boreType === 'N' || boreType === 'NONE') return null;
   const s = String(boreType).toUpperCase().trim();
-  if (s === 'N' || s === '') return null;
+  if (s === 'N' || s === '' || s.startsWith('N/') || s.startsWith('N,')) return null;
 
-  const hasDW = s.includes('DW') || s.includes('DRIVEWAY');
-  const hasSW = s.includes('SW') || s.includes('SIDEWALK');
-  const hasRD = s.includes('RD') || s.includes('ROAD');
+  const labels = [];
+  const types = [];
 
-  if (hasDW && hasSW) {
-    return {
-      type: 'DW+SW',
-      label: 'DW + SW',
-      fullLabel: 'DW + SW Bore (+$30)',
-      bonus: 30,
-      hasBonus: true,
-      dotColor: 'bg-cyan-400',
-      badgeTextClass: 'text-slate-200 font-semibold',
-      badgeClass: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
-    };
-  }
-  if (hasDW) {
-    return {
-      type: 'DW',
-      label: 'DW Bore',
-      fullLabel: 'DW Bore (+$30)',
-      bonus: 30,
-      hasBonus: true,
-      dotColor: 'bg-cyan-400',
-      badgeTextClass: 'text-slate-200 font-semibold',
-      badgeClass: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
-    };
-  }
+  // 1. Sidewalk / Acera
+  const swMatch = s.match(/\b(?:SW|SV)[:\s]*(\d+)/i);
+  const hasSW = Boolean(swMatch) || /\b(?:SW|SV)\b/i.test(s) || s.includes('SIDEWALK');
+  const swQty = swMatch ? (parseInt(swMatch[1], 10) || 1) : (hasSW ? 1 : 0);
   if (hasSW) {
+    labels.push(swQty > 1 ? `SW:${swQty}` : 'SW');
+    types.push('SW');
+  }
+
+  // 2. Driveway / Entrada vehicular
+  const dwMatch = s.match(/\b(?:DW|DV|DOW)[:\s]*(\d+)/i);
+  const hasDW = Boolean(dwMatch) || /\b(?:DW|DV|DOW)\b/i.test(s) || s.includes('DRIVEWAY');
+  const dwQty = dwMatch ? (parseInt(dwMatch[1], 10) || 1) : (hasDW ? 1 : 0);
+  if (hasDW) {
+    labels.push(dwQty > 1 ? `DW:${dwQty}` : 'DW');
+    types.push('DW');
+  }
+
+  // 3. Road Bore / Cruce de calle
+  const rdMatch = s.match(/\bRD[:\s]*(\d+)/i);
+  const hasRD = Boolean(rdMatch) || /\bRD\b/i.test(s) || s.includes('ROAD');
+  const rdQty = rdMatch ? (parseInt(rdMatch[1], 10) || 1) : (hasRD ? 1 : 0);
+  if (hasRD) {
+    labels.push(rdQty > 1 ? `RD:${rdQty}` : 'RD');
+    types.push('RD');
+  }
+
+  if (labels.length === 0) {
     return {
-      type: 'SW',
-      label: 'SW Bore',
-      fullLabel: 'SW Bore (Acera)',
+      type: 'OTHER',
+      label: s,
+      fullLabel: `Bore: ${s}`,
       bonus: 0,
       hasBonus: false,
-      dotColor: 'bg-amber-400/90',
+      hasDriveway: false,
+      hasRoadBore: false,
+      hasSidewalk: false,
+      dotColor: 'bg-slate-400',
       badgeTextClass: 'text-slate-200 font-semibold',
       badgeClass: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
     };
   }
+
+  const combinedLabel = labels.join(' + ');
+  const dwBonus = dwQty * 30; // $30 por cada driveway
+
+  // Color de punto indicador según complejidad
+  let dotColor = 'bg-cyan-400';
   if (hasRD) {
-    return {
-      type: 'RD',
-      label: 'RD Bore',
-      fullLabel: 'RD Bore (Calle)',
-      bonus: 0,
-      hasBonus: false,
-      dotColor: 'bg-purple-400',
-      badgeTextClass: 'text-slate-200 font-semibold',
-      badgeClass: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
-    };
+    dotColor = 'bg-purple-400'; // Destacar calle / road bore
+  } else if (hasDW) {
+    dotColor = 'bg-cyan-400'; // Driveway con bono
+  } else {
+    dotColor = 'bg-amber-400/90'; // Solo acera
   }
 
   return {
-    type: 'OTHER',
-    label: s,
-    fullLabel: `Bore: ${s}`,
-    bonus: 0,
-    hasBonus: false,
-    dotColor: 'bg-slate-400',
+    type: types.join('+'),
+    label: combinedLabel,
+    fullLabel: `Bore: ${combinedLabel}`,
+    bonus: dwBonus,
+    hasBonus: dwBonus > 0,
+    hasDriveway: hasDW,
+    drivewayCount: dwQty,
+    hasRoadBore: hasRD,
+    roadBoreCount: rdQty,
+    hasSidewalk: hasSW,
+    sidewalkCount: swQty,
+    dotColor,
     badgeTextClass: 'text-slate-200 font-semibold',
     badgeClass: 'bg-slate-800/70 text-slate-300 border-slate-700/60'
   };
+}
+
+/**
+ * formatCableType
+ * Muestra 'Fibra' para cables tipo EPON o fibra óptica, y 'RG-6'/'RG-11' para coaxiales.
+ */
+export function formatCableType(cableType) {
+  if (!cableType) return 'RG-6';
+  const s = String(cableType).toUpperCase().trim();
+  if (s === 'EPON' || s.includes('FIBER') || s.includes('FIBRA') || s.includes('FTTH') || s.includes('OPTIC')) {
+    return 'Fibra';
+  }
+  return cableType;
 }

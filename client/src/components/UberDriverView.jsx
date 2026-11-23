@@ -13,7 +13,7 @@ import {
 import { formatDateFriendly, normalizeDateStr, formatRouteDuration } from '../utils/dateUtils';
 import { geocodeAddressWithMapbox, detectOrderState, buildNavigationUrl, MAPBOX_TOKEN } from '../utils/mapboxGeocode';
 import { getCustomerSmsUrl, formatPhoneDisplay } from '../utils/smsUtils';
-import { getOrderRemark, getOrderFieldBadges, getBoreInfo } from '../utils/remarkUtils';
+import { getOrderRemark, getOrderFieldBadges, getBoreInfo, formatCableType } from '../utils/remarkUtils';
 import { useTheme } from '../context/ThemeContext';
 import EmptyStateCard from './EmptyStateCard';
 
@@ -147,6 +147,9 @@ function optimizeStopsSequence(ordersList, startPoint, mode = 'nearest', routeCa
   }));
 }
 
+// Default coordinate center: Skokie / Chicago
+const DEFAULT_LNG_LAT = [-87.734557, 42.033592];
+
 export default function UberDriverView({
   orders = [],
   activeDate,
@@ -192,6 +195,34 @@ export default function UberDriverView({
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [is3DMode, setIs3DMode] = useState(true);
   const [showFullRemark, setShowFullRemark] = useState(false);
+
+  // Touch / Drag Gestures for Bottom Sliding Drawer (Swipe Up to Expand, Swipe Down to Collapse)
+  const drawerTouchStartY = useRef(null);
+
+  const handleDrawerDragStart = (e) => {
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    drawerTouchStartY.current = clientY;
+
+    const handleDragEnd = (endEvt) => {
+      const endY = endEvt.changedTouches ? endEvt.changedTouches[0].clientY : endEvt.clientY;
+      if (drawerTouchStartY.current !== null && endY !== undefined) {
+        const diffY = endY - drawerTouchStartY.current;
+        if (diffY < -30) {
+          // Deslizó hacia arriba -> Expandir tarjeta
+          setDrawerState('expanded');
+        } else if (diffY > 30) {
+          // Deslizó hacia abajo -> Contraer tarjeta
+          setDrawerState('peek');
+        }
+      }
+      drawerTouchStartY.current = null;
+      window.removeEventListener('touchend', handleDragEnd);
+      window.removeEventListener('mouseup', handleDragEnd);
+    };
+
+    window.addEventListener('touchend', handleDragEnd, { passive: true });
+    window.addEventListener('mouseup', handleDragEnd);
+  };
 
   // Free Exploration Mode: User can pan/zoom anywhere freely without being snapped back
   const [isUserPanned, setIsUserPanned] = useState(false);
@@ -337,8 +368,15 @@ export default function UberDriverView({
       return travesiaSummary;
     }
     const list = (tempOrdersList.length > 0 ? tempOrdersList : activeOrders).filter(o => o.latitude && o.longitude);
-    if (list.length >= 2) {
+    if (list.length >= 1) {
       let miles = 0;
+      const startCoord = (userLocation && userLocation.lat && userLocation.lng)
+        ? { lat: userLocation.lat, lng: userLocation.lng }
+        : { lat: DEFAULT_LNG_LAT[1], lng: DEFAULT_LNG_LAT[0] };
+      
+      // Tramo inicial desde la posición actual del usuario / base hasta la parada 1
+      miles += getEstimatedDrivingMiles(startCoord.lat, startCoord.lng, list[0].latitude, list[0].longitude) || 0;
+
       for (let i = 0; i < list.length - 1; i++) {
         miles += getEstimatedDrivingMiles(list[i].latitude, list[i].longitude, list[i + 1].latitude, list[i + 1].longitude) || 1.8;
       }
@@ -346,13 +384,13 @@ export default function UberDriverView({
       return { totalMiles: miles, totalMinutes: minutes };
     }
     const allStops = tempOrdersList.length > 0 ? tempOrdersList : activeOrders;
-    if (allStops.length >= 2) {
-      const estimatedMiles = (allStops.length - 1) * 3.5;
+    if (allStops.length >= 1) {
+      const estimatedMiles = allStops.length * 3.5;
       const estimatedMinutes = Math.round(estimatedMiles * 2.2);
       return { totalMiles: estimatedMiles, totalMinutes: estimatedMinutes };
     }
     return { totalMiles: 0, totalMinutes: 0 };
-  }, [travesiaSummary, tempOrdersList, activeOrders]);
+  }, [travesiaSummary, tempOrdersList, activeOrders, userLocation?.lat, userLocation?.lng]);
 
   // Job On-Site Timers
   const [jobTimers, setJobTimers] = useState(() => {
@@ -363,9 +401,6 @@ export default function UberDriverView({
       return {};
     }
   });
-
-  // Default coordinate center: Skokie / Chicago
-  const DEFAULT_LNG_LAT = [-87.734557, 42.033592];
 
   // Daily statistics
   const dayPending = activeOrders.filter(o => o.status === 'Pendiente');
@@ -696,20 +731,16 @@ export default function UberDriverView({
       return;
     }
 
-    // Sequence starts from user's live GPS location (si está cerca de la zona) -> Stop 1 -> Stop 2 -> Stop 3...
+    // Sequence starts from user's live GPS location -> Stop 1 -> Stop 2 -> Stop 3...
     const sequenceStops = [];
     if (userLocation && userLocation.lng && userLocation.lat && validStops.length > 0) {
-      const distToFirst = getEstimatedDrivingMiles(userLocation.lat, userLocation.lng, validStops[0].latitude, validStops[0].longitude);
-      // Solo anteponer GPS si está a menos de 15 millas del primer trabajo para no distorsionar el trazado del día al probar fuera de zona
-      if (distToFirst <= 15) {
-        sequenceStops.push({
-          id: 'start-current-gps',
-          latitude: userLocation.lat,
-          longitude: userLocation.lng,
-          isCurrentGps: true,
-          address: 'Ubicación actual'
-        });
-      }
+      sequenceStops.push({
+        id: 'start-current-gps',
+        latitude: userLocation.lat,
+        longitude: userLocation.lng,
+        isCurrentGps: true,
+        address: 'Ubicación actual'
+      });
     }
     sequenceStops.push(...validStops);
 
@@ -879,10 +910,11 @@ export default function UberDriverView({
       let accumulatedMiles = 0;
       let accumulatedMinutes = 0;
 
-      for (let i = 0; i < validStops.length - 1; i++) {
+      const hasGpsStart = Boolean(sequenceStops[0]?.isCurrentGps);
+      for (let i = 0; i < sequenceStops.length - 1; i++) {
         if (controller.signal.aborted) return;
-        const s1 = validStops[i];
-        const s2 = validStops[i + 1];
+        const s1 = sequenceStops[i];
+        const s2 = sequenceStops[i + 1];
         const p1 = [s1.longitude, s1.latitude];
         const p2 = [s2.longitude, s2.latitude];
         const legRoute = await fetchShortestRoute(p1, p2, controller.signal);
@@ -905,8 +937,9 @@ export default function UberDriverView({
           stitchedLegs.push({
             fromOrder: s1,
             toOrder: s2,
-            fromIndex: i,
-            toIndex: i + 1,
+            fromIndex: hasGpsStart ? (i === 0 ? -1 : i - 1) : i,
+            toIndex: hasGpsStart ? i : i + 1,
+            isFromGps: hasGpsStart && i === 0,
             miles: legMiles,
             minutes: legMinutes,
             midCoord
@@ -1049,21 +1082,38 @@ export default function UberDriverView({
     if (!order) return null;
     if (indexInList === 0) {
       if (activeRouteInfo && String(selectedOrder?.id) === String(order.id)) {
+        const durationFormatted = formatRouteDuration(activeRouteInfo.minutes, false);
         return {
           minutes: activeRouteInfo.minutes,
           miles: activeRouteInfo.miles,
-          text: `A ${activeRouteInfo.minutes} min (${activeRouteInfo.miles.toFixed(1)} mi)`,
-          shortText: `A ${activeRouteInfo.minutes} min`,
+          text: `A ${durationFormatted} (${activeRouteInfo.miles.toFixed(1)} mi) de tu ubicación`,
+          shortText: `A ${durationFormatted}`,
           isFirst: true
         };
       }
       const gpsLeg = travesiaLegs.find(l => l.isFromGps && String(l.toOrder?.id) === String(order.id));
       if (gpsLeg) {
+        const durationFormatted = formatRouteDuration(gpsLeg.minutes, false);
         return {
           minutes: gpsLeg.minutes,
           miles: gpsLeg.miles,
-          text: `A ${gpsLeg.minutes} min (${gpsLeg.miles.toFixed(1)} mi) de tu GPS`,
-          shortText: `A ${gpsLeg.minutes} min`,
+          text: `A ${durationFormatted} (${gpsLeg.miles.toFixed(1)} mi) de tu ubicación`,
+          shortText: `A ${durationFormatted}`,
+          isFirst: true
+        };
+      }
+      if (order.latitude && order.longitude) {
+        const startCoord = (userLocation && userLocation.lat && userLocation.lng)
+          ? { lat: userLocation.lat, lng: userLocation.lng }
+          : { lat: DEFAULT_LNG_LAT[1], lng: DEFAULT_LNG_LAT[0] };
+        const miles = getEstimatedDrivingMiles(startCoord.lat, startCoord.lng, order.latitude, order.longitude) || 2.5;
+        const minutes = Math.max(1, Math.round(miles * 2.2));
+        const durationFormatted = formatRouteDuration(minutes, false);
+        return {
+          minutes,
+          miles,
+          text: `A ${durationFormatted} (${miles.toFixed(1)} mi) de tu ubicación`,
+          shortText: `A ${durationFormatted}`,
           isFirst: true
         };
       }
@@ -1078,12 +1128,13 @@ export default function UberDriverView({
     const leg = travesiaLegs.find(l => !l.isFromGps && String(l.toOrder?.id) === String(order.id)) || travesiaLegs[indexInList - 1 + hasGpsOffset];
     if (leg) {
       const prevStopNum = indexInList; // 1-based previous stop number
+      const durationFormatted = formatRouteDuration(leg.minutes, false);
       return {
         minutes: leg.minutes,
         miles: leg.miles,
         prevStopNum,
-        text: `+${leg.minutes} min (${leg.miles.toFixed(1)} mi) de #${prevStopNum}`,
-        shortText: `+${leg.minutes} min`,
+        text: `+${durationFormatted} (${leg.miles.toFixed(1)} mi) de #${prevStopNum}`,
+        shortText: `+${durationFormatted}`,
         isFirst: false
       };
     }
@@ -1092,22 +1143,24 @@ export default function UberDriverView({
     if (prevOrder && prevOrder.latitude && prevOrder.longitude && order.latitude && order.longitude) {
       const miles = getEstimatedDrivingMiles(prevOrder.latitude, prevOrder.longitude, order.latitude, order.longitude) || 1.8;
       const minutes = Math.max(1, Math.round(miles * 2.2));
+      const durationFormatted = formatRouteDuration(minutes, false);
       return {
         minutes,
         miles,
         prevStopNum: indexInList,
-        text: `+${minutes} min (${miles.toFixed(1)} mi) de #${indexInList}`,
-        shortText: `+${minutes} min`,
+        text: `+${durationFormatted} (${miles.toFixed(1)} mi) de #${indexInList}`,
+        shortText: `+${durationFormatted}`,
         isFirst: false
       };
     }
 
+    const durationFormatted = formatRouteDuration(8, false);
     return {
       minutes: 8,
       miles: 3.0,
       prevStopNum: indexInList,
-      text: `~8 min de #${indexInList}`,
-      shortText: '~8 min',
+      text: `~${durationFormatted} de #${indexInList}`,
+      shortText: `~${durationFormatted}`,
       isFirst: false
     };
   };
@@ -1273,7 +1326,35 @@ export default function UberDriverView({
     } else {
       const current = activeOrders.find(o => o.id === selectedOrder.id);
       if (current) {
+        const wasPending = selectedOrder.status !== 'Completado' && selectedOrder.status !== 'No Realizado';
+        const isNowDone = current.status === 'Completado' || current.status === 'No Realizado';
+
         setSelectedOrder(current);
+
+        // Si este trabajo acaba de completarse o cancelarse, avanzar automáticamente a la siguiente parada pendiente en la ruta
+        if (wasPending && isNowDone) {
+          const currentIdx = activeOrders.findIndex(o => o.id === current.id);
+          let nextJob = null;
+          if (currentIdx >= 0) {
+            for (let i = currentIdx + 1; i < activeOrders.length; i++) {
+              if (activeOrders[i].status !== 'Completado' && activeOrders[i].status !== 'No Realizado') {
+                nextJob = activeOrders[i];
+                break;
+              }
+            }
+            if (!nextJob) {
+              for (let i = 0; i < currentIdx; i++) {
+                if (activeOrders[i].status !== 'Completado' && activeOrders[i].status !== 'No Realizado') {
+                  nextJob = activeOrders[i];
+                  break;
+                }
+              }
+            }
+          }
+          if (nextJob) {
+            handleSelectJob(nextJob);
+          }
+        }
       }
     }
   }, [activeOrders, targetFocusOrderId]);
@@ -1737,12 +1818,22 @@ export default function UberDriverView({
 
       if (isTarget) {
         // Destination Marker (con número de parada explícito)
+        let destIconStyle = '';
+        let destPointerStyle = '';
+        if (isCancelled) {
+          destIconStyle = 'style="background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%); box-shadow: 0 4px 16px rgba(225, 29, 72, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);"';
+          destPointerStyle = 'style="border-top-color: #e11d48;"';
+        } else if (isCompleted) {
+          destIconStyle = 'style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 4px 16px rgba(16, 185, 129, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);"';
+          destPointerStyle = 'style="border-top-color: #059669;"';
+        }
+
         markerEl.className = 'apple-dest-badge cursor-pointer';
         markerEl.innerHTML = `
-          <div class="apple-dest-icon flex items-center justify-center font-black text-sm font-mono shadow-xl">
+          <div class="apple-dest-icon flex items-center justify-center font-black text-sm font-mono shadow-xl" ${destIconStyle}>
             ${stopNumber}
           </div>
-          <div class="apple-dest-pointer"></div>
+          <div class="apple-dest-pointer" ${destPointerStyle}></div>
           <div class="apple-dest-label font-bold text-center">
             <span>${order.address || 'Destino'}</span>
           </div>
@@ -1758,7 +1849,7 @@ export default function UberDriverView({
         // Numbered Stop Marker for other jobs
         let bg = 'bg-[#FF9500]';
         if (isCompleted) bg = 'bg-[#34C759]';
-        else if (isCancelled) bg = 'bg-[#8E8E93]';
+        else if (isCancelled) bg = 'bg-[#E11D48]'; // Rojo cálido para cancelado en el mapa
 
         markerEl.className = 'cursor-pointer group flex flex-col items-center';
         markerEl.innerHTML = `
@@ -2566,12 +2657,15 @@ export default function UberDriverView({
           drawerState === 'expanded' ? 'h-[75%]' : 'min-h-[195px] sm:min-h-[205px] pb-2'
         }`}
       >
-        {/* Grabber Handle */}
+        {/* Grabber Handle with Touch & Drag Support */}
         <div 
+          onTouchStart={handleDrawerDragStart}
+          onMouseDown={handleDrawerDragStart}
           onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
-          className="w-full pt-2.5 pb-1 flex flex-col items-center justify-center cursor-pointer select-none"
+          className="w-full pt-2.5 pb-1.5 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none touch-none group"
+          title="Desliza hacia arriba para ver más o hacia abajo para contraer"
         >
-          <div className="w-12 h-1 rounded-full bg-slate-600/50 hover:bg-slate-400 transition" />
+          <div className="w-14 h-1.5 rounded-full bg-slate-500/50 group-hover:bg-cyan-400/80 active:bg-cyan-400 transition-colors shadow-xs" />
         </div>
 
         {selectedOrder ? (
@@ -2613,8 +2707,11 @@ export default function UberDriverView({
                 </button>
 
                 <div 
+                  onTouchStart={handleDrawerDragStart}
+                  onMouseDown={handleDrawerDragStart}
                   onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
-                  className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/25 text-[9px] sm:text-[10px] font-black tracking-tight sm:tracking-wider uppercase cursor-pointer transition select-none shadow-xs whitespace-nowrap shrink-0"
+                  className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/25 text-[9px] sm:text-[10px] font-black tracking-tight sm:tracking-wider uppercase cursor-grab active:cursor-grabbing transition select-none shadow-xs whitespace-nowrap shrink-0 touch-none"
+                  title="Desliza o toca para alternar detalles"
                 >
                   PARADA {currentStopNumber} DE {activeOrders.length}
                 </div>
@@ -2651,10 +2748,13 @@ export default function UberDriverView({
               </div>
             </div>
 
-            {/* ROW 2: CENTERED ADDRESS */}
+            {/* ROW 2: CENTERED ADDRESS WITH TOUCH DRAG */}
             <div 
-              className="py-0.5 cursor-pointer group text-center"
+              onTouchStart={handleDrawerDragStart}
+              onMouseDown={handleDrawerDragStart}
+              className="py-0.5 cursor-grab active:cursor-grabbing group text-center touch-none select-none"
               onClick={() => setDrawerState(prev => prev === 'peek' ? 'expanded' : 'peek')}
+              title="Desliza hacia arriba para ver más o hacia abajo para contraer"
             >
               <div className="flex items-center justify-center gap-1.5 flex-wrap">
                 <h2 className="text-base sm:text-lg font-black truncate leading-tight text-white group-hover:text-cyan-400 transition">
@@ -2693,7 +2793,7 @@ export default function UberDriverView({
                   <span>{selectedOrder.drop_footage || 0} ft</span>
                   <span className="text-slate-500">•</span>
                   <span className={selectedOrder.cable_type === 'EPON' ? 'text-amber-400 font-bold' : 'text-slate-300'}>
-                    {selectedOrder.cable_type || 'RG-6'}
+                    {formatCableType(selectedOrder.cable_type)}
                   </span>
                   {boreInfo && (
                     <>
@@ -3025,23 +3125,30 @@ export default function UberDriverView({
                   </div>
 
                   <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
+                    <span className="text-slate-400 font-medium">Número de Trabajo</span>
+                    <span className="text-slate-200 font-mono font-semibold text-[11px]">
+                      #{selectedOrder.job_id || 'S/N'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
                     <span className="text-slate-400 font-medium">Metraje</span>
-                    <span className="text-amber-300 font-mono font-bold text-[11px]">
-                      {selectedOrder.drop_footage || 0} ft {boreInfo?.hasBonus ? '• Bore DW' : ''}{Number(selectedOrder.road_bore_ft) > 0 ? ` • Road Bore ${selectedOrder.road_bore_ft} ft` : ''}
+                    <span className="text-slate-200 font-mono font-semibold text-[11px]">
+                      {selectedOrder.drop_footage || 0} ft
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center text-xs border-b border-white/5 pb-2">
                     <span className="text-slate-400 font-medium">Tipo de Cable</span>
-                    <span className="text-cyan-300 font-mono font-bold text-[11px]">
-                      {selectedOrder.cable_type || 'RG-6'}
+                    <span className="text-slate-200 font-mono font-semibold text-[11px]">
+                      {formatCableType(selectedOrder.cable_type)}
                     </span>
                   </div>
 
                   {selectedOrder.phone && (
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-slate-400 font-medium">Teléfono Cliente</span>
-                      <span className="text-cyan-400 font-mono font-bold text-[11px]">
+                      <span className="text-slate-200 font-mono font-semibold text-[11px]">
                         {formatPhoneDisplay(selectedOrder.phone)}
                       </span>
                     </div>
@@ -3049,7 +3156,7 @@ export default function UberDriverView({
 
                   <div className="flex justify-between items-start text-xs border-t border-white/5 pt-2">
                     <span className="text-slate-400 font-medium">Condición / Acceso</span>
-                    <span className="text-right text-amber-300 font-medium text-[11px] max-w-[240px] leading-tight">
+                    <span className="text-right text-slate-200 font-medium text-[11px] max-w-[240px] leading-tight">
                       {selectedRemark || '🟢 Acceso libre'}
                     </span>
                   </div>
@@ -3083,7 +3190,7 @@ export default function UberDriverView({
                     </button>
                     <button
                       onClick={() => setStatusFilter('No Realizado')}
-                      className={`py-1.5 rounded-xl transition ${statusFilter === 'No Realizado' ? 'bg-[#8E8E93] text-white shadow-sm font-black' : 'text-slate-400'}`}
+                      className={`py-1.5 rounded-xl transition cursor-pointer ${statusFilter === 'No Realizado' ? 'bg-rose-600 text-white shadow-sm shadow-rose-500/30 font-black' : 'text-slate-400'}`}
                     >
                       Canc. ({dayCancelled.length})
                     </button>
@@ -3109,6 +3216,8 @@ export default function UberDriverView({
                             className={`p-3 rounded-2xl border cursor-pointer transition select-none flex items-center justify-between gap-2.5 ${
                               isTarget 
                                 ? 'bg-[#007AFF]/20 border-[#007AFF]/80 shadow-md ring-1 ring-[#007AFF]/50'
+                                : isCancelled
+                                ? 'bg-rose-950/25 border-rose-500/35 hover:border-rose-500/50 shadow-xs'
                                 : 'bg-[#1b2533] border-white/5 hover:border-white/15'
                             }`}
                           >
@@ -3132,7 +3241,7 @@ export default function UberDriverView({
                                   <span>•</span>
                                   <span>{ord.drop_footage || 0} ft</span>
                                   <span>•</span>
-                                  <span className={ord.cable_type === 'EPON' ? 'text-amber-400 font-bold' : 'text-slate-300'}>{ord.cable_type || 'RG-6'}</span>
+                                  <span className={ord.cable_type === 'EPON' ? 'text-amber-400 font-bold' : 'text-slate-300'}>{formatCableType(ord.cable_type)}</span>
                                   {(() => {
                                     const b = getBoreInfo(ord.bore_type);
                                     if (!b) return null;
@@ -3152,9 +3261,13 @@ export default function UberDriverView({
                                   {getOrderRemark(ord)}
                                 </div>
 
-                                {legInfo && !legInfo.isFirst && (
-                                  <div className="mt-1 inline-flex items-center gap-1 text-[9.5px] font-bold text-sky-300 bg-sky-500/15 border border-sky-400/30 px-1.5 py-0.2 rounded-md">
-                                    <Car className="h-2.5 w-2.5 text-sky-400 shrink-0" />
+                                {legInfo && (
+                                  <div className={`mt-1 inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-md ${
+                                    legInfo.isFirst
+                                      ? 'text-cyan-300 bg-cyan-500/15 border border-cyan-400/30'
+                                      : 'text-sky-300 bg-sky-500/15 border border-sky-400/30'
+                                  }`}>
+                                    <Car className={`h-2.5 w-2.5 shrink-0 ${legInfo.isFirst ? 'text-cyan-400' : 'text-sky-400'}`} />
                                     <span>{legInfo.shortText}</span>
                                   </div>
                                 )}
@@ -3420,7 +3533,7 @@ export default function UberDriverView({
                   onClick={() => setOverlayStatusFilter('No Realizado')}
                   className={`py-1.5 px-0.5 rounded-lg transition font-bold truncate cursor-pointer ${
                     overlayStatusFilter === 'No Realizado'
-                      ? 'bg-slate-300 text-slate-950 font-black shadow-sm'
+                      ? 'bg-rose-600 text-white font-black shadow-sm shadow-rose-500/30'
                       : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }`}
                   title="Ver trabajos cancelados"
@@ -3478,6 +3591,8 @@ export default function UberDriverView({
                           ? 'bg-[#1e2d40] border-cyan-400 ring-2 ring-cyan-400/50 scale-[1.01]'
                           : isTarget
                           ? 'bg-[#007AFF]/20 border-[#007AFF]/70 shadow-lg ring-1 ring-[#007AFF]/40'
+                          : isCancelled
+                          ? 'bg-rose-950/25 border-rose-500/35 hover:border-rose-500/50 hover:bg-rose-950/35 shadow-xs'
                           : 'bg-[#16202c]/90 border-white/5 hover:border-white/20 hover:bg-[#1a2634]'
                       }`}
                     >
@@ -3529,7 +3644,7 @@ export default function UberDriverView({
                               <span>•</span>
                               <span>{ord.drop_footage || 0} ft</span>
                               <span>•</span>
-                              <span className={ord.cable_type === 'EPON' ? 'text-amber-400 font-bold' : 'text-slate-300'}>{ord.cable_type || 'RG-6'}</span>
+                              <span className={ord.cable_type === 'EPON' ? 'text-amber-400 font-bold' : 'text-slate-300'}>{formatCableType(ord.cable_type)}</span>
                               {(() => {
                                 const b = getBoreInfo(ord.bore_type);
                                 if (!b) return null;

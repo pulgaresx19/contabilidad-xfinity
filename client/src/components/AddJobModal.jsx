@@ -12,16 +12,21 @@ import CompactSelect from './CompactSelect';
 const CABLE_TYPE_OPTIONS = [
   { value: 'RG-6', label: 'RG-6 (Coaxial Estándar)', shortLabel: 'RG-6 (Coaxial)' },
   { value: 'RG-11', label: 'RG-11 (Larga Distancia)', shortLabel: 'RG-11 (Largo)' },
-  { value: 'EPON', label: 'EPON (Fibra Óptica)', shortLabel: 'EPON (Fibra)' }
+  { value: 'EPON', label: 'Fibra', shortLabel: 'Fibra' }
 ];
 
 const BORE_TYPE_OPTIONS = [
   { value: 'N', label: 'Sin cruce', sublabel: '$0', shortLabel: 'Sin cruce ($0)' },
-  { value: 'DW:1', label: 'Driveway', sublabel: '+$30 (D20)', shortLabel: 'Driveway (+$30)' },
-  { value: 'SW:1', label: 'Acera / Sidewalk', sublabel: '$0', shortLabel: 'Acera ($0)' },
-  { value: 'SW:1,DW:1', label: 'Driveway + Acera', sublabel: '+$30 (D20)', shortLabel: 'DW + Acera (+$30)' },
-  { value: 'RD:1', label: 'Road Bore / Calle', sublabel: '$2.50/ft (B002)', shortLabel: 'Road Bore (RD:1)' },
-  { value: 'RD:2', label: 'Road Bore 2 (Doble cruce)', sublabel: '$2.50/ft (B002)', shortLabel: 'Road Bore 2 (RD:2)' }
+  { value: 'DW:1', label: 'Driveway (DW)', sublabel: '+$30', shortLabel: 'Driveway (DW)' },
+  { value: 'DW:2', label: '2 Driveways (DW:2)', sublabel: '+$60', shortLabel: '2 Driveways (DW:2)' },
+  { value: 'SW:1', label: 'Acera / Sidewalk (SW)', sublabel: '$0', shortLabel: 'Acera (SW)' },
+  { value: 'SW:2', label: '2 Aceras (SW:2)', sublabel: '$0', shortLabel: '2 Aceras (SW:2)' },
+  { value: 'SW:1,DW:1', label: 'Acera + Driveway (SW + DW)', sublabel: '+$30', shortLabel: 'SW + DW' },
+  { value: 'DW:1,RD:1', label: 'Driveway + Calle (DW + RD)', sublabel: '+$30', shortLabel: 'DW + RD' },
+  { value: 'SW:1,RD:1', label: 'Acera + Calle (SW + RD)', sublabel: '$0', shortLabel: 'SW + RD' },
+  { value: 'SW:1,DW:1,RD:1', label: 'Acera + Driveway + Calle (SW + DW + RD)', sublabel: '+$30', shortLabel: 'SW + DW + RD' },
+  { value: 'RD:1', label: 'Road Bore / Calle (RD)', sublabel: '$2.50/ft (si se hace)', shortLabel: 'Road Bore (RD)' },
+  { value: 'RD:2', label: 'Road Bore 2 / Doble vía (RD:2)', sublabel: '$2.50/ft (si se hace)', shortLabel: 'Road Bore 2 (RD:2)' }
 ];
 
 const REMARK_CHIPS = [
@@ -417,7 +422,7 @@ export default function AddJobModal({ isOpen, onClose, onJobAdded, defaultTech, 
                     <span>Desglose Oficial de Tarifa</span>
                   </span>
                   <span className="text-[9.5px] font-mono text-slate-400">
-                    {formData.cable_type === 'EPON' ? 'EPON (Fibra)' : formData.cable_type} • {numFootage} ft
+                    {formData.cable_type === 'EPON' ? 'Fibra' : (formData.cable_type || 'RG-6')} • {numFootage} ft
                   </span>
                 </div>
 

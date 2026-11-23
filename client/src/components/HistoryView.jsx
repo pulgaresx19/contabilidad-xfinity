@@ -15,7 +15,7 @@ import HistoricalOrderCard from './HistoricalOrderCard';
 import ZoomableImageViewer from './ZoomableImageViewer';
 import PdfDocumentViewer from './PdfDocumentViewer';
 import EmptyStateCard from './EmptyStateCard';
-import { getOrderRemark } from '../utils/remarkUtils';
+import { getOrderRemark, getBoreInfo, formatCableType } from '../utils/remarkUtils';
 import { stampReceiptPhoto } from '../utils/receiptStamper';
 import { formatAdjustmentReason } from '../utils/adjustmentUtils';
 import { calcOrderRate, normalizeRateCard, DEFAULT_RATE_CARD } from '../utils/rateUtils';
@@ -296,12 +296,14 @@ export default function HistoryView({
     }
   }, [summaryData]);
 
-  // Filtered list of historical orders for the selected year with smart cable search (RG6 / RG11)
+  // Filtered list of historical orders for the selected year with smart cable search (Fibra / RG6 / RG11)
   const filteredAllOrders = yearOrders.filter((o) => {
     const q = orderSearch.toLowerCase().trim();
     if (q) {
       const cleanQ = q.replace(/[^a-z0-9]/g, '');
       const cleanCable = (o.cable_type || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const formattedCable = formatCableType(o.cable_type).toLowerCase();
+      const boreLabel = (getBoreInfo(o.bore_type)?.label || '').toLowerCase();
 
       const matchesSearch = 
         (o.job_id || '').toLowerCase().includes(q) ||
@@ -310,6 +312,9 @@ export default function HistoryView({
         (o.phone && o.phone.includes(q)) ||
         (o.work_date && o.work_date.includes(q)) ||
         (o.cable_type && o.cable_type.toLowerCase().includes(q)) ||
+        formattedCable.includes(q) ||
+        (o.bore_type && o.bore_type.toLowerCase().includes(q)) ||
+        boreLabel.includes(q) ||
         (o.raw_notes && o.raw_notes.toLowerCase().includes(q)) ||
         (o.obstacles && o.obstacles.toLowerCase().includes(q)) ||
         (o.premise_access && o.premise_access.toLowerCase().includes(q)) ||
@@ -521,7 +526,7 @@ export default function HistoryView({
       const photosTxt = o.photos_count > 0 ? ` (${o.photos_count} fotos de respaldo)` : ' (Sin fotos)';
       return `${idx + 1}. Job #${o.job_id} | ${o.work_date}
    📍 ${o.address}, ${o.city}
-   📏 ${o.drop_footage} ft (${o.cable_type})${boreTxt}${rdTxt}${footTxt}${adjTxt}${photosTxt}
+   📏 ${o.drop_footage} ft (${formatCableType(o.cable_type)})${boreTxt}${rdTxt}${footTxt}${adjTxt}${photosTxt}
    💵 Valor Cobrable: $${o.rate_calculated}`;
     }).join('\n\n');
 
@@ -545,22 +550,16 @@ ${jobLines}
 
   // Copy proof for single order dispute
   const copySingleJobClaim = (order) => {
-    const hasDriveway = Boolean(
-      order.bore_type && (
-        order.bore_type.includes('DW') || 
-        order.bore_type.toLowerCase().includes('driveway') || 
-        order.bore_type === 'Y'
-      )
-    );
-
+    const bInfo = getBoreInfo(order.bore_type);
+    const boreLabel = bInfo ? bInfo.label : 'No';
     const remark = getOrderRemark(order);
 
     const text = `📋 *COMPROBANTE DE TRABAJO - XFINITY*
 🔢 *Work Order #:* ${order.job_id}
 📅 *Fecha Ejecución:* ${order.work_date}
 📍 *Dirección:* ${order.address}${order.city ? `, ${order.city}` : ''}
-📏 *Pies / Drop:* ${order.drop_footage} ft (${order.cable_type || 'RG-6'})
-🚗 *Driveway:* ${hasDriveway ? 'Sí' : 'No'}
+📏 *Pies / Drop:* ${order.drop_footage} ft (${formatCableType(order.cable_type)})
+🚧 *Cruce (Bore):* ${boreLabel}
 📝 *Observaciones / Acceso:* ${remark || '🟢 Acceso libre'}
 📸 *Fotos de Evidencia:* ${order.photos_count || (order.photos ? order.photos.length : 0)} archivada(s)
 ✅ *Estado:* ${order.status}`;
